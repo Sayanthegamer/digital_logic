@@ -1,0 +1,229 @@
+use crate::engine::ComponentType;
+
+use super::Editor;
+
+impl Editor {
+    pub fn draw_gui(&mut self) {
+        let mut egui_wants_pointer = false;
+        egui_macroquad::ui(|ctx| {
+            egui_wants_pointer = ctx.wants_pointer_input() || ctx.wants_keyboard_input();
+            // Dark elegant theme styling overrides
+            let mut style = (*ctx.style()).clone();
+            style.visuals.dark_mode = true;
+            style.visuals.widgets.active.bg_fill = egui::Color32::from_rgb(32, 60, 48);
+            style.visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(36, 42, 45);
+            style.visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(18, 20, 22);
+            ctx.set_style(style);
+
+            // 1. Sidebar catalog panel
+            if self.inspection_path.is_empty() {
+                egui::SidePanel::left("parts_catalog")
+                    .resizable(false)
+                    .default_width(180.0)
+                    .show(ctx, |ui| {
+                        ui.add_space(10.0);
+                        ui.heading("Parts Catalog");
+                        ui.separator();
+                        ui.add_space(5.0);
+
+                        // Library Primitives
+                        ui.label("Primitives");
+                        if ui.selectable_label(self.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Input)), "Input Pin").clicked() {
+                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Input));
+                        }
+                        if ui.selectable_label(self.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Output)), "Output Pin").clicked() {
+                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Output));
+                        }
+                        if ui.selectable_label(self.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Nand)), "NAND Gate").clicked() {
+                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Nand));
+                        }
+                        if ui.selectable_label(self.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Clock)), "Clock Input").clicked() {
+                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Clock));
+                        }
+                        if ui.selectable_label(self.selected_tool == Some(super::types::ActiveTool::PlaceAnnotation), "Text Annotation").clicked() {
+                            self.selected_tool = Some(super::types::ActiveTool::PlaceAnnotation);
+                        }
+                        
+                        if ui.button("Clear Selection").clicked() {
+                            self.selected_tool = None;
+                        }
+
+                        ui.add_space(20.0);
+                        ui.label("Custom Chips");
+                        ui.separator();
+
+                        for (idx, bp) in self.library.iter().enumerate() {
+                            let is_sel = self.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::SubChip(idx)));
+                            if ui.selectable_label(is_sel, &bp.name).clicked() {
+                                self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::SubChip(idx)));
+                            }
+                        }
+                    });
+            }
+
+            // 2. Control Toolbar (Top Panel)
+            egui::TopBottomPanel::top("control_bar").show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    if !self.inspection_path.is_empty() {
+                        if ui.button("← Exit Inspection").clicked() {
+                            self.inspection_path.pop();
+                            self.selected_comp_id = None;
+                        }
+                        ui.separator();
+                    }
+                    ui.heading("Digital Logic Sim");
+                    ui.add_space(30.0);
+
+                    // Simulation Ticker controls
+                    if ui.button(if self.is_playing { "Pause" } else { "Play" }).clicked() {
+                        self.is_playing = !self.is_playing;
+                    }
+
+                    if ui.button("Step Tick").clicked() {
+                        let _ = self.simulator.propagate_events(50);
+                    }
+
+                    ui.add_space(20.0);
+                    ui.label("Sim Speed:");
+                    ui.add(egui::Slider::new(&mut self.ticks_per_frame, 1..=500).text("ticks/frame"));
+
+                    ui.add_space(20.0);
+                    if ui.button("Recompile Graph").clicked() {
+                        self.compile();
+                    }
+
+                    if ui.button("Clear Canvas").clicked() {
+                        self.components.clear();
+                        self.connections.clear();
+                        self.compile();
+                    }
+                    ui.separator();
+                    if ui.button("💾 Save").clicked() {
+                        self.save_project();
+                    }
+                    if ui.button("📂 Load").clicked() {
+                        self.load_project();
+                    }
+                });
+            });
+
+            // 3. Packaging Chip Panel (Right Panel)
+            egui::SidePanel::right("package_panel")
+                .resizable(false)
+                .default_width(200.0)
+                .show(ctx, |ui| {
+                    ui.add_space(10.0);
+
+                    if !self.inspection_path.is_empty() {
+                        if let Some((blueprint, _)) = self.get_inspected_blueprint_and_components() {
+                            ui.heading("Inspecting Block");
+                            ui.colored_label(egui::Color32::from_rgb(0, 180, 255), &blueprint.name);
+                            ui.separator();
+                            ui.add_space(10.0);
+                            
+                            ui.label(format!("Inputs: {}", blueprint.inputs));
+                            for (i, name) in blueprint.input_names.iter().enumerate() {
+                                ui.small(format!("  Pin {}: {}", i, name));
+                            }
+                            
+                            ui.add_space(10.0);
+                            ui.label(format!("Outputs: {}", blueprint.outputs));
+                            for (o, name) in blueprint.output_names.iter().enumerate() {
+                                ui.small(format!("  Pin {}: {}", o, name));
+                            }
+                            
+                            ui.add_space(10.0);
+                            ui.label(format!("Internal Gates: {}", blueprint.components.len()));
+                            
+                            ui.add_space(30.0);
+                            if ui.button("← Exit Inspection").clicked() {
+                                self.inspection_path.pop();
+                                self.selected_comp_id = None;
+                            }
+                        }
+                    } else {
+                         // If a component is selected, allow inspecting & editing properties
+                         if let Some(sel_id) = self.selected_comp_id {
+                             let mut comp_opt = None;
+                             for c in &mut self.components {
+                                 if c.id == sel_id {
+                                     comp_opt = Some(c);
+                                     break;
+                                 }
+                             }
+                             
+                             if let Some(comp) = comp_opt {
+                                 ui.heading("Selected Component");
+                                 ui.label(format!("ID: {}", comp.id));
+                                 ui.label(format!("Type: {:?}", comp.comp_type));
+                                 
+                                 ui.add_space(5.0);
+                                 ui.label("Label / Name:");
+                                 let mut label = comp.label.clone();
+                                 if ui.text_edit_singleline(&mut label).changed() {
+                                     comp.label = label;
+                                 }
+                                 
+                                 if let ComponentType::SubChip(_) = comp.comp_type {
+                                     ui.add_space(5.0);
+                                     if ui.button("🔍 Look Inside").clicked() {
+                                         self.inspection_path.push(comp.id);
+                                         self.selected_comp_id = None;
+                                     }
+                                 }
+                                 
+                                 if let ComponentType::Clock = comp.comp_type {
+                                     ui.add_space(5.0);
+                                     let mut period = comp.clock_period.unwrap_or(20);
+                                     ui.label("Clock Period (ticks):");
+                                     if ui.add(egui::Slider::new(&mut period, 2..=1000).text("ticks")).changed() {
+                                         comp.clock_period = Some(period);
+                                         // Directly update the compiled active_clocks array!
+                                         if let Some(active_clk) = self.active_clocks.iter_mut().find(|ac| ac.visual_id == Some(comp.id)) {
+                                             active_clk.period = period;
+                                         }
+                                     }
+                                 }
+                                 
+                                 ui.separator();
+                                 ui.add_space(15.0);
+                             }
+                         }
+
+                         if let Some(idx) = self.selected_annotation_idx {
+                             if let Some(ann) = self.annotations.get_mut(idx) {
+                                 ui.heading("Selected Text Label");
+                                 ui.label("Text Content:");
+                                 ui.text_edit_multiline(&mut ann.text);
+                                 
+                                 ui.separator();
+                                 ui.add_space(15.0);
+                             }
+                         }
+
+                        ui.heading("Package Chip");
+                        ui.separator();
+                        ui.add_space(5.0);
+                        
+                        ui.label("Create a reusable custom block out of your current canvas layout.");
+                        ui.add_space(10.0);
+
+                        ui.label("Chip Name:");
+                        ui.text_edit_singleline(&mut self.chip_name_input);
+
+                        ui.add_space(15.0);
+
+                        if ui.button("Compile & Save to Catalog").clicked() {
+                            if let Some(new_bp) = self.package_current_canvas() {
+                                self.library.push(new_bp);
+                                self.components.clear();
+                                self.connections.clear();
+                                self.compile();
+                            }
+                        }
+                    }
+                });
+        });
+        self.egui_wants_pointer = egui_wants_pointer;
+    }
+}
