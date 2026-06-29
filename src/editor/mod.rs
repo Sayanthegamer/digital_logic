@@ -78,6 +78,12 @@ pub struct Editor {
     pub is_fullscreen: bool,
     pub resolution_idx: usize,
     pub ui_scale: f32,
+    pub temp_is_fullscreen: bool,
+    pub temp_resolution_idx: usize,
+    pub temp_ui_scale: f32,
+    pub resolution_revert_timer: Option<f32>,
+    pub prev_is_fullscreen: bool,
+    pub prev_resolution_idx: usize,
 
     // Error Reporting
     pub propagation_error: Option<String>,
@@ -131,6 +137,12 @@ impl Editor {
             is_fullscreen: false,
             resolution_idx: 2, // 1280x720 by default
             ui_scale: 1.0,
+            temp_is_fullscreen: false,
+            temp_resolution_idx: 2,
+            temp_ui_scale: 1.0,
+            resolution_revert_timer: None,
+            prev_is_fullscreen: false,
+            prev_resolution_idx: 2,
             propagation_error: None,
             last_touch_dist: None,
             last_touch_center: None,

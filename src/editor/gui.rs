@@ -118,6 +118,11 @@ impl Editor {
                     ui.separator();
                     if ui.button("⚙ Settings").clicked() {
                         self.show_settings = !self.show_settings;
+                        if self.show_settings {
+                            self.temp_is_fullscreen = self.is_fullscreen;
+                            self.temp_resolution_idx = self.resolution_idx;
+                            self.temp_ui_scale = self.ui_scale;
+                        }
                     }
                 });
             });
@@ -257,50 +262,83 @@ impl Editor {
                     .open(&mut show_settings)
                     .resizable(false)
                     .show(ctx, |ui| {
-                        ui.heading("Graphics Settings");
-                        ui.add_space(5.0);
-
-                        // 1. Fullscreen Toggle
-                        let mut is_fullscreen = self.is_fullscreen;
-                        if ui.checkbox(&mut is_fullscreen, "Fullscreen").changed() {
-                            self.is_fullscreen = is_fullscreen;
-                            macroquad::window::set_fullscreen(is_fullscreen);
-                        }
-
-                        ui.add_space(5.0);
-
-                        // 2. Resolution Choice
-                        ui.label("Window Resolution:");
-                        let resolutions = &[
-                            (800, 600, "800 x 600"),
-                            (1024, 768, "1024 x 768"),
-                            (1280, 720, "1280 x 720 (Default)"),
-                            (1600, 900, "1600 x 900"),
-                            (1920, 1080, "1920 x 1080"),
-                        ];
-                        let mut selected_idx = self.resolution_idx;
-                        egui::ComboBox::from_label("")
-                            .selected_text(resolutions[selected_idx].2)
-                            .show_ui(ui, |ui| {
-                                for (idx, r) in resolutions.iter().enumerate() {
-                                    ui.selectable_value(&mut selected_idx, idx, r.2);
+                        if let Some(timer) = self.resolution_revert_timer {
+                            ui.heading("Confirm Resolution Change");
+                            ui.add_space(10.0);
+                            ui.label(format!("Resolution has been updated. Reverting automatically in {:.1} seconds...", timer));
+                            ui.add_space(15.0);
+                            
+                            ui.horizontal(|ui| {
+                                if ui.button("Keep Changes").clicked() {
+                                    self.resolution_revert_timer = None;
+                                }
+                                if ui.button("Revert Now").clicked() {
+                                    // Trigger immediate revert
+                                    self.resolution_revert_timer = Some(0.0);
                                 }
                             });
-                        if selected_idx != self.resolution_idx {
-                            self.resolution_idx = selected_idx;
-                            let r = resolutions[selected_idx];
-                            macroquad::window::request_new_screen_size(r.0 as f32, r.1 as f32);
-                        }
+                        } else {
+                            ui.heading("Graphics Settings");
+                            ui.add_space(5.0);
 
-                        ui.add_space(10.0);
-                        ui.heading("UI Scaling");
-                        ui.add_space(5.0);
+                            // 1. Fullscreen Toggle (temporary)
+                            let mut temp_fs = self.temp_is_fullscreen;
+                            ui.checkbox(&mut temp_fs, "Fullscreen");
+                            self.temp_is_fullscreen = temp_fs;
 
-                        // 3. UI Scale (zoom factor)
-                        let mut ui_scale = self.ui_scale;
-                        ui.add(egui::Slider::new(&mut ui_scale, 0.5..=2.0).text("UI Scale"));
-                        if ui_scale != self.ui_scale {
-                            self.ui_scale = ui_scale;
+                            ui.add_space(5.0);
+
+                            // 2. Resolution Choice (temporary)
+                            ui.label("Window Resolution:");
+                            let resolutions = &[
+                                (800, 600, "800 x 600"),
+                                (1024, 768, "1024 x 768"),
+                                (1280, 720, "1280 x 720 (Default)"),
+                                (1600, 900, "1600 x 900"),
+                                (1920, 1080, "1920 x 1080"),
+                            ];
+                            let mut temp_res = self.temp_resolution_idx;
+                            egui::ComboBox::from_label("")
+                                .selected_text(resolutions[temp_res].2)
+                                .show_ui(ui, |ui| {
+                                    for (idx, r) in resolutions.iter().enumerate() {
+                                        ui.selectable_value(&mut temp_res, idx, r.2);
+                                    }
+                                });
+                            self.temp_resolution_idx = temp_res;
+
+                            ui.add_space(10.0);
+                            ui.heading("UI Scaling");
+                            ui.add_space(5.0);
+
+                            // 3. UI Scale (temporary)
+                            let mut temp_scale = self.temp_ui_scale;
+                            ui.add(egui::Slider::new(&mut temp_scale, 0.5..=2.0).text("UI Scale"));
+                            self.temp_ui_scale = temp_scale;
+
+                            ui.add_space(15.0);
+                            ui.separator();
+                            ui.add_space(5.0);
+
+                            if ui.button("Apply Settings").clicked() {
+                                self.prev_is_fullscreen = self.is_fullscreen;
+                                self.prev_resolution_idx = self.resolution_idx;
+
+                                let size_changed = self.temp_resolution_idx != self.resolution_idx 
+                                    || self.temp_is_fullscreen != self.is_fullscreen;
+
+                                self.is_fullscreen = self.temp_is_fullscreen;
+                                self.resolution_idx = self.temp_resolution_idx;
+                                self.ui_scale = self.temp_ui_scale;
+
+                                macroquad::window::set_fullscreen(self.is_fullscreen);
+                                let r = resolutions[self.resolution_idx];
+                                macroquad::window::request_new_screen_size(r.0 as f32, r.1 as f32);
+
+                                if size_changed {
+                                    self.resolution_revert_timer = Some(10.0);
+                                }
+                            }
                         }
                     });
                 self.show_settings = show_settings;
