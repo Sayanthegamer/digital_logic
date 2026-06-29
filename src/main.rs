@@ -9,14 +9,16 @@ async fn main() {
     let mut editor = Editor::new();
 
     loop {
-        // Update logic editor state
+        // Process egui UI logic first (updates egui_wants_pointer for the current frame)
+        editor.draw_gui();
+
+        // Update logic editor state using the fresh input state
         editor.update();
 
         // Draw 2D logic canvas (wires, gates)
         editor.draw();
 
-        // Render egui panels overlay
-        editor.draw_gui();
+        // Render egui panels on top of the canvas
         egui_macroquad::draw();
 
         // Wait for next frame
