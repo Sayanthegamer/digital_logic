@@ -18,6 +18,9 @@ jobs:
       with:
         targets: x86_64-pc-windows-msvc
 
+    - name: Setup MSVC
+      uses: ilammy/msvc-dev-cmd@v1
+
     - name: Build EXE
       run: cargo build --release
 
