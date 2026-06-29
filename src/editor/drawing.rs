@@ -179,8 +179,8 @@ impl Editor {
         }
 
         // Draw active wire drag preview
-        if let Some((src_id, src_port)) = self.active_wire_drag {
-            if let Some(src) = self.components.iter().find(|c| c.id == src_id) {
+        if let Some((src_id, src_port)) = self.active_wire_drag
+            && let Some(src) = self.components.iter().find(|c| c.id == src_id) {
                 let (_, src_outputs) = self.get_component_ports_count(src.comp_type);
                 let start_pos = self.to_screen_space(src.output_port_pos(src_port, src_outputs));
                 let mouse_pos: Vec2 = mouse_position().into();
@@ -194,7 +194,6 @@ impl Editor {
                     Color::new(0.5, 0.8, 1.0, 0.6), // Light blue preview wire
                 );
             }
-        }
 
         // 1.5. Draw Text Annotations
         for (idx, ann) in self.annotations.iter().enumerate() {
@@ -342,13 +341,11 @@ impl Editor {
                     if wire.tgt_comp_id == comp.id && wire.tgt_port == i {
                         if let Some(&gate_idx) = self.port_to_sim_gate_map.get(&(wire.src_comp_id, wire.src_port)) {
                             input_active = self.simulator.get_state(gate_idx);
-                        } else if let Some(src_comp) = self.components.iter().find(|c| c.id == wire.src_comp_id) {
-                            if src_comp.comp_type == ComponentType::Input {
-                                if let Some(&gate_idx) = self.visual_to_sim_map.get(&src_comp.id) {
+                        } else if let Some(src_comp) = self.components.iter().find(|c| c.id == wire.src_comp_id)
+                            && src_comp.comp_type == ComponentType::Input
+                                && let Some(&gate_idx) = self.visual_to_sim_map.get(&src_comp.id) {
                                     input_active = self.simulator.get_state(gate_idx);
                                 }
-                            }
-                        }
                     }
                 }
 
@@ -391,8 +388,8 @@ impl Editor {
             }
 
             // Draw custom port names inside sub-chip boundary boxes
-            if let ComponentType::SubChip(idx) = comp.comp_type {
-                if let Some(bp) = self.library.get(idx) {
+            if let ComponentType::SubChip(idx) = comp.comp_type
+                && let Some(bp) = self.library.get(idx) {
                     let text_size_px = (10.0 * self.zoom).max(5.0);
                     for i in 0..inputs_count {
                         let port_pos = self.to_screen_space(comp.input_port_pos(i, inputs_count));
@@ -406,7 +403,6 @@ impl Editor {
                         draw_text(&name, port_pos.x - 6.0 * self.zoom - text_w, port_pos.y + 3.0 * self.zoom, text_size_px, Color::new(0.5, 0.55, 0.6, 1.0));
                     }
                 }
-            }
         }
 
         // Draw selection box (Windows style)

@@ -203,8 +203,8 @@ impl Editor {
                 }
 
                 // If nothing was clicked and a tool is active, place the component or annotation
-                if !clicked_something {
-                    if let Some(tool) = self.selected_tool {
+                if !clicked_something
+                    && let Some(tool) = self.selected_tool {
                         match tool {
                             ActiveTool::PlaceComponent(comp_type) => {
                                 let (inputs, outputs) = self.get_component_ports_count(comp_type);
@@ -252,7 +252,6 @@ impl Editor {
                             }
                         }
                     }
-                }
             } else if is_mouse_button_down(MouseButton::Left) {
                 self.drag_dist_pixels += mouse_delta.length();
                 // Drag component (multi-selection snapped drag)
@@ -269,16 +268,15 @@ impl Editor {
                     }
                 }
                 // Drag annotation
-                if let Some(idx) = self.dragging_annotation_idx {
-                    if idx < self.annotations.len() {
+                if let Some(idx) = self.dragging_annotation_idx
+                    && idx < self.annotations.len() {
                         let target_pos = mouse_pos_world + self.drag_offset;
                         self.annotations[idx].pos = Vec2::new((target_pos.x / 20.0).round() * 20.0, (target_pos.y / 20.0).round() * 20.0);
                     }
-                }
             } else if is_mouse_button_released(MouseButton::Left) {
                 // If it was an Input component and it was clicked (not dragged far)
-                if let Some(comp_id) = self.dragging_comp_id {
-                    if self.drag_dist_pixels < 5.0 {
+                if let Some(comp_id) = self.dragging_comp_id
+                    && self.drag_dist_pixels < 5.0 {
                         let mut comp_type = None;
                         for comp in &self.components {
                             if comp.id == comp_id {
@@ -286,8 +284,8 @@ impl Editor {
                                 break;
                             }
                         }
-                        if comp_type == Some(ComponentType::Input) {
-                            if let Some(&gate_idx) = self.visual_to_sim_map.get(&comp_id) {
+                        if comp_type == Some(ComponentType::Input)
+                            && let Some(&gate_idx) = self.visual_to_sim_map.get(&comp_id) {
                                 let curr_val = self.simulator.get_state(gate_idx);
                                 self.simulator.set_input(gate_idx, !curr_val);
                                 let max_steps = (self.simulator.gates.len() * 10).max(1000);
@@ -296,9 +294,7 @@ impl Editor {
                                     Err(e) => self.propagation_error = Some(e),
                                 }
                             }
-                        }
                     }
-                }
 
                 // If drag selection box was active, parse selection
                 if let Some(start) = self.selection_box_start {
