@@ -18,12 +18,18 @@ jobs:
       with:
         targets: aarch64-linux-android, armv7-linux-androideabi
         
+    - name: Setup NDK
+      id: setup-ndk
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25c
+        
     - name: Install cargo-apk
       run: cargo install cargo-apk
       
     - name: Build APK
       env:
-        ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_HOME }}
+        ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
       run: cargo apk build --release
       
     - name: Upload APK Artifact
