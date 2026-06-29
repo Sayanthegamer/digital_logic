@@ -211,14 +211,16 @@ impl Editor {
                 let start_node = CanvasNode::CompInput { comp_id: comp.id, port_idx };
                 let driver = trace_root(start_node, &mut trace_cache);
 
-                if let OutputSource::DrivenByGate(src_g_idx) = driver
-                    && let Some((inputs, _)) = component_ports.get(&comp.id)
-                        && port_idx < inputs.len() {
+                if let OutputSource::DrivenByGate(src_g_idx) = driver {
+                    if let Some((inputs, _)) = component_ports.get(&comp.id) {
+                        if port_idx < inputs.len() {
                             let targets = &inputs[port_idx];
                             for &(tgt_g_idx, tgt_port) in targets {
                                 sim.connect(src_g_idx, tgt_g_idx, tgt_port);
                             }
                         }
+                    }
+                }
             }
         }
 
