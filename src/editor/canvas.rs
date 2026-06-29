@@ -102,7 +102,7 @@ impl Editor {
                         &mut instance_outputs,
                         &mut active_clocks,
                     ) {
-                        instance_outputs.insert((path.clone(), comp.id), sub_interface.outputs.clone());
+                        instance_outputs.insert((vec![], comp.id), sub_interface.outputs.clone());
                         component_ports.insert(comp.id, (
                             sub_interface.inputs,
                             sub_interface.outputs,
@@ -148,42 +148,59 @@ impl Editor {
             }
         };
 
-        let trace_root = |start_node: CanvasNode| -> OutputSource {
-            let mut current = start_node;
-            let mut visited = HashSet::new();
+        let mut trace_cache: HashMap<CanvasNode, OutputSource> = HashMap::new();
+
+        let trace_root = |start_node: CanvasNode, trace_cache: &mut HashMap<CanvasNode, OutputSource>| -> OutputSource {
+            if let Some(&cached) = trace_cache.get(&start_node) {
+                return cached;
+            }
             
-            loop {
-                if !visited.insert(current.clone()) {
-                    return OutputSource::Floating;
+            let mut current = start_node.clone();
+            let mut visited = HashSet::new();
+            let mut path_nodes = Vec::new();
+            
+            let result = loop {
+                if let Some(&cached) = trace_cache.get(&current) {
+                    break cached;
                 }
+                if !visited.insert(current.clone()) {
+                    break OutputSource::Floating;
+                }
+                path_nodes.push(current.clone());
                 
                 match current {
                     CanvasNode::CompOutput { comp_id, port_idx } => {
                         if let Some((_, outputs)) = component_ports.get(&comp_id) {
                             if port_idx < outputs.len() {
                                 match outputs[port_idx] {
-                                    OutputSource::DrivenByGate(g_idx) => return OutputSource::DrivenByGate(g_idx),
-                                    OutputSource::Floating => return OutputSource::Floating,
+                                    OutputSource::DrivenByGate(g_idx) => break OutputSource::DrivenByGate(g_idx),
+                                    OutputSource::Floating => break OutputSource::Floating,
                                     OutputSource::PassedThrough(in_idx) => {
                                         current = CanvasNode::CompInput { comp_id, port_idx: in_idx };
                                     }
                                 }
                             } else {
-                                return OutputSource::Floating;
+                                break OutputSource::Floating;
                             }
                         } else {
-                            return OutputSource::Floating;
+                            break OutputSource::Floating;
                         }
                     }
                     _ => {
                         if let Some(next_node) = get_immediate_source(&current) {
                             current = next_node;
                         } else {
-                            return OutputSource::Floating;
+                            break OutputSource::Floating;
                         }
                     }
                 }
+            };
+            
+            for node in path_nodes {
+                trace_cache.insert(node, result);
             }
+            
+            result
         };
 
         // 2. Wire up all component inputs on the canvas in the simulator
@@ -192,7 +209,7 @@ impl Editor {
 
             for port_idx in 0..inputs_count {
                 let start_node = CanvasNode::CompInput { comp_id: comp.id, port_idx };
-                let driver = trace_root(start_node);
+                let driver = trace_root(start_node, &mut trace_cache);
 
                 if let OutputSource::DrivenByGate(src_g_idx) = driver {
                     if let Some((inputs, _)) = component_ports.get(&comp.id) {
@@ -214,7 +231,7 @@ impl Editor {
 
             for port_idx in 0..outputs_count {
                 let start_node = CanvasNode::CompOutput { comp_id: comp.id, port_idx };
-                let driver = trace_root(start_node);
+                let driver = trace_root(start_node, &mut trace_cache);
                 if let OutputSource::DrivenByGate(g_idx) = driver {
                     port_to_sim_gate_map.insert((comp.id, port_idx), g_idx);
                 }
@@ -222,7 +239,11 @@ impl Editor {
         }
 
         // Settle initial states
-        let _ = sim.propagate_events(5000);
+        let max_steps = (sim.gates.len() * 10).max(1000);
+        match sim.propagate_events(max_steps) {
+            Ok(_) => self.propagation_error = None,
+            Err(e) => self.propagation_error = Some(e),
+        }
 
         self.simulator = sim;
         self.visual_to_sim_map = visual_to_sim_map;
@@ -339,20 +360,6 @@ impl Editor {
 
             if let (Some(source), Some(target)) = (source_port, target_port) {
                 connections.push(Connection { source, target });
-            }
-        }
-
-        // Handle direct feedthrough wires (Input connected directly to Output on canvas)
-        for out_idx in 0..visual_outputs.len() {
-            let out_comp_id = visual_outputs[out_idx].id;
-            // Find if there is a connection directly from a top-level Input to this Output
-            if let Some(conn) = self.connections.iter().find(|c| c.tgt_comp_id == out_comp_id) {
-                if let Some(in_idx) = visual_inputs.iter().position(|c| c.id == conn.src_comp_id) {
-                    connections.push(Connection {
-                        source: SourcePort::ChipInput(in_idx),
-                        target: TargetPort::ChipOutput(out_idx),
-                    });
-                }
             }
         }
 
