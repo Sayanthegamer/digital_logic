@@ -106,24 +106,12 @@ impl Editor {
                     if let Some(comp) = found_comp {
                         self.selected_comp_id = Some(comp.id);
                         self.selected_annotation_idx = None;
-                        if comp.comp_type == ComponentType::Input {
-                            // Toggle Input state directly in simulator using mapping table without full recompile
-                            if let Some(&gate_idx) = self.visual_to_sim_map.get(&comp.id) {
-                                let curr_val = self.simulator.get_state(gate_idx);
-                                self.simulator.set_input(gate_idx, !curr_val);
-                                let max_steps = (self.simulator.gates.len() * 10).max(1000);
-                                match self.simulator.propagate_events(max_steps) {
-                                    Ok(_) => self.propagation_error = None,
-                                    Err(e) => self.propagation_error = Some(e),
-                                }
-                            }
-                            clicked_something = true;
-                        } else {
-                            // Start dragging
-                            self.dragging_comp_id = Some(comp.id);
-                            self.drag_offset = comp.pos - mouse_pos_world;
-                            clicked_something = true;
-                        }
+                        
+                        // Start dragging (Input components are also draggable now!)
+                        self.dragging_comp_id = Some(comp.id);
+                        self.drag_offset = comp.pos - mouse_pos_world;
+                        self.drag_dist_pixels = 0.0;
+                        clicked_something = true;
                     } else {
                         // Check if we clicked an annotation
                         let mut clicked_ann = None;
@@ -200,6 +188,7 @@ impl Editor {
                     }
                 }
             } else if is_mouse_button_down(MouseButton::Left) {
+                self.drag_dist_pixels += mouse_delta.length();
                 // Drag component
                 if let Some(comp_id) = self.dragging_comp_id {
                     if let Some(comp) = self.components.iter_mut().find(|c| c.id == comp_id) {
@@ -215,6 +204,30 @@ impl Editor {
                     }
                 }
             } else if is_mouse_button_released(MouseButton::Left) {
+                // If it was an Input component and it was clicked (not dragged far)
+                if let Some(comp_id) = self.dragging_comp_id {
+                    if self.drag_dist_pixels < 5.0 {
+                        let mut comp_type = None;
+                        for comp in &self.components {
+                            if comp.id == comp_id {
+                                comp_type = Some(comp.comp_type);
+                                break;
+                            }
+                        }
+                        if comp_type == Some(ComponentType::Input) {
+                            if let Some(&gate_idx) = self.visual_to_sim_map.get(&comp_id) {
+                                let curr_val = self.simulator.get_state(gate_idx);
+                                self.simulator.set_input(gate_idx, !curr_val);
+                                let max_steps = (self.simulator.gates.len() * 10).max(1000);
+                                match self.simulator.propagate_events(max_steps) {
+                                    Ok(_) => self.propagation_error = None,
+                                    Err(e) => self.propagation_error = Some(e),
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // End drag
                 self.dragging_comp_id = None;
                 self.dragging_annotation_idx = None;
