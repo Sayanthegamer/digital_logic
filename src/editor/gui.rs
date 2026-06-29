@@ -6,6 +6,7 @@ impl Editor {
     pub fn draw_gui(&mut self) {
         let mut egui_wants_pointer = false;
         egui_macroquad::ui(|ctx| {
+            ctx.set_pixels_per_point(self.ui_scale);
             egui_wants_pointer = ctx.wants_pointer_input() || ctx.wants_keyboard_input();
             // Dark elegant theme styling overrides
             let mut style = (*ctx.style()).clone();
@@ -113,6 +114,10 @@ impl Editor {
                     }
                     if ui.button("📂 Load").clicked() {
                         self.load_project();
+                    }
+                    ui.separator();
+                    if ui.button("⚙ Settings").clicked() {
+                        self.show_settings = !self.show_settings;
                     }
                 });
             });
@@ -245,6 +250,61 @@ impl Editor {
                             }
                     }
                 });
+
+            if self.show_settings {
+                let mut show_settings = self.show_settings;
+                egui::Window::new("Settings")
+                    .open(&mut show_settings)
+                    .resizable(false)
+                    .show(ctx, |ui| {
+                        ui.heading("Graphics Settings");
+                        ui.add_space(5.0);
+
+                        // 1. Fullscreen Toggle
+                        let mut is_fullscreen = self.is_fullscreen;
+                        if ui.checkbox(&mut is_fullscreen, "Fullscreen").changed() {
+                            self.is_fullscreen = is_fullscreen;
+                            macroquad::window::set_fullscreen(is_fullscreen);
+                        }
+
+                        ui.add_space(5.0);
+
+                        // 2. Resolution Choice
+                        ui.label("Window Resolution:");
+                        let resolutions = &[
+                            (800, 600, "800 x 600"),
+                            (1024, 768, "1024 x 768"),
+                            (1280, 720, "1280 x 720 (Default)"),
+                            (1600, 900, "1600 x 900"),
+                            (1920, 1080, "1920 x 1080"),
+                        ];
+                        let mut selected_idx = self.resolution_idx;
+                        egui::ComboBox::from_label("")
+                            .selected_text(resolutions[selected_idx].2)
+                            .show_ui(ui, |ui| {
+                                for (idx, r) in resolutions.iter().enumerate() {
+                                    ui.selectable_value(&mut selected_idx, idx, r.2);
+                                }
+                            });
+                        if selected_idx != self.resolution_idx {
+                            self.resolution_idx = selected_idx;
+                            let r = resolutions[selected_idx];
+                            macroquad::window::request_new_screen_size(r.0 as f32, r.1 as f32);
+                        }
+
+                        ui.add_space(10.0);
+                        ui.heading("UI Scaling");
+                        ui.add_space(5.0);
+
+                        // 3. UI Scale (zoom factor)
+                        let mut ui_scale = self.ui_scale;
+                        ui.add(egui::Slider::new(&mut ui_scale, 0.5..=2.0).text("UI Scale"));
+                        if ui_scale != self.ui_scale {
+                            self.ui_scale = ui_scale;
+                        }
+                    });
+                self.show_settings = show_settings;
+            }
         });
         self.egui_wants_pointer = egui_wants_pointer;
     }
