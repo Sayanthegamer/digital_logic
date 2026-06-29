@@ -151,7 +151,21 @@ impl Editor {
                                 self.selected_comp_id = None;
                             }
                         }
-                    } else {
+                     } else {
+                         // Delete Selected Button (Touch / UI alternative to Delete key)
+                         if !self.selected_comp_ids.is_empty() {
+                             ui.add_space(5.0);
+                             if ui.button("🗑 Delete Selected").clicked() {
+                                 self.components.retain(|c| !self.selected_comp_ids.contains(&c.id));
+                                 self.connections.retain(|c| !self.selected_comp_ids.contains(&c.src_comp_id) && !self.selected_comp_ids.contains(&c.tgt_comp_id));
+                                 self.selected_comp_ids.clear();
+                                 self.selected_comp_id = None;
+                                 self.compile();
+                             }
+                             ui.separator();
+                             ui.add_space(5.0);
+                         }
+
                          // If a component is selected, allow inspecting & editing properties
                          if let Some(sel_id) = self.selected_comp_id {
                              let mut comp_opt = None;

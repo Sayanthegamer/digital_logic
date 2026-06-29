@@ -75,6 +75,10 @@ pub struct Editor {
 
     // Error Reporting
     pub propagation_error: Option<String>,
+    
+    // Touch State
+    pub last_touch_dist: Option<f32>,
+    pub last_touch_center: Option<Vec2>,
 }
 
 impl Default for Editor {
@@ -118,6 +122,8 @@ impl Editor {
             inspection_path: Vec::new(),
             active_clocks: Vec::new(),
             propagation_error: None,
+            last_touch_dist: None,
+            last_touch_center: None,
         };
 
         // Add some basic chips to the library as initial examples

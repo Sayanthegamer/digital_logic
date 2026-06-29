@@ -1,0 +1,33 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # Allows manual trigger from the GitHub Actions tab
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+    
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: aarch64-linux-android, armv7-linux-androideabi
+        
+    - name: Install cargo-apk
+      run: cargo install cargo-apk
+      
+    - name: Build APK
+      env:
+        ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_HOME }}
+      run: cargo apk build --release
+      
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: logic-simulator-alpha-apk
+        path: target/release/apk/*.apk
