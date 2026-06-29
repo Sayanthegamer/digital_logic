@@ -9,6 +9,12 @@ pub struct Simulator {
     pub in_queue: Vec<bool>,
 }
 
+impl Default for Simulator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Simulator {
     pub fn new() -> Self {
         Self {
