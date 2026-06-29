@@ -50,11 +50,10 @@ impl Editor {
                     let inputs: Vec<&super::types::VisualComponent> = self.components.iter()
                         .filter(|c| c.comp_type == ComponentType::Input)
                         .collect();
-                    if let Some(comp) = inputs.get(*idx) {
-                        if let Some(&g_idx) = self.visual_to_sim_map.get(&comp.id) {
+                    if let Some(comp) = inputs.get(*idx)
+                        && let Some(&g_idx) = self.visual_to_sim_map.get(&comp.id) {
                             return self.simulator.get_state(g_idx);
                         }
-                    }
                 }
                 TraceNode::CompOutput { component_idx, port_idx } => {
                     if let Some(&g_idx) = self.port_to_sim_gate_map.get(&(*component_idx, *port_idx)) {
