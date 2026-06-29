@@ -111,7 +111,11 @@ impl Editor {
                             if let Some(&gate_idx) = self.visual_to_sim_map.get(&comp.id) {
                                 let curr_val = self.simulator.get_state(gate_idx);
                                 self.simulator.set_input(gate_idx, !curr_val);
-                                let _ = self.simulator.propagate_events(5000);
+                                let max_steps = (self.simulator.gates.len() * 10).max(1000);
+                                match self.simulator.propagate_events(max_steps) {
+                                    Ok(_) => self.propagation_error = None,
+                                    Err(e) => self.propagation_error = Some(e),
+                                }
                             }
                             clicked_something = true;
                         } else {
@@ -275,7 +279,14 @@ impl Editor {
                     }
                 }
                 
-                let _ = self.simulator.propagate_events(100);
+                let max_steps = (self.simulator.gates.len() * 10).max(1000);
+                match self.simulator.propagate_events(max_steps) {
+                    Ok(_) => self.propagation_error = None,
+                    Err(e) => {
+                        self.propagation_error = Some(e);
+                        break;
+                    }
+                }
             }
         }
         

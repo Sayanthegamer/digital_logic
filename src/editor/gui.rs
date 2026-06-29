@@ -15,6 +15,16 @@ impl Editor {
             style.visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(18, 20, 22);
             ctx.set_style(style);
 
+            // Error panel if simulation has oscillated/errored
+            if let Some(ref err) = self.propagation_error {
+                egui::TopBottomPanel::top("error_panel").show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(egui::Color32::from_rgb(255, 80, 80), "⚠️ Simulation Error:");
+                        ui.label(err);
+                    });
+                });
+            }
+
             // 1. Sidebar catalog panel
             if self.inspection_path.is_empty() {
                 egui::SidePanel::left("parts_catalog")

@@ -68,6 +68,9 @@ pub struct Editor {
     
     // Clocks
     pub active_clocks: Vec<CompiledClock>,
+
+    // Error Reporting
+    pub propagation_error: Option<String>,
 }
 
 impl Editor {
@@ -100,6 +103,7 @@ impl Editor {
             instance_outputs: HashMap::new(),
             inspection_path: Vec::new(),
             active_clocks: Vec::new(),
+            propagation_error: None,
         };
 
         // Add some basic chips to the library as initial examples
