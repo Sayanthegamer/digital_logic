@@ -72,6 +72,12 @@ pub struct Editor {
     
     // Clocks
     pub active_clocks: Vec<CompiledClock>,
+    
+    // Settings
+    pub show_settings: bool,
+    pub is_fullscreen: bool,
+    pub resolution_idx: usize,
+    pub ui_scale: f32,
 
     // Error Reporting
     pub propagation_error: Option<String>,
@@ -121,6 +127,10 @@ impl Editor {
             instance_outputs: HashMap::new(),
             inspection_path: Vec::new(),
             active_clocks: Vec::new(),
+            show_settings: false,
+            is_fullscreen: false,
+            resolution_idx: 2, // 1280x720 by default
+            ui_scale: 1.0,
             propagation_error: None,
             last_touch_dist: None,
             last_touch_center: None,
