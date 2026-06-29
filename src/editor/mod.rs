@@ -40,6 +40,7 @@ pub struct Editor {
     pub active_wire_drag: Option<(usize, usize)>, // (src_comp_id, src_port_idx)
     pub dragging_comp_id: Option<usize>,
     pub drag_offset: Vec2,
+    pub drag_dist_pixels: f32,
     
     // Simulation Backend
     pub library: Vec<ChipBlueprint>,
@@ -89,6 +90,7 @@ impl Editor {
             active_wire_drag: None,
             dragging_comp_id: None,
             drag_offset: Vec2::ZERO,
+            drag_dist_pixels: 0.0,
             library: Vec::new(),
             simulator: Simulator::new(),
             visual_to_sim_map: HashMap::new(),
