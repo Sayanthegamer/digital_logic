@@ -4,7 +4,7 @@ version = "0.1.0-alpha.1"
 edition = "2021"
 
 [package.metadata.android]
-apk_label = "Digital Logic Sim"
+label = "Digital Logic Sim"
 
 [package.metadata.android.sdk]
 target_sdk_version = 33
