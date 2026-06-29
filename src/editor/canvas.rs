@@ -1,6 +1,6 @@
 use crate::engine::{
-    ChipBlueprint, Component, ComponentType, Connection, GateType,
-    OutputSource, Simulator, SourcePort, TargetPort, CompiledClock,
+    ChipBlueprint, CompiledClock, Component, ComponentType, Connection, GateType, OutputSource,
+    Simulator, SourcePort, TargetPort,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -54,31 +54,29 @@ impl Editor {
                 ComponentType::Nand => {
                     let sim_idx = sim.add_gate(GateType::Nand);
                     visual_to_sim_map.insert(comp.id, sim_idx);
-                    component_ports.insert(comp.id, (
-                        vec![vec![(sim_idx, 0)], vec![(sim_idx, 1)]],
-                        vec![OutputSource::DrivenByGate(sim_idx)],
-                    ));
+                    component_ports.insert(
+                        comp.id,
+                        (
+                            vec![vec![(sim_idx, 0)], vec![(sim_idx, 1)]],
+                            vec![OutputSource::DrivenByGate(sim_idx)],
+                        ),
+                    );
                 }
                 ComponentType::Input => {
                     let sim_idx = sim.add_gate(GateType::Input);
                     visual_to_sim_map.insert(comp.id, sim_idx);
-                    component_ports.insert(comp.id, (
-                        vec![],
-                        vec![OutputSource::DrivenByGate(sim_idx)],
-                    ));
+                    component_ports
+                        .insert(comp.id, (vec![], vec![OutputSource::DrivenByGate(sim_idx)]));
                 }
                 ComponentType::Output => {
                     let sim_idx = sim.add_gate(GateType::Output);
                     visual_to_sim_map.insert(comp.id, sim_idx);
-                    component_ports.insert(comp.id, (
-                        vec![vec![(sim_idx, 0)]],
-                        vec![],
-                    ));
+                    component_ports.insert(comp.id, (vec![vec![(sim_idx, 0)]], vec![]));
                 }
                 ComponentType::Clock => {
                     let sim_idx = sim.add_gate(GateType::Input);
                     visual_to_sim_map.insert(comp.id, sim_idx);
-                    
+
                     let period = comp.clock_period.unwrap_or(20);
                     active_clocks.push(CompiledClock {
                         gate_idx: sim_idx,
@@ -87,10 +85,8 @@ impl Editor {
                         visual_id: Some(comp.id),
                     });
 
-                    component_ports.insert(comp.id, (
-                        vec![],
-                        vec![OutputSource::DrivenByGate(sim_idx)],
-                    ));
+                    component_ports
+                        .insert(comp.id, (vec![], vec![OutputSource::DrivenByGate(sim_idx)]));
                 }
                 ComponentType::SubChip(sub_idx) => {
                     let path = vec![comp.id];
@@ -103,10 +99,8 @@ impl Editor {
                         &mut active_clocks,
                     ) {
                         instance_outputs.insert((vec![], comp.id), sub_interface.outputs.clone());
-                        component_ports.insert(comp.id, (
-                            sub_interface.inputs,
-                            sub_interface.outputs,
-                        ));
+                        component_ports
+                            .insert(comp.id, (sub_interface.inputs, sub_interface.outputs));
                     }
                 }
             }
@@ -121,20 +115,23 @@ impl Editor {
 
         let get_immediate_source = |node: &CanvasNode| -> Option<CanvasNode> {
             match node {
-                CanvasNode::CompInput { comp_id, port_idx } => {
-                    self.connections.iter()
-                        .find(|conn| conn.tgt_comp_id == *comp_id && conn.tgt_port == *port_idx)
-                        .map(|conn| CanvasNode::CompOutput {
-                            comp_id: conn.src_comp_id,
-                            port_idx: conn.src_port,
-                        })
-                }
+                CanvasNode::CompInput { comp_id, port_idx } => self
+                    .connections
+                    .iter()
+                    .find(|conn| conn.tgt_comp_id == *comp_id && conn.tgt_port == *port_idx)
+                    .map(|conn| CanvasNode::CompOutput {
+                        comp_id: conn.src_comp_id,
+                        port_idx: conn.src_port,
+                    }),
                 CanvasNode::CompOutput { comp_id, port_idx } => {
                     if let Some((_, outputs)) = component_ports.get(comp_id) {
                         if *port_idx < outputs.len() {
                             match outputs[*port_idx] {
                                 OutputSource::PassedThrough(in_idx) => {
-                                    Some(CanvasNode::CompInput { comp_id: *comp_id, port_idx: in_idx })
+                                    Some(CanvasNode::CompInput {
+                                        comp_id: *comp_id,
+                                        port_idx: in_idx,
+                                    })
                                 }
                                 _ => None,
                             }
@@ -150,15 +147,17 @@ impl Editor {
 
         let mut trace_cache: HashMap<CanvasNode, OutputSource> = HashMap::new();
 
-        let trace_root = |start_node: CanvasNode, trace_cache: &mut HashMap<CanvasNode, OutputSource>| -> OutputSource {
+        let trace_root = |start_node: CanvasNode,
+                          trace_cache: &mut HashMap<CanvasNode, OutputSource>|
+         -> OutputSource {
             if let Some(&cached) = trace_cache.get(&start_node) {
                 return cached;
             }
-            
+
             let mut current = start_node.clone();
             let mut visited = HashSet::new();
             let mut path_nodes = Vec::new();
-            
+
             let result = loop {
                 if let Some(&cached) = trace_cache.get(&current) {
                     break cached;
@@ -167,16 +166,21 @@ impl Editor {
                     break OutputSource::Floating;
                 }
                 path_nodes.push(current.clone());
-                
+
                 match current {
                     CanvasNode::CompOutput { comp_id, port_idx } => {
                         if let Some((_, outputs)) = component_ports.get(&comp_id) {
                             if port_idx < outputs.len() {
                                 match outputs[port_idx] {
-                                    OutputSource::DrivenByGate(g_idx) => break OutputSource::DrivenByGate(g_idx),
+                                    OutputSource::DrivenByGate(g_idx) => {
+                                        break OutputSource::DrivenByGate(g_idx);
+                                    }
                                     OutputSource::Floating => break OutputSource::Floating,
                                     OutputSource::PassedThrough(in_idx) => {
-                                        current = CanvasNode::CompInput { comp_id, port_idx: in_idx };
+                                        current = CanvasNode::CompInput {
+                                            comp_id,
+                                            port_idx: in_idx,
+                                        };
                                     }
                                 }
                             } else {
@@ -195,11 +199,11 @@ impl Editor {
                     }
                 }
             };
-            
+
             for node in path_nodes {
                 trace_cache.insert(node, result);
             }
-            
+
             result
         };
 
@@ -208,17 +212,21 @@ impl Editor {
             let (inputs_count, _) = self.get_component_ports_count(comp.comp_type);
 
             for port_idx in 0..inputs_count {
-                let start_node = CanvasNode::CompInput { comp_id: comp.id, port_idx };
+                let start_node = CanvasNode::CompInput {
+                    comp_id: comp.id,
+                    port_idx,
+                };
                 let driver = trace_root(start_node, &mut trace_cache);
 
                 if let OutputSource::DrivenByGate(src_g_idx) = driver
                     && let Some((inputs, _)) = component_ports.get(&comp.id)
-                        && port_idx < inputs.len() {
-                            let targets = &inputs[port_idx];
-                            for &(tgt_g_idx, tgt_port) in targets {
-                                sim.connect(src_g_idx, tgt_g_idx, tgt_port);
-                            }
-                        }
+                    && port_idx < inputs.len()
+                {
+                    let targets = &inputs[port_idx];
+                    for &(tgt_g_idx, tgt_port) in targets {
+                        sim.connect(src_g_idx, tgt_g_idx, tgt_port);
+                    }
+                }
             }
         }
 
@@ -228,7 +236,10 @@ impl Editor {
             let (_, outputs_count) = self.get_component_ports_count(comp.comp_type);
 
             for port_idx in 0..outputs_count {
-                let start_node = CanvasNode::CompOutput { comp_id: comp.id, port_idx };
+                let start_node = CanvasNode::CompOutput {
+                    comp_id: comp.id,
+                    port_idx,
+                };
                 let driver = trace_root(start_node, &mut trace_cache);
                 if let OutputSource::DrivenByGate(g_idx) = driver {
                     port_to_sim_gate_map.insert((comp.id, port_idx), g_idx);
@@ -254,13 +265,17 @@ impl Editor {
     /// Translates the current canvas components and connections into a reusable ChipBlueprint
     pub(crate) fn package_current_canvas(&self) -> Option<ChipBlueprint> {
         // Collect Inputs and Outputs from canvas, sorted by Y position to preserve order
-        let mut visual_inputs: Vec<VisualComponent> = self.components.iter()
+        let mut visual_inputs: Vec<VisualComponent> = self
+            .components
+            .iter()
             .filter(|c| c.comp_type == ComponentType::Input)
             .cloned()
             .collect();
         visual_inputs.sort_by(|a, b| a.pos.y.partial_cmp(&b.pos.y).unwrap());
 
-        let mut visual_outputs: Vec<VisualComponent> = self.components.iter()
+        let mut visual_outputs: Vec<VisualComponent> = self
+            .components
+            .iter()
             .filter(|c| c.comp_type == ComponentType::Output)
             .cloned()
             .collect();
@@ -275,7 +290,7 @@ impl Editor {
             } else {
                 comp.label.clone()
             };
-            
+
             let count = input_counts.entry(base_label.clone()).or_insert(0);
             *count += 1;
             let final_label = if *count > 1 {
@@ -294,7 +309,7 @@ impl Editor {
             } else {
                 comp.label.clone()
             };
-            
+
             let count = output_counts.entry(base_label.clone()).or_insert(0);
             *count += 1;
             let final_label = if *count > 1 {
@@ -306,7 +321,9 @@ impl Editor {
         }
 
         // Collect internal components
-        let visual_internals: Vec<VisualComponent> = self.components.iter()
+        let visual_internals: Vec<VisualComponent> = self
+            .components
+            .iter()
             .filter(|c| c.comp_type != ComponentType::Input && c.comp_type != ComponentType::Output)
             .cloned()
             .collect();
@@ -329,21 +346,24 @@ impl Editor {
 
         for conn in &self.connections {
             // 1. Resolve source
-            let source_port = if let Some(in_idx) = visual_inputs.iter().position(|c| c.id == conn.src_comp_id) {
-                // Connection starts at a top-level Input pin
-                Some(SourcePort::ChipInput(in_idx))
-            } else if let Some(&comp_idx) = comp_id_to_bp_idx.get(&conn.src_comp_id) {
-                // Connection starts at an internal component output
-                Some(SourcePort::ComponentOutput {
-                    component_idx: comp_idx,
-                    port_idx: conn.src_port,
-                })
-            } else {
-                None
-            };
+            let source_port =
+                if let Some(in_idx) = visual_inputs.iter().position(|c| c.id == conn.src_comp_id) {
+                    // Connection starts at a top-level Input pin
+                    Some(SourcePort::ChipInput(in_idx))
+                } else if let Some(&comp_idx) = comp_id_to_bp_idx.get(&conn.src_comp_id) {
+                    // Connection starts at an internal component output
+                    Some(SourcePort::ComponentOutput {
+                        component_idx: comp_idx,
+                        port_idx: conn.src_port,
+                    })
+                } else {
+                    None
+                };
 
             // 2. Resolve target
-            let target_port = if let Some(out_idx) = visual_outputs.iter().position(|c| c.id == conn.tgt_comp_id) {
+            let target_port = if let Some(out_idx) =
+                visual_outputs.iter().position(|c| c.id == conn.tgt_comp_id)
+            {
                 // Connection targets a top-level Output pin
                 Some(TargetPort::ChipOutput(out_idx))
             } else if let Some(&comp_idx) = comp_id_to_bp_idx.get(&conn.tgt_comp_id) {

@@ -7,7 +7,7 @@ use macroquad::prelude::*;
 fn test_custom_port_naming_collision() {
     let mut editor = Editor::new();
     editor.library.clear();
-    
+
     editor.components.push(VisualComponent {
         id: 1,
         comp_type: ComponentType::Input,
@@ -65,8 +65,10 @@ fn test_custom_port_naming_collision() {
         clock_period: None,
     });
 
-    let bp = editor.package_current_canvas().expect("Failed to package canvas");
-    
+    let bp = editor
+        .package_current_canvas()
+        .expect("Failed to package canvas");
+
     assert_eq!(bp.input_names.len(), 3);
     assert_eq!(bp.input_names[0], "X");
     assert_eq!(bp.input_names[1], "X_1");

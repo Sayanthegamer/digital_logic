@@ -24,20 +24,26 @@ pub enum ComponentType {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Component {
     pub component_type: ComponentType,
-    pub pos: (f32, f32), // Visual layout position for inspection mode
+    pub pos: (f32, f32),             // Visual layout position for inspection mode
     pub clock_period: Option<usize>, // Localized period in ticks (only for ComponentType::Clock)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum SourcePort {
     ChipInput(usize), // The i-th input of the custom chip itself
-    ComponentOutput { component_idx: usize, port_idx: usize },
+    ComponentOutput {
+        component_idx: usize,
+        port_idx: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TargetPort {
     ChipOutput(usize), // The j-th output of the custom chip itself
-    ComponentInput { component_idx: usize, port_idx: usize },
+    ComponentInput {
+        component_idx: usize,
+        port_idx: usize,
+    },
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -74,8 +80,14 @@ pub struct InstantiatedInterface {
 pub enum TraceNode {
     ChipInput(usize),
     ChipOutput(usize),
-    CompInput { component_idx: usize, port_idx: usize },
-    CompOutput { component_idx: usize, port_idx: usize },
+    CompInput {
+        component_idx: usize,
+        port_idx: usize,
+    },
+    CompOutput {
+        component_idx: usize,
+        port_idx: usize,
+    },
 }
 
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
