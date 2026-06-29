@@ -16,12 +16,10 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Build APK
-      working-directory: ./logic_simulator
-      run: |
-        cargo quad-apk build --release
+      run: cargo quad-apk build --release
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: logic-simulator-alpha-apk
-        path: logic_simulator/target/android-artifacts/release/apk/*.apk
+        path: target/android-artifacts/release/apk/*.apk
