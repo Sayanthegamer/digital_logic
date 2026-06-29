@@ -139,8 +139,8 @@ impl Editor {
                 }
 
                 // If nothing was clicked and a tool is active, place the component or annotation
-                if !clicked_something {
-                    if let Some(tool) = self.selected_tool {
+                if !clicked_something
+                    && let Some(tool) = self.selected_tool {
                         match tool {
                             ActiveTool::PlaceComponent(comp_type) => {
                                 let (inputs, outputs) = self.get_component_ports_count(comp_type);
@@ -186,27 +186,24 @@ impl Editor {
                             }
                         }
                     }
-                }
             } else if is_mouse_button_down(MouseButton::Left) {
                 self.drag_dist_pixels += mouse_delta.length();
                 // Drag component
-                if let Some(comp_id) = self.dragging_comp_id {
-                    if let Some(comp) = self.components.iter_mut().find(|c| c.id == comp_id) {
+                if let Some(comp_id) = self.dragging_comp_id
+                    && let Some(comp) = self.components.iter_mut().find(|c| c.id == comp_id) {
                         let target_pos = mouse_pos_world + self.drag_offset;
                         comp.pos = Vec2::new((target_pos.x / 20.0).round() * 20.0, (target_pos.y / 20.0).round() * 20.0);
                     }
-                }
                 // Drag annotation
-                if let Some(idx) = self.dragging_annotation_idx {
-                    if idx < self.annotations.len() {
+                if let Some(idx) = self.dragging_annotation_idx
+                    && idx < self.annotations.len() {
                         let target_pos = mouse_pos_world + self.drag_offset;
                         self.annotations[idx].pos = Vec2::new((target_pos.x / 20.0).round() * 20.0, (target_pos.y / 20.0).round() * 20.0);
                     }
-                }
             } else if is_mouse_button_released(MouseButton::Left) {
                 // If it was an Input component and it was clicked (not dragged far)
-                if let Some(comp_id) = self.dragging_comp_id {
-                    if self.drag_dist_pixels < 5.0 {
+                if let Some(comp_id) = self.dragging_comp_id
+                    && self.drag_dist_pixels < 5.0 {
                         let mut comp_type = None;
                         for comp in &self.components {
                             if comp.id == comp_id {
@@ -214,8 +211,8 @@ impl Editor {
                                 break;
                             }
                         }
-                        if comp_type == Some(ComponentType::Input) {
-                            if let Some(&gate_idx) = self.visual_to_sim_map.get(&comp_id) {
+                        if comp_type == Some(ComponentType::Input)
+                            && let Some(&gate_idx) = self.visual_to_sim_map.get(&comp_id) {
                                 let curr_val = self.simulator.get_state(gate_idx);
                                 self.simulator.set_input(gate_idx, !curr_val);
                                 let max_steps = (self.simulator.gates.len() * 10).max(1000);
@@ -224,9 +221,7 @@ impl Editor {
                                     Err(e) => self.propagation_error = Some(e),
                                 }
                             }
-                        }
                     }
-                }
 
                 // End drag
                 self.dragging_comp_id = None;
@@ -266,16 +261,14 @@ impl Editor {
         }
 
         // 4. Delete selected component (only in main canvas)
-        if !egui_wants_pointer && self.inspection_path.is_empty() {
-            if is_key_pressed(KeyCode::Delete) || is_key_pressed(KeyCode::Backspace) {
-                if let Some(id) = self.selected_comp_id {
+        if !egui_wants_pointer && self.inspection_path.is_empty()
+            && (is_key_pressed(KeyCode::Delete) || is_key_pressed(KeyCode::Backspace))
+                && let Some(id) = self.selected_comp_id {
                     self.components.retain(|c| c.id != id);
                     self.connections.retain(|c| c.src_comp_id != id && c.tgt_comp_id != id);
                     self.selected_comp_id = None;
                     self.compile();
                 }
-            }
-        }
 
         // 5. Run continuous simulation ticks with multi-domain clocks (batch-then-propagate)
         if self.is_playing {

@@ -1,7 +1,5 @@
-#[cfg(test)]
-mod tests {
-    use crate::engine::*;
-    use crate::engine::simulator::Simulator;
+use crate::engine::*;
+use crate::engine::simulator::Simulator;
 
     #[test]
     fn test_single_nand() {
@@ -24,25 +22,25 @@ mod tests {
         sim.set_input(in_a, false);
         sim.set_input(in_b, false);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), true);
+        assert!(sim.get_state(out));
 
         // A=0, B=1 => OUT=1
         sim.set_input(in_a, false);
         sim.set_input(in_b, true);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), true);
+        assert!(sim.get_state(out));
 
         // A=1, B=0 => OUT=1
         sim.set_input(in_a, true);
         sim.set_input(in_b, false);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), true);
+        assert!(sim.get_state(out));
 
         // A=1, B=1 => OUT=0
         sim.set_input(in_a, true);
         sim.set_input(in_b, true);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), false);
+        assert!(!sim.get_state(out));
     }
 
     #[test]
@@ -62,12 +60,12 @@ mod tests {
         // Input = false => Out = true
         sim.set_input(input, false);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), true);
+        assert!(sim.get_state(out));
 
         // Input = true => Out = false
         sim.set_input(input, true);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), false);
+        assert!(!sim.get_state(out));
     }
 
     #[test]
@@ -93,25 +91,25 @@ mod tests {
         sim.set_input(in_a, false);
         sim.set_input(in_b, false);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), false);
+        assert!(!sim.get_state(out));
 
         // A=0, B=1 => OUT=0
         sim.set_input(in_a, false);
         sim.set_input(in_b, true);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), false);
+        assert!(!sim.get_state(out));
 
         // A=1, B=0 => OUT=0
         sim.set_input(in_a, true);
         sim.set_input(in_b, false);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), false);
+        assert!(!sim.get_state(out));
 
         // A=1, B=1 => OUT=1
         sim.set_input(in_a, true);
         sim.set_input(in_b, true);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), true);
+        assert!(sim.get_state(out));
     }
 
     #[test]
@@ -141,25 +139,25 @@ mod tests {
         sim.set_input(in_a, false);
         sim.set_input(in_b, false);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), false);
+        assert!(!sim.get_state(out));
 
         // A=0, B=1 => OUT=1
         sim.set_input(in_a, false);
         sim.set_input(in_b, true);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), true);
+        assert!(sim.get_state(out));
 
         // A=1, B=0 => OUT=1
         sim.set_input(in_a, true);
         sim.set_input(in_b, false);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), true);
+        assert!(sim.get_state(out));
 
         // A=1, B=1 => OUT=1
         sim.set_input(in_a, true);
         sim.set_input(in_b, true);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), true);
+        assert!(sim.get_state(out));
     }
 
     #[test]
@@ -200,26 +198,26 @@ mod tests {
         // Action: Pulse Set (S_bar = 0)
         sim.set_input(s_bar, false);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(q_out), true);
-        assert_eq!(sim.get_state(q_bar_out), false);
+        assert!(sim.get_state(q_out));
+        assert!(!sim.get_state(q_bar_out));
 
         // Release Set (S_bar = 1) -> state should latch (Q=1, Q_bar=0)
         sim.set_input(s_bar, true);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(q_out), true);
-        assert_eq!(sim.get_state(q_bar_out), false);
+        assert!(sim.get_state(q_out));
+        assert!(!sim.get_state(q_bar_out));
 
         // Action: Pulse Reset (R_bar = 0)
         sim.set_input(r_bar, false);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(q_out), false);
-        assert_eq!(sim.get_state(q_bar_out), true);
+        assert!(!sim.get_state(q_out));
+        assert!(sim.get_state(q_bar_out));
 
         // Release Reset (R_bar = 1) -> state should latch (Q=0, Q_bar=1)
         sim.set_input(r_bar, true);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(q_out), false);
-        assert_eq!(sim.get_state(q_bar_out), true);
+        assert!(!sim.get_state(q_out));
+        assert!(sim.get_state(q_bar_out));
     }
 
     #[test]
@@ -364,25 +362,25 @@ mod tests {
         sim.set_input(in_a, false);
         sim.set_input(in_b, false);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), false);
+        assert!(!sim.get_state(out));
 
         // A=0, B=1 => OUT=1
         sim.set_input(in_a, false);
         sim.set_input(in_b, true);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), true);
+        assert!(sim.get_state(out));
 
         // A=1, B=0 => OUT=1
         sim.set_input(in_a, true);
         sim.set_input(in_b, false);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), true);
+        assert!(sim.get_state(out));
 
         // A=1, B=1 => OUT=0
         sim.set_input(in_a, true);
         sim.set_input(in_b, true);
         assert!(sim.propagate_events(100).is_ok());
-        assert_eq!(sim.get_state(out), false);
+        assert!(!sim.get_state(out));
 
         // 2. Compile and test BufferTest (inverter -> PassThrough -> output)
         let mut sim2 = Simulator::new();
@@ -405,12 +403,12 @@ mod tests {
         // Input = false => Output = true
         sim2.set_input(b_in, false);
         assert!(sim2.propagate_events(100).is_ok());
-        assert_eq!(sim2.get_state(b_out), true);
+        assert!(sim2.get_state(b_out));
 
         // Input = true => Output = false
         sim2.set_input(b_in, true);
         assert!(sim2.propagate_events(100).is_ok());
-        assert_eq!(sim2.get_state(b_out), false);
+        assert!(!sim2.get_state(b_out));
     }
 
     #[test]
@@ -485,7 +483,7 @@ mod tests {
             }
             let _ = sim.propagate_events(50);
 
-            let expected_val = if (tick / 5) % 2 == 1 { true } else { false };
+            let expected_val = (tick / 5) % 2 == 1;
             let out_idx = match interface.outputs[0] {
                 OutputSource::DrivenByGate(g_idx) => g_idx,
                 _ => panic!("Expected driven by gate output"),
@@ -493,4 +491,3 @@ mod tests {
             assert_eq!(sim.get_state(out_idx), expected_val, "Failed at tick {}", tick);
         }
     }
-}
