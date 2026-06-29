@@ -33,6 +33,7 @@ pub struct Editor {
     // Zoom/Pan
     pub pan: Vec2,
     pub zoom: f32,
+    pub last_mouse_pos: Vec2,
     
     // Interaction States
     pub selected_tool: Option<ActiveTool>,
@@ -80,6 +81,7 @@ impl Editor {
             dragging_annotation_idx: None,
             pan: Vec2::new(200.0, 100.0),
             zoom: 1.0,
+            last_mouse_pos: Vec2::ZERO,
             selected_tool: None,
             active_wire_drag: None,
             dragging_comp_id: None,

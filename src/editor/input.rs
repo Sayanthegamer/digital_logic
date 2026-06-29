@@ -17,6 +17,12 @@ impl Editor {
         let mouse_pos_screen = mouse_position().into();
         let mouse_pos_world = self.to_world_space(mouse_pos_screen);
         
+        let mouse_delta = if self.last_mouse_pos == Vec2::ZERO {
+            Vec2::ZERO
+        } else {
+            mouse_pos_screen - self.last_mouse_pos
+        };
+        
         let egui_wants_pointer = self.egui_wants_pointer;
 
         // Keyboard Shortcuts
@@ -58,8 +64,7 @@ impl Editor {
 
         // 2. Pan with right drag
         if !egui_wants_pointer && is_mouse_button_down(MouseButton::Right) {
-            let delta: Vec2 = mouse_delta_position().into();
-            self.pan += delta * Vec2::new(screen_width(), screen_height());
+            self.pan += mouse_delta;
         }
 
         // 3. Interactions: Left click / drag (only in main canvas)
@@ -273,5 +278,7 @@ impl Editor {
                 let _ = self.simulator.propagate_events(100);
             }
         }
+        
+        self.last_mouse_pos = mouse_pos_screen;
     }
 }
