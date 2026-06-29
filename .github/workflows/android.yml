@@ -12,6 +12,17 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
+      
+    - name: Setup Java (JDK 17)
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+    
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v4
+      with:
+        packages: "platforms;android-33 build-tools;33.0.0 platform-tools"
     
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@stable
