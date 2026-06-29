@@ -5,6 +5,8 @@ edition = "2024"
 
 [package.metadata.android]
 apk_label = "Digital Logic Sim"
+
+[package.metadata.android.sdk]
 target_sdk_version = 33
 min_sdk_version = 21
 
