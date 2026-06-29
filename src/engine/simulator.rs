@@ -1,5 +1,5 @@
-use std::collections::VecDeque;
 use super::types::*;
+use std::collections::VecDeque;
 
 pub struct Simulator {
     pub gates: Vec<PrimitiveGate>,
@@ -36,7 +36,7 @@ impl Simulator {
             input_a_source: None,
             input_b_source: None,
         });
-        
+
         // Floating inputs default to false (Logic 0).
         // A NAND gate with floating inputs evaluates to !(false && false) = true.
         // Input and Output gates default to false.
@@ -44,22 +44,30 @@ impl Simulator {
             GateType::Nand => true,
             GateType::Input | GateType::Output => false,
         };
-        
+
         self.states.push(initial_state);
         self.dependents.push(Vec::new());
         self.in_queue.push(false);
-        
+
         // Queue the newly created gate for initial propagation check
         self.enqueue(index);
-        
+
         index
     }
 
     /// Connects the output of source_idx to target_idx on the specified port.
     /// port is 0 for input_a_source, 1 for input_b_source.
     pub fn connect(&mut self, source_idx: usize, target_idx: usize, port: u8) {
-        assert!(source_idx < self.gates.len(), "Source index out of bounds: {}", source_idx);
-        assert!(target_idx < self.gates.len(), "Target index out of bounds: {}", target_idx);
+        assert!(
+            source_idx < self.gates.len(),
+            "Source index out of bounds: {}",
+            source_idx
+        );
+        assert!(
+            target_idx < self.gates.len(),
+            "Target index out of bounds: {}",
+            target_idx
+        );
 
         let target_gate = &mut self.gates[target_idx];
         match port {
@@ -77,7 +85,11 @@ impl Simulator {
     /// Sets the value of an Input gate.
     /// If the state changes, enqueues all dependents for evaluation.
     pub fn set_input(&mut self, gate_idx: usize, value: bool) {
-        assert!(gate_idx < self.gates.len(), "Gate index out of bounds: {}", gate_idx);
+        assert!(
+            gate_idx < self.gates.len(),
+            "Gate index out of bounds: {}",
+            gate_idx
+        );
         assert!(
             self.gates[gate_idx].gate_type == GateType::Input,
             "Cannot set input on a non-Input gate: {:?}",
@@ -95,7 +107,11 @@ impl Simulator {
 
     /// Gets the current state of a gate by its index.
     pub fn get_state(&self, gate_idx: usize) -> bool {
-        assert!(gate_idx < self.states.len(), "Gate index out of bounds: {}", gate_idx);
+        assert!(
+            gate_idx < self.states.len(),
+            "Gate index out of bounds: {}",
+            gate_idx
+        );
         self.states[gate_idx]
     }
 
@@ -132,8 +148,14 @@ impl Simulator {
             }
 
             let gate = &self.gates[idx];
-            let val_a = gate.input_a_source.map(|s_idx| self.states[s_idx]).unwrap_or(false);
-            let val_b = gate.input_b_source.map(|s_idx| self.states[s_idx]).unwrap_or(false);
+            let val_a = gate
+                .input_a_source
+                .map(|s_idx| self.states[s_idx])
+                .unwrap_or(false);
+            let val_b = gate
+                .input_b_source
+                .map(|s_idx| self.states[s_idx])
+                .unwrap_or(false);
 
             let new_state = match gate.gate_type {
                 GateType::Input => self.states[idx],

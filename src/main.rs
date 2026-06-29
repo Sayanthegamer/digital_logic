@@ -1,8 +1,8 @@
-pub mod engine;
 pub mod editor;
+pub mod engine;
 
-use macroquad::prelude::*;
 use editor::Editor;
+use macroquad::prelude::*;
 
 #[macroquad::main("Digital Logic Simulator")]
 async fn main() {

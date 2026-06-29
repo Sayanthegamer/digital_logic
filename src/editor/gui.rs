@@ -20,7 +20,10 @@ impl Editor {
             if let Some(ref err) = self.propagation_error {
                 egui::TopBottomPanel::top("error_panel").show(ctx, |ui| {
                     ui.horizontal(|ui| {
-                        ui.colored_label(egui::Color32::from_rgb(255, 80, 80), "⚠️ Simulation Error:");
+                        ui.colored_label(
+                            egui::Color32::from_rgb(255, 80, 80),
+                            "⚠️ Simulation Error:",
+                        );
                         ui.label(err);
                     });
                 });
@@ -39,22 +42,73 @@ impl Editor {
 
                         // Library Primitives
                         ui.label("Primitives");
-                        if ui.selectable_label(self.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Input)), "Input Pin").clicked() {
-                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Input));
+                        if ui
+                            .selectable_label(
+                                self.selected_tool
+                                    == Some(super::types::ActiveTool::PlaceComponent(
+                                        ComponentType::Input,
+                                    )),
+                                "Input Pin",
+                            )
+                            .clicked()
+                        {
+                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(
+                                ComponentType::Input,
+                            ));
                         }
-                        if ui.selectable_label(self.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Output)), "Output Pin").clicked() {
-                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Output));
+                        if ui
+                            .selectable_label(
+                                self.selected_tool
+                                    == Some(super::types::ActiveTool::PlaceComponent(
+                                        ComponentType::Output,
+                                    )),
+                                "Output Pin",
+                            )
+                            .clicked()
+                        {
+                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(
+                                ComponentType::Output,
+                            ));
                         }
-                        if ui.selectable_label(self.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Nand)), "NAND Gate").clicked() {
-                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Nand));
+                        if ui
+                            .selectable_label(
+                                self.selected_tool
+                                    == Some(super::types::ActiveTool::PlaceComponent(
+                                        ComponentType::Nand,
+                                    )),
+                                "NAND Gate",
+                            )
+                            .clicked()
+                        {
+                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(
+                                ComponentType::Nand,
+                            ));
                         }
-                        if ui.selectable_label(self.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Clock)), "Clock Input").clicked() {
-                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Clock));
+                        if ui
+                            .selectable_label(
+                                self.selected_tool
+                                    == Some(super::types::ActiveTool::PlaceComponent(
+                                        ComponentType::Clock,
+                                    )),
+                                "Clock Input",
+                            )
+                            .clicked()
+                        {
+                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(
+                                ComponentType::Clock,
+                            ));
                         }
-                        if ui.selectable_label(self.selected_tool == Some(super::types::ActiveTool::PlaceAnnotation), "Text Annotation").clicked() {
+                        if ui
+                            .selectable_label(
+                                self.selected_tool
+                                    == Some(super::types::ActiveTool::PlaceAnnotation),
+                                "Text Annotation",
+                            )
+                            .clicked()
+                        {
                             self.selected_tool = Some(super::types::ActiveTool::PlaceAnnotation);
                         }
-                        
+
                         if ui.button("Clear Selection").clicked() {
                             self.selected_tool = None;
                         }
@@ -64,9 +118,15 @@ impl Editor {
                         ui.separator();
 
                         for (idx, bp) in self.library.iter().enumerate() {
-                            let is_sel = self.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::SubChip(idx)));
+                            let is_sel = self.selected_tool
+                                == Some(super::types::ActiveTool::PlaceComponent(
+                                    ComponentType::SubChip(idx),
+                                ));
                             if ui.selectable_label(is_sel, &bp.name).clicked() {
-                                self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::SubChip(idx)));
+                                self.selected_tool =
+                                    Some(super::types::ActiveTool::PlaceComponent(
+                                        ComponentType::SubChip(idx),
+                                    ));
                             }
                         }
                     });
@@ -86,7 +146,10 @@ impl Editor {
                     ui.add_space(30.0);
 
                     // Simulation Ticker controls
-                    if ui.button(if self.is_playing { "Pause" } else { "Play" }).clicked() {
+                    if ui
+                        .button(if self.is_playing { "Pause" } else { "Play" })
+                        .clicked()
+                    {
                         self.is_playing = !self.is_playing;
                     }
 
@@ -96,7 +159,9 @@ impl Editor {
 
                     ui.add_space(20.0);
                     ui.label("Sim Speed:");
-                    ui.add(egui::Slider::new(&mut self.ticks_per_frame, 1..=500).text("ticks/frame"));
+                    ui.add(
+                        egui::Slider::new(&mut self.ticks_per_frame, 1..=500).text("ticks/frame"),
+                    );
 
                     ui.add_space(20.0);
                     if ui.button("Recompile Graph").clicked() {
@@ -135,110 +200,125 @@ impl Editor {
                     ui.add_space(10.0);
 
                     if !self.inspection_path.is_empty() {
-                        if let Some((blueprint, _)) = self.get_inspected_blueprint_and_components() {
+                        if let Some((blueprint, _)) = self.get_inspected_blueprint_and_components()
+                        {
                             ui.heading("Inspecting Block");
                             ui.colored_label(egui::Color32::from_rgb(0, 180, 255), &blueprint.name);
                             ui.separator();
                             ui.add_space(10.0);
-                            
+
                             ui.label(format!("Inputs: {}", blueprint.inputs));
                             for (i, name) in blueprint.input_names.iter().enumerate() {
                                 ui.small(format!("  Pin {}: {}", i, name));
                             }
-                            
+
                             ui.add_space(10.0);
                             ui.label(format!("Outputs: {}", blueprint.outputs));
                             for (o, name) in blueprint.output_names.iter().enumerate() {
                                 ui.small(format!("  Pin {}: {}", o, name));
                             }
-                            
+
                             ui.add_space(10.0);
                             ui.label(format!("Internal Gates: {}", blueprint.components.len()));
-                            
+
                             ui.add_space(30.0);
                             if ui.button("← Exit Inspection").clicked() {
                                 self.inspection_path.pop();
                                 self.selected_comp_id = None;
                             }
                         }
-                     } else {
-                         // Delete Selected Button (Touch / UI alternative to Delete key)
-                         if !self.selected_comp_ids.is_empty() {
-                             ui.add_space(5.0);
-                             if ui.button("🗑 Delete Selected").clicked() {
-                                 self.components.retain(|c| !self.selected_comp_ids.contains(&c.id));
-                                 self.connections.retain(|c| !self.selected_comp_ids.contains(&c.src_comp_id) && !self.selected_comp_ids.contains(&c.tgt_comp_id));
-                                 self.selected_comp_ids.clear();
-                                 self.selected_comp_id = None;
-                                 self.compile();
-                             }
-                             ui.separator();
-                             ui.add_space(5.0);
-                         }
+                    } else {
+                        // Delete Selected Button (Touch / UI alternative to Delete key)
+                        if !self.selected_comp_ids.is_empty() {
+                            ui.add_space(5.0);
+                            if ui.button("🗑 Delete Selected").clicked() {
+                                self.components
+                                    .retain(|c| !self.selected_comp_ids.contains(&c.id));
+                                self.connections.retain(|c| {
+                                    !self.selected_comp_ids.contains(&c.src_comp_id)
+                                        && !self.selected_comp_ids.contains(&c.tgt_comp_id)
+                                });
+                                self.selected_comp_ids.clear();
+                                self.selected_comp_id = None;
+                                self.compile();
+                            }
+                            ui.separator();
+                            ui.add_space(5.0);
+                        }
 
-                         // If a component is selected, allow inspecting & editing properties
-                         if let Some(sel_id) = self.selected_comp_id {
-                             let mut comp_opt = None;
-                             for c in &mut self.components {
-                                 if c.id == sel_id {
-                                     comp_opt = Some(c);
-                                     break;
-                                 }
-                             }
-                             
-                             if let Some(comp) = comp_opt {
-                                 ui.heading("Selected Component");
-                                 ui.label(format!("ID: {}", comp.id));
-                                 ui.label(format!("Type: {:?}", comp.comp_type));
-                                 
-                                 ui.add_space(5.0);
-                                 ui.label("Label / Name:");
-                                 let mut label = comp.label.clone();
-                                 if ui.text_edit_singleline(&mut label).changed() {
-                                     comp.label = label;
-                                 }
-                                 
-                                 if let ComponentType::SubChip(_) = comp.comp_type {
-                                     ui.add_space(5.0);
-                                     if ui.button("🔍 Look Inside").clicked() {
-                                         self.inspection_path.push(comp.id);
-                                         self.selected_comp_id = None;
-                                     }
-                                 }
-                                 
-                                 if let ComponentType::Clock = comp.comp_type {
-                                     ui.add_space(5.0);
-                                     let mut period = comp.clock_period.unwrap_or(20);
-                                     ui.label("Clock Period (ticks):");
-                                     if ui.add(egui::Slider::new(&mut period, 2..=1000).text("ticks")).changed() {
-                                         comp.clock_period = Some(period);
-                                         // Directly update the compiled active_clocks array!
-                                         if let Some(active_clk) = self.active_clocks.iter_mut().find(|ac| ac.visual_id == Some(comp.id)) {
-                                             active_clk.period = period;
-                                         }
-                                     }
-                                 }
-                                 
-                                 ui.separator();
-                                 ui.add_space(15.0);
-                             }
-                         }
+                        // If a component is selected, allow inspecting & editing properties
+                        if let Some(sel_id) = self.selected_comp_id {
+                            let mut comp_opt = None;
+                            for c in &mut self.components {
+                                if c.id == sel_id {
+                                    comp_opt = Some(c);
+                                    break;
+                                }
+                            }
 
-                         if let Some(idx) = self.selected_annotation_idx
-                             && let Some(ann) = self.annotations.get_mut(idx) {
-                                 ui.heading("Selected Text Label");
-                                 ui.label("Text Content:");
-                                 ui.text_edit_multiline(&mut ann.text);
-                                 
-                                 ui.separator();
-                                 ui.add_space(15.0);
-                             }
+                            if let Some(comp) = comp_opt {
+                                ui.heading("Selected Component");
+                                ui.label(format!("ID: {}", comp.id));
+                                ui.label(format!("Type: {:?}", comp.comp_type));
+
+                                ui.add_space(5.0);
+                                ui.label("Label / Name:");
+                                let mut label = comp.label.clone();
+                                if ui.text_edit_singleline(&mut label).changed() {
+                                    comp.label = label;
+                                }
+
+                                if let ComponentType::SubChip(_) = comp.comp_type {
+                                    ui.add_space(5.0);
+                                    if ui.button("🔍 Look Inside").clicked() {
+                                        self.inspection_path.push(comp.id);
+                                        self.selected_comp_id = None;
+                                    }
+                                }
+
+                                if let ComponentType::Clock = comp.comp_type {
+                                    ui.add_space(5.0);
+                                    let mut period = comp.clock_period.unwrap_or(20);
+                                    ui.label("Clock Period (ticks):");
+                                    if ui
+                                        .add(egui::Slider::new(&mut period, 2..=1000).text("ticks"))
+                                        .changed()
+                                    {
+                                        comp.clock_period = Some(period);
+                                        // Directly update the compiled active_clocks array!
+                                        if let Some(active_clk) = self
+                                            .active_clocks
+                                            .iter_mut()
+                                            .find(|ac| ac.visual_id == Some(comp.id))
+                                        {
+                                            active_clk.period = period;
+                                        }
+                                    }
+                                }
+
+                                ui.separator();
+                                ui.add_space(15.0);
+                            }
+                        }
+
+                        if let Some(idx) = self.selected_annotation_idx
+                            && let Some(ann) = self.annotations.get_mut(idx)
+                        {
+                            ui.heading("Selected Text Label");
+                            ui.label("Text Content:");
+                            ui.text_edit_multiline(&mut ann.text);
+
+                            ui.separator();
+                            ui.add_space(15.0);
+                        }
 
                         ui.heading("Package Chip");
                         ui.separator();
                         ui.add_space(5.0);
-                        
-                        ui.label("Create a reusable custom block out of your current canvas layout.");
+
+                        ui.label(
+                            "Create a reusable custom block out of your current canvas layout.",
+                        );
                         ui.add_space(10.0);
 
                         ui.label("Chip Name:");
@@ -247,12 +327,13 @@ impl Editor {
                         ui.add_space(15.0);
 
                         if ui.button("Compile & Save to Catalog").clicked()
-                            && let Some(new_bp) = self.package_current_canvas() {
-                                self.library.push(new_bp);
-                                self.components.clear();
-                                self.connections.clear();
-                                self.compile();
-                            }
+                            && let Some(new_bp) = self.package_current_canvas()
+                        {
+                            self.library.push(new_bp);
+                            self.components.clear();
+                            self.connections.clear();
+                            self.compile();
+                        }
                     }
                 });
 
@@ -267,7 +348,7 @@ impl Editor {
                             ui.add_space(10.0);
                             ui.label(format!("Resolution has been updated. Reverting automatically in {:.1} seconds...", timer));
                             ui.add_space(15.0);
-                            
+
                             ui.horizontal(|ui| {
                                 if ui.button("Keep Changes").clicked() {
                                     self.resolution_revert_timer = None;
@@ -324,7 +405,7 @@ impl Editor {
                                 self.prev_is_fullscreen = self.is_fullscreen;
                                 self.prev_resolution_idx = self.resolution_idx;
 
-                                let size_changed = self.temp_resolution_idx != self.resolution_idx 
+                                let size_changed = self.temp_resolution_idx != self.resolution_idx
                                     || self.temp_is_fullscreen != self.is_fullscreen;
 
                                 self.is_fullscreen = self.temp_is_fullscreen;
