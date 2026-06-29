@@ -409,6 +409,29 @@ impl Editor {
             }
         }
         
+        // --- Resolution Change Revert Timer ---
+        if let Some(mut timer) = self.resolution_revert_timer {
+            timer -= get_frame_time();
+            if timer <= 0.0 {
+                // Revert to prev settings
+                self.is_fullscreen = self.prev_is_fullscreen;
+                self.resolution_idx = self.prev_resolution_idx;
+                self.temp_is_fullscreen = self.prev_is_fullscreen;
+                self.temp_resolution_idx = self.prev_resolution_idx;
+
+                macroquad::window::set_fullscreen(self.is_fullscreen);
+                let resolutions = &[
+                    (800, 600), (1024, 768), (1280, 720), (1600, 900), (1920, 1080)
+                ];
+                let r = resolutions[self.resolution_idx];
+                macroquad::window::request_new_screen_size(r.0 as f32, r.1 as f32);
+
+                self.resolution_revert_timer = None;
+            } else {
+                self.resolution_revert_timer = Some(timer);
+            }
+        }
+
         self.last_mouse_pos = mouse_pos_screen;
     }
 }
