@@ -65,6 +65,7 @@ impl Editor {
         // 2. Pan with right drag
         if !egui_wants_pointer && is_mouse_button_down(MouseButton::Right) {
             self.pan += mouse_delta;
+            self.selected_tool = None;
         }
 
         // 3. Interactions: Left click / drag (only in main canvas)
@@ -107,10 +108,28 @@ impl Editor {
                         self.selected_comp_id = Some(comp.id);
                         self.selected_annotation_idx = None;
                         
+                        // Handle multi-selection tracking
+                        if self.selected_comp_ids.contains(&comp.id) {
+                            // Already selected, keep multi-selection
+                        } else if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) {
+                            self.selected_comp_ids.insert(comp.id);
+                        } else {
+                            self.selected_comp_ids.clear();
+                            self.selected_comp_ids.insert(comp.id);
+                        }
+
                         // Start dragging (Input components are also draggable now!)
                         self.dragging_comp_id = Some(comp.id);
-                        self.drag_offset = comp.pos - mouse_pos_world;
+                        self.drag_offset = mouse_pos_world;
                         self.drag_dist_pixels = 0.0;
+                        
+                        // Store starting positions of all selected components
+                        self.drag_start_positions.clear();
+                        for &id in &self.selected_comp_ids {
+                            if let Some(c) = self.components.iter().find(|x| x.id == id) {
+                                self.drag_start_positions.insert(id, c.pos);
+                            }
+                        }
                         clicked_something = true;
                     } else {
                         // Check if we clicked an annotation
@@ -128,12 +147,19 @@ impl Editor {
                             self.selected_annotation_idx = Some(idx);
                             self.dragging_annotation_idx = Some(idx);
                             self.selected_comp_id = None;
+                            self.selected_comp_ids.clear();
                             self.drag_offset = self.annotations[idx].pos - mouse_pos_world;
                             clicked_something = true;
                         } else {
                             // Clicked empty space
                             self.selected_comp_id = None;
                             self.selected_annotation_idx = None;
+                            
+                            // Start drag selection box if no placement tool is active
+                            if self.selected_tool.is_none() {
+                                self.selected_comp_ids.clear();
+                                self.selection_box_start = Some(mouse_pos_world);
+                            }
                         }
                     }
                 }
@@ -172,6 +198,8 @@ impl Editor {
                                     clock_period,
                                 });
                                 self.selected_comp_id = Some(new_id);
+                                self.selected_comp_ids.clear();
+                                self.selected_comp_ids.insert(new_id);
                                 self.next_component_id += 1;
                                 self.compile();
                             }
@@ -188,12 +216,19 @@ impl Editor {
                     }
             } else if is_mouse_button_down(MouseButton::Left) {
                 self.drag_dist_pixels += mouse_delta.length();
-                // Drag component
-                if let Some(comp_id) = self.dragging_comp_id
-                    && let Some(comp) = self.components.iter_mut().find(|c| c.id == comp_id) {
-                        let target_pos = mouse_pos_world + self.drag_offset;
-                        comp.pos = Vec2::new((target_pos.x / 20.0).round() * 20.0, (target_pos.y / 20.0).round() * 20.0);
+                // Drag component (multi-selection snapped drag)
+                if let Some(_comp_id) = self.dragging_comp_id {
+                    let translation = mouse_pos_world - self.drag_offset;
+                    let snapped_translation = Vec2::new(
+                        (translation.x / 20.0).round() * 20.0,
+                        (translation.y / 20.0).round() * 20.0,
+                    );
+                    for (&id, &start_pos) in &self.drag_start_positions {
+                        if let Some(c) = self.components.iter_mut().find(|x| x.id == id) {
+                            c.pos = start_pos + snapped_translation;
+                        }
                     }
+                }
                 // Drag annotation
                 if let Some(idx) = self.dragging_annotation_idx
                     && idx < self.annotations.len() {
@@ -223,8 +258,41 @@ impl Editor {
                             }
                     }
 
+                // If drag selection box was active, parse selection
+                if let Some(start) = self.selection_box_start {
+                    let end = mouse_pos_world;
+                    let x_min = start.x.min(end.x);
+                    let x_max = start.x.max(end.x);
+                    let y_min = start.y.min(end.y);
+                    let y_max = start.y.max(end.y);
+                    
+                    let box_w = x_max - x_min;
+                    let box_h = y_max - y_min;
+                    
+                    if box_w > 5.0 || box_h > 5.0 {
+                        self.selected_comp_ids.clear();
+                        self.selected_comp_id = None;
+                        for comp in &self.components {
+                            let comp_rect = Rect::new(comp.pos.x, comp.pos.y, comp.width, comp.height);
+                            let box_rect = Rect::new(x_min, y_min, box_w, box_h);
+                            if comp_rect.overlaps(&box_rect) {
+                                self.selected_comp_ids.insert(comp.id);
+                            }
+                        }
+                        if self.selected_comp_ids.len() == 1 {
+                            self.selected_comp_id = self.selected_comp_ids.iter().next().copied();
+                        }
+                    } else {
+                        // Clicked empty space: clear selection
+                        self.selected_comp_ids.clear();
+                        self.selected_comp_id = None;
+                    }
+                    self.selection_box_start = None;
+                }
+
                 // End drag
                 self.dragging_comp_id = None;
+                self.drag_start_positions.clear();
                 self.dragging_annotation_idx = None;
 
                 // Handle wiring connection release
@@ -260,15 +328,22 @@ impl Editor {
             }
         }
 
-        // 4. Delete selected component (only in main canvas)
+        // 4. Delete selected components (only in main canvas)
         if !egui_wants_pointer && self.inspection_path.is_empty()
-            && (is_key_pressed(KeyCode::Delete) || is_key_pressed(KeyCode::Backspace))
-                && let Some(id) = self.selected_comp_id {
+            && (is_key_pressed(KeyCode::Delete) || is_key_pressed(KeyCode::Backspace)) {
+                if !self.selected_comp_ids.is_empty() {
+                    self.components.retain(|c| !self.selected_comp_ids.contains(&c.id));
+                    self.connections.retain(|c| !self.selected_comp_ids.contains(&c.src_comp_id) && !self.selected_comp_ids.contains(&c.tgt_comp_id));
+                    self.selected_comp_ids.clear();
+                    self.selected_comp_id = None;
+                    self.compile();
+                } else if let Some(id) = self.selected_comp_id {
                     self.components.retain(|c| c.id != id);
                     self.connections.retain(|c| c.src_comp_id != id && c.tgt_comp_id != id);
                     self.selected_comp_id = None;
                     self.compile();
                 }
+            }
 
         // 5. Run continuous simulation ticks with multi-domain clocks (batch-then-propagate)
         if self.is_playing {

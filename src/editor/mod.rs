@@ -41,6 +41,9 @@ pub struct Editor {
     pub dragging_comp_id: Option<usize>,
     pub drag_offset: Vec2,
     pub drag_dist_pixels: f32,
+    pub selected_comp_ids: std::collections::HashSet<usize>,
+    pub selection_box_start: Option<Vec2>,
+    pub drag_start_positions: std::collections::HashMap<usize, Vec2>,
     
     // Simulation Backend
     pub library: Vec<ChipBlueprint>,
@@ -97,6 +100,9 @@ impl Editor {
             dragging_comp_id: None,
             drag_offset: Vec2::ZERO,
             drag_dist_pixels: 0.0,
+            selected_comp_ids: std::collections::HashSet::new(),
+            selection_box_start: None,
+            drag_start_positions: std::collections::HashMap::new(),
             library: Vec::new(),
             simulator: Simulator::new(),
             visual_to_sim_map: HashMap::new(),
