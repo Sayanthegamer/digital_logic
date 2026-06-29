@@ -27,10 +27,11 @@ impl Editor {
                 annotations: self.annotations.clone(),
             };
             if let Ok(serialized) = serde_json::to_string_pretty(&project)
-                && let Ok(mut file) = std::fs::File::create(path) {
-                    use std::io::Write;
-                    let _ = file.write_all(serialized.as_bytes());
-                }
+                && let Ok(mut file) = std::fs::File::create(path)
+            {
+                use std::io::Write;
+                let _ = file.write_all(serialized.as_bytes());
+            }
         }
     }
 
@@ -39,21 +40,23 @@ impl Editor {
             .add_filter("Logic Simulator Projects", &["json"])
             .set_directory(".")
             .pick_file()
-            && let Ok(mut file) = std::fs::File::open(path) {
-                let mut contents = String::new();
-                use std::io::Read;
-                if file.read_to_string(&mut contents).is_ok()
-                    && let Ok(project) = serde_json::from_str::<ProjectFile>(&contents) {
-                        self.library = project.library;
-                        self.components = project.components;
-                        self.connections = project.connections;
-                        self.next_component_id = project.next_component_id;
-                        self.annotations = project.annotations;
-                        self.selected_comp_id = None;
-                        self.selected_annotation_idx = None;
-                        self.inspection_path.clear();
-                        self.compile();
-                    }
+            && let Ok(mut file) = std::fs::File::open(path)
+        {
+            let mut contents = String::new();
+            use std::io::Read;
+            if file.read_to_string(&mut contents).is_ok()
+                && let Ok(project) = serde_json::from_str::<ProjectFile>(&contents)
+            {
+                self.library = project.library;
+                self.components = project.components;
+                self.connections = project.connections;
+                self.next_component_id = project.next_component_id;
+                self.annotations = project.annotations;
+                self.selected_comp_id = None;
+                self.selected_annotation_idx = None;
+                self.inspection_path.clear();
+                self.compile();
             }
+        }
     }
 }
