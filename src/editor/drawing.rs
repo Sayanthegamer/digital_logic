@@ -302,7 +302,7 @@ impl Editor {
             draw_rectangle(screen_pos.x, screen_pos.y + stripe_height / 2.0, comp_width, stripe_height / 2.0, accent_color);
 
             // Draw glowing selection border if selected
-            if self.selected_comp_id == Some(comp.id) {
+            if self.selected_comp_id == Some(comp.id) || self.selected_comp_ids.contains(&comp.id) {
                 let offset = 3.0 * self.zoom;
                 draw_rounded_rect_lines(
                     screen_pos.x - offset,
@@ -403,6 +403,25 @@ impl Editor {
                         draw_text(&name, port_pos.x - 6.0 * self.zoom - text_w, port_pos.y + 3.0 * self.zoom, text_size_px, Color::new(0.5, 0.55, 0.6, 1.0));
                     }
                 }
+        }
+
+        // Draw selection box (Windows style)
+        if let Some(start) = self.selection_box_start {
+            let start_screen = self.to_screen_space(start);
+            let end_screen = Vec2::from(mouse_position());
+            
+            let x_min = start_screen.x.min(end_screen.x);
+            let x_max = start_screen.x.max(end_screen.x);
+            let y_min = start_screen.y.min(end_screen.y);
+            let y_max = start_screen.y.max(end_screen.y);
+            
+            let w = x_max - x_min;
+            let h = y_max - y_min;
+            
+            // Draw filled selection box with translucent blue
+            draw_rectangle(x_min, y_min, w, h, Color::new(0.0, 0.47, 0.83, 0.15));
+            // Draw selection box border line
+            draw_rectangle_lines(x_min, y_min, w, h, 1.5, Color::new(0.0, 0.47, 0.83, 0.6));
         }
 
         // Draw instructions at top-left
