@@ -4,8 +4,9 @@ version = "0.1.0-alpha.1"
 edition = "2024"
 
 [[bin]]
-name = "logic_simulator"
+name = "logic_simulator_desktop"
 path = "src/main.rs"
+
 
 [dependencies]
 logic_simulator = { path = ".." }
