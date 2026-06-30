@@ -1,10 +1,11 @@
+#![allow(clippy::type_complexity)]
 #![allow(dead_code)]
 
-pub mod engine;
 pub mod editor;
+pub mod engine;
 
-use macroquad::prelude::*;
 use editor::Editor;
+use macroquad::prelude::*;
 
 pub async fn run() {
     let mut editor = Editor::new();
