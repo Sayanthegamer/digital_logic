@@ -3,135 +3,9 @@ use macroquad::prelude::*;
 
 use super::Editor;
 
-fn draw_rounded_rect(x: f32, y: f32, w: f32, h: f32, r: f32, color: Color) {
-    let r = r.min(w / 2.0).min(h / 2.0);
-    if r <= 0.0 {
-        draw_rectangle(x, y, w, h, color);
-        return;
-    }
-    // Main horizontal center
-    draw_rectangle(x + r, y, w - 2.0 * r, h, color);
-    // Left vertical strip
-    draw_rectangle(x, y + r, r, h - 2.0 * r, color);
-    // Right vertical strip
-    draw_rectangle(x + w - r, y + r, r, h - 2.0 * r, color);
-
-    // Four corner circles
-    draw_circle(x + r, y + r, r, color);
-    draw_circle(x + w - r, y + r, r, color);
-    draw_circle(x + r, y + h - r, r, color);
-    draw_circle(x + w - r, y + h - r, r, color);
-}
-
-fn draw_rounded_rect_lines(x: f32, y: f32, w: f32, h: f32, r: f32, thickness: f32, color: Color) {
-    let r = r.min(w / 2.0).min(h / 2.0);
-    if r <= 0.0 {
-        draw_rectangle_lines(x, y, w, h, thickness, color);
-        return;
-    }
-    // Draw 4 straight edge lines
-    draw_line(x + r, y, x + w - r, y, thickness, color);
-    draw_line(x + r, y + h, x + w - r, y + h, thickness, color);
-    draw_line(x, y + r, x, y + h - r, thickness, color);
-    draw_line(x + w, y + r, x + w, y + h - r, thickness, color);
-
-    // Draw 4 corner arcs
-    let segments = 6;
-    let draw_arc = |cx: f32, cy: f32, start_angle: f32, end_angle: f32| {
-        let mut last_point = Vec2::new(cx + r * start_angle.cos(), cy + r * start_angle.sin());
-        for i in 1..=segments {
-            let angle = start_angle + (end_angle - start_angle) * (i as f32 / segments as f32);
-            let point = Vec2::new(cx + r * angle.cos(), cy + r * angle.sin());
-            draw_line(
-                last_point.x,
-                last_point.y,
-                point.x,
-                point.y,
-                thickness,
-                color,
-            );
-            last_point = point;
-        }
-    };
-
-    use std::f32::consts::PI;
-    draw_arc(x + r, y + r, PI, 1.5 * PI);
-    draw_arc(x + w - r, y + r, 1.5 * PI, 2.0 * PI);
-    draw_arc(x + w - r, y + h - r, 0.0, 0.5 * PI);
-    draw_arc(x + r, y + h - r, 0.5 * PI, PI);
-}
+use crate::editor::drawing_shapes::*;
 
 impl Editor {
-    fn draw_manhattan_wire_segments(
-        src_pos: Vec2,
-        tgt_pos: Vec2,
-        thickness: f32,
-        color: Color,
-        zoom: f32,
-    ) {
-        if tgt_pos.x >= src_pos.x + 20.0 * zoom {
-            let mid_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0;
-            draw_line(src_pos.x, src_pos.y, mid_x, src_pos.y, thickness, color);
-            draw_line(mid_x, src_pos.y, mid_x, tgt_pos.y, thickness, color);
-            draw_line(mid_x, tgt_pos.y, tgt_pos.x, tgt_pos.y, thickness, color);
-        } else {
-            let stub_src = src_pos.x + 20.0 * zoom;
-            let stub_tgt = tgt_pos.x - 20.0 * zoom;
-
-            let mut mid_y = src_pos.y + (tgt_pos.y - src_pos.y) / 2.0;
-            if (tgt_pos.y - src_pos.y).abs() < 10.0 * zoom {
-                mid_y += 35.0 * zoom;
-            }
-
-            draw_line(src_pos.x, src_pos.y, stub_src, src_pos.y, thickness, color);
-            draw_line(stub_src, src_pos.y, stub_src, mid_y, thickness, color);
-            draw_line(stub_src, mid_y, stub_tgt, mid_y, thickness, color);
-            draw_line(stub_tgt, mid_y, stub_tgt, tgt_pos.y, thickness, color);
-            draw_line(stub_tgt, tgt_pos.y, tgt_pos.x, tgt_pos.y, thickness, color);
-        }
-    }
-
-    pub(crate) fn draw_manhattan_wire(&self, src_pos: Vec2, tgt_pos: Vec2, wire_state: bool) {
-        let color = if wire_state {
-            Color::new(0.00, 0.70, 1.00, 1.0) // electric cyan
-        } else {
-            Color::new(0.24, 0.27, 0.30, 1.0) // muted slate gray
-        };
-        let thickness = if wire_state { 2.2 } else { 1.3 } * self.zoom;
-
-        // Active glow bloom effect under active wires
-        if wire_state {
-            let glow_color = Color::new(0.00, 0.70, 1.00, 0.15);
-            let glow_thickness = thickness + 4.0 * self.zoom;
-            Self::draw_manhattan_wire_segments(
-                src_pos,
-                tgt_pos,
-                glow_thickness,
-                glow_color,
-                self.zoom,
-            );
-        }
-
-        Self::draw_manhattan_wire_segments(src_pos, tgt_pos, thickness, color, self.zoom);
-
-        // Draw concentric terminal circle/indicator at target
-        let port_radius = 4.0 * self.zoom;
-        if wire_state {
-            draw_circle(
-                tgt_pos.x,
-                tgt_pos.y,
-                port_radius + 2.0 * self.zoom,
-                Color::new(0.00, 0.70, 1.00, 0.2),
-            );
-        }
-        draw_circle(tgt_pos.x, tgt_pos.y, port_radius, color);
-        draw_circle(
-            tgt_pos.x,
-            tgt_pos.y,
-            2.0 * self.zoom,
-            Color::new(0.09, 0.10, 0.12, 1.0),
-        );
-    }
 
     pub fn draw(&mut self) {
         // Clear background with dark slate-navy
@@ -217,16 +91,29 @@ impl Editor {
         {
             let (_, src_outputs) = self.get_component_ports_count(src.comp_type);
             let start_pos = self.to_screen_space(src.output_port_pos(src_port, src_outputs));
-            let mouse_pos: Vec2 = mouse_position().into();
+            let mut end_pos: Vec2 = mouse_position().into();
+            
+            // Magnetic Snapping
+            if let Some((tgt_id, tgt_port, is_input)) = self.hovered_port {
+                if is_input && tgt_id != src_id {
+                    if let Some(tgt_comp) = self.components.iter().find(|c| c.id == tgt_id) {
+                        let (inputs_count, _) = self.get_component_ports_count(tgt_comp.comp_type);
+                        end_pos = self.to_screen_space(tgt_comp.input_port_pos(tgt_port, inputs_count));
+                    }
+                }
+            }
 
             draw_line(
                 start_pos.x,
                 start_pos.y,
-                mouse_pos.x,
-                mouse_pos.y,
-                2.0,
-                Color::new(0.5, 0.8, 1.0, 0.6), // Light blue preview wire
+                end_pos.x,
+                end_pos.y,
+                3.0 * self.zoom,
+                Color::new(0.5, 0.8, 1.0, 0.8), // Light blue preview wire
             );
+            
+            // Draw end circle
+            draw_circle(end_pos.x, end_pos.y, 4.0 * self.zoom, Color::new(0.5, 0.8, 1.0, 0.8));
         }
 
         // 1.5. Draw Text Annotations
@@ -235,7 +122,7 @@ impl Editor {
             let font_size = (15.0 * self.zoom).max(8.0);
 
             // Frustum culling for annotations
-            let text_w = measure_text(&ann.text, None, font_size as u16, 1.0).width;
+            let text_w = measure_text(&ann.text, Some(&self.font), font_size as u16, 1.0).width;
             if screen_pos.x + text_w < 0.0
                 || screen_pos.x > screen_width()
                 || screen_pos.y < 0.0
@@ -250,7 +137,12 @@ impl Editor {
             } else {
                 Color::new(0.7, 0.73, 0.75, 0.8)
             };
-            draw_text(&ann.text, screen_pos.x, screen_pos.y, font_size, color);
+            draw_text_ex(&ann.text, screen_pos.x, screen_pos.y, TextParams {
+                font: Some(&self.font),
+                font_size: font_size as u16,
+                color,
+                ..Default::default()
+            });
 
             if is_selected {
                 let pad = 4.0 * self.zoom;
@@ -379,7 +271,7 @@ impl Editor {
 
             // Draw text label
             let font_size = (13.0 * self.zoom).max(6.0);
-            let text_size = measure_text(&comp.label, None, font_size as u16, 1.0);
+            let text_size = measure_text(&comp.label, Some(&self.font), font_size as u16, 1.0);
             let text_x = screen_pos.x + (comp_width - text_size.width) / 2.0;
             let text_y = screen_pos.y + (comp_height + text_size.height) / 2.0;
 
@@ -388,7 +280,12 @@ impl Editor {
             } else {
                 Color::new(0.85, 0.88, 0.90, 1.0)
             };
-            draw_text(&comp.label, text_x, text_y, font_size, text_color);
+            draw_text_ex(&comp.label, text_x, text_y, TextParams {
+                font: Some(&self.font),
+                font_size: font_size as u16,
+                color: text_color,
+                ..Default::default()
+            });
 
             // Draw port circles
             let (inputs_count, outputs_count) = self.get_component_ports_count(comp.comp_type);
@@ -487,13 +384,12 @@ impl Editor {
                         .get(i)
                         .cloned()
                         .unwrap_or_else(|| format!("{}", i));
-                    draw_text(
-                        &name,
-                        port_pos.x + 6.0 * self.zoom,
-                        port_pos.y + 3.0 * self.zoom,
-                        text_size_px,
-                        Color::new(0.5, 0.55, 0.6, 1.0),
-                    );
+                    draw_text_ex(&name, port_pos.x + 6.0 * self.zoom, port_pos.y + 3.0 * self.zoom, TextParams {
+                        font: Some(&self.font),
+                        font_size: text_size_px as u16,
+                        color: Color::new(0.5, 0.55, 0.6, 1.0),
+                        ..Default::default()
+                    });
                 }
                 for o in 0..outputs_count {
                     let port_pos = self.to_screen_space(comp.output_port_pos(o, outputs_count));
@@ -502,14 +398,13 @@ impl Editor {
                         .get(o)
                         .cloned()
                         .unwrap_or_else(|| format!("{}", o));
-                    let text_w = measure_text(&name, None, text_size_px as u16, 1.0).width;
-                    draw_text(
-                        &name,
-                        port_pos.x - 6.0 * self.zoom - text_w,
-                        port_pos.y + 3.0 * self.zoom,
-                        text_size_px,
-                        Color::new(0.5, 0.55, 0.6, 1.0),
-                    );
+                    let text_w = measure_text(&name, Some(&self.font), text_size_px as u16, 1.0).width;
+                    draw_text_ex(&name, port_pos.x - 6.0 * self.zoom - text_w, port_pos.y + 3.0 * self.zoom, TextParams {
+                        font: Some(&self.font),
+                        font_size: text_size_px as u16,
+                        color: Color::new(0.5, 0.55, 0.6, 1.0),
+                        ..Default::default()
+                    });
                 }
             }
         }
@@ -533,13 +428,37 @@ impl Editor {
             draw_rectangle_lines(x_min, y_min, w, h, 1.5, Color::new(0.0, 0.47, 0.83, 0.6));
         }
 
+        // Draw magnetic hover ring
+        if let Some((comp_id, port_idx, is_input)) = self.hovered_port {
+            if let Some(comp) = self.components.iter().find(|c| c.id == comp_id) {
+                let (inputs_count, outputs_count) = self.get_component_ports_count(comp.comp_type);
+                let pos = if is_input {
+                    self.to_screen_space(comp.input_port_pos(port_idx, inputs_count))
+                } else {
+                    self.to_screen_space(comp.output_port_pos(port_idx, outputs_count))
+                };
+                
+                // Draw a pulsing glowing ring
+                let t = get_time() as f32;
+                let pulse = (t * 8.0).sin() * 0.5 + 0.5; // 0.0 to 1.0
+                let radius = 6.0 * self.zoom + pulse * 4.0 * self.zoom;
+                
+                draw_circle_lines(pos.x, pos.y, radius, 2.0 * self.zoom, Color::new(0.0, 0.8, 1.0, 0.8 - pulse * 0.4));
+                draw_circle(pos.x, pos.y, radius, Color::new(0.0, 0.8, 1.0, 0.2 - pulse * 0.1));
+            }
+        }
+
         // Draw instructions at top-left
-        draw_text(
+        draw_text_ex(
             "Left Click: Place/Connect/Toggle | Drag: Move | Right Click/Del: Delete | Scroll: Zoom | Right Drag: Pan",
             15.0,
             20.0,
-            14.0,
-            Color::new(0.6, 0.65, 0.7, 0.8),
+            TextParams {
+                font: Some(&self.font),
+                font_size: 14,
+                color: Color::new(0.6, 0.65, 0.7, 0.8),
+                ..Default::default()
+            },
         );
     }
 }

@@ -1,9 +1,14 @@
 mod canvas;
 mod drawing;
+mod drawing_shapes;
+mod drawing_wires;
 mod gui;
 mod input;
-mod inspection;
+mod inspection_logic;
+mod inspection_ui;
 mod persistence;
+mod ui_catalog;
+mod ui_properties;
 pub mod types;
 
 #[cfg(test)]
@@ -38,6 +43,7 @@ pub struct Editor {
     // Interaction States
     pub selected_tool: Option<ActiveTool>,
     pub active_wire_drag: Option<(usize, usize)>, // (src_comp_id, src_port_idx)
+    pub hovered_port: Option<(usize, usize, bool)>, // (comp_id, port_idx, is_input)
     pub dragging_comp_id: Option<usize>,
     pub drag_offset: Vec2,
     pub drag_dist_pixels: f32,
@@ -91,6 +97,13 @@ pub struct Editor {
     // Touch State
     pub last_touch_dist: Option<f32>,
     pub last_touch_center: Option<Vec2>,
+
+    // Crisp Vector Font
+    pub font: Font,
+
+    // Mobile specific layout controls
+    pub show_menu_mobile: bool,
+    pub catalog_page: usize,
 }
 
 impl Default for Editor {
@@ -101,6 +114,9 @@ impl Default for Editor {
 
 impl Editor {
     pub fn new() -> Self {
+        let font_bytes = include_bytes!("../Inter-Regular.ttf");
+        let font = load_ttf_font_from_bytes(font_bytes).expect("Failed to load embedded Inter font");
+
         let mut editor = Self {
             components: Vec::new(),
             connections: Vec::new(),
@@ -113,6 +129,7 @@ impl Editor {
             last_mouse_pos: Vec2::ZERO,
             selected_tool: None,
             active_wire_drag: None,
+            hovered_port: None,
             dragging_comp_id: None,
             drag_offset: Vec2::ZERO,
             drag_dist_pixels: 0.0,
@@ -146,6 +163,9 @@ impl Editor {
             propagation_error: None,
             last_touch_dist: None,
             last_touch_center: None,
+            font,
+            show_menu_mobile: false,
+            catalog_page: 0,
         };
 
         // Add some basic chips to the library as initial examples

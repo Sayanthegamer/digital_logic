@@ -1,19 +1,23 @@
-use crate::engine::ComponentType;
-
 use super::Editor;
 
 impl Editor {
     pub fn draw_gui(&mut self) {
         let mut egui_wants_pointer = false;
+        let is_mobile = macroquad::window::screen_width() < 720.0;
+
         egui_macroquad::ui(|ctx| {
             ctx.set_pixels_per_point(self.ui_scale);
             egui_wants_pointer = ctx.wants_pointer_input() || ctx.wants_keyboard_input();
-            // Dark elegant theme styling overrides
+            
+            // Dark elegant theme styling overrides with large touch-friendly targets
             let mut style = (*ctx.style()).clone();
             style.visuals.dark_mode = true;
             style.visuals.widgets.active.bg_fill = egui::Color32::from_rgb(32, 60, 48);
             style.visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(36, 42, 45);
             style.visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(18, 20, 22);
+            style.visuals.window_corner_radius = egui::CornerRadius::same(12);
+            style.spacing.button_padding = egui::vec2(14.0, 10.0);
+            style.spacing.item_spacing = egui::vec2(12.0, 12.0);
             ctx.set_style(style);
 
             // Error panel if simulation has oscillated/errored
@@ -29,348 +33,177 @@ impl Editor {
                 });
             }
 
-            // 1. Sidebar catalog panel
-            if self.inspection_path.is_empty() {
-                egui::SidePanel::left("parts_catalog")
+            if is_mobile {
+                // --- MOBILE LAYOUT ---
+                // 1. Tiny Transparent FAB for Menu & Play/Pause at the top
+                egui::Window::new("Mobile FAB")
+                    .anchor(egui::Align2::LEFT_TOP, egui::vec2(15.0, 15.0))
+                    .collapsible(false)
+                    .title_bar(false)
                     .resizable(false)
-                    .default_width(180.0)
+                    .frame(egui::Frame::window(&ctx.style()).fill(egui::Color32::from_rgba_unmultiplied(18, 20, 22, 180)))
                     .show(ctx, |ui| {
-                        ui.add_space(10.0);
-                        ui.heading("Parts Catalog");
-                        ui.separator();
-                        ui.add_space(5.0);
-
-                        // Library Primitives
-                        ui.label("Primitives");
-                        if ui
-                            .selectable_label(
-                                self.selected_tool
-                                    == Some(super::types::ActiveTool::PlaceComponent(
-                                        ComponentType::Input,
-                                    )),
-                                "Input Pin",
-                            )
-                            .clicked()
-                        {
-                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(
-                                ComponentType::Input,
-                            ));
-                        }
-                        if ui
-                            .selectable_label(
-                                self.selected_tool
-                                    == Some(super::types::ActiveTool::PlaceComponent(
-                                        ComponentType::Output,
-                                    )),
-                                "Output Pin",
-                            )
-                            .clicked()
-                        {
-                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(
-                                ComponentType::Output,
-                            ));
-                        }
-                        if ui
-                            .selectable_label(
-                                self.selected_tool
-                                    == Some(super::types::ActiveTool::PlaceComponent(
-                                        ComponentType::Nand,
-                                    )),
-                                "NAND Gate",
-                            )
-                            .clicked()
-                        {
-                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(
-                                ComponentType::Nand,
-                            ));
-                        }
-                        if ui
-                            .selectable_label(
-                                self.selected_tool
-                                    == Some(super::types::ActiveTool::PlaceComponent(
-                                        ComponentType::Clock,
-                                    )),
-                                "Clock Input",
-                            )
-                            .clicked()
-                        {
-                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(
-                                ComponentType::Clock,
-                            ));
-                        }
-                        if ui
-                            .selectable_label(
-                                self.selected_tool
-                                    == Some(super::types::ActiveTool::PlaceAnnotation),
-                                "Text Annotation",
-                            )
-                            .clicked()
-                        {
-                            self.selected_tool = Some(super::types::ActiveTool::PlaceAnnotation);
-                        }
-
-                        if ui.button("Clear Selection").clicked() {
-                            self.selected_tool = None;
-                        }
-
-                        ui.add_space(20.0);
-                        ui.label("Custom Chips");
-                        ui.separator();
-
-                        for (idx, bp) in self.library.iter().enumerate() {
-                            let is_sel = self.selected_tool
-                                == Some(super::types::ActiveTool::PlaceComponent(
-                                    ComponentType::SubChip(idx),
-                                ));
-                            if ui.selectable_label(is_sel, &bp.name).clicked() {
-                                self.selected_tool =
-                                    Some(super::types::ActiveTool::PlaceComponent(
-                                        ComponentType::SubChip(idx),
-                                    ));
+                        ui.horizontal(|ui| {
+                            if ui.button("🛠️ Menu").clicked() {
+                                self.show_menu_mobile = !self.show_menu_mobile;
                             }
-                        }
+                            ui.separator();
+                            if ui.button(if self.is_playing { "⏸" } else { "▶" }).clicked() {
+                                self.is_playing = !self.is_playing;
+                            }
+                            if ui.button("⏭").clicked() {
+                                let _ = self.simulator.propagate_events(50);
+                            }
+                        });
                     });
-            }
 
-            // 2. Control Toolbar (Top Panel)
-            egui::TopBottomPanel::top("control_bar").show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    if !self.inspection_path.is_empty() {
-                        if ui.button("← Exit Inspection").clicked() {
-                            self.inspection_path.pop();
-                            self.selected_comp_id = None;
-                        }
-                        ui.separator();
-                    }
-                    ui.heading("Digital Logic Sim");
-                    ui.add_space(30.0);
-
-                    // Simulation Ticker controls
-                    if ui
-                        .button(if self.is_playing { "Pause" } else { "Play" })
-                        .clicked()
-                    {
-                        self.is_playing = !self.is_playing;
-                    }
-
-                    if ui.button("Step Tick").clicked() {
-                        let _ = self.simulator.propagate_events(50);
-                    }
-
-                    ui.add_space(20.0);
-                    ui.label("Sim Speed:");
-                    ui.add(
-                        egui::Slider::new(&mut self.ticks_per_frame, 1..=500).text("ticks/frame"),
-                    );
-
-                    ui.add_space(20.0);
-                    if ui.button("Recompile Graph").clicked() {
-                        self.compile();
-                    }
-
-                    if ui.button("Clear Canvas").clicked() {
-                        self.components.clear();
-                        self.connections.clear();
-                        self.compile();
-                    }
-                    ui.separator();
-                    if ui.button("💾 Save").clicked() {
-                        self.save_project();
-                    }
-                    if ui.button("📂 Load").clicked() {
-                        self.load_project();
-                    }
-                    ui.separator();
-                    if ui.button("⚙ Settings").clicked() {
-                        self.show_settings = !self.show_settings;
-                        if self.show_settings {
-                            self.temp_is_fullscreen = self.is_fullscreen;
-                            self.temp_resolution_idx = self.resolution_idx;
-                            self.temp_ui_scale = self.ui_scale;
-                        }
-                    }
-                });
-            });
-
-            // 3. Packaging Chip Panel (Right Panel)
-            egui::SidePanel::right("package_panel")
-                .resizable(false)
-                .default_width(200.0)
-                .show(ctx, |ui| {
-                    ui.add_space(10.0);
-
-                    if !self.inspection_path.is_empty() {
-                        if let Some((blueprint, _)) = self.get_inspected_blueprint_and_components()
-                        {
-                            ui.heading("Inspecting Block");
-                            ui.colored_label(egui::Color32::from_rgb(0, 180, 255), &blueprint.name);
-                            ui.separator();
-                            ui.add_space(10.0);
-
-                            ui.label(format!("Inputs: {}", blueprint.inputs));
-                            for (i, name) in blueprint.input_names.iter().enumerate() {
-                                ui.small(format!("  Pin {}: {}", i, name));
-                            }
-
-                            ui.add_space(10.0);
-                            ui.label(format!("Outputs: {}", blueprint.outputs));
-                            for (o, name) in blueprint.output_names.iter().enumerate() {
-                                ui.small(format!("  Pin {}: {}", o, name));
-                            }
-
-                            ui.add_space(10.0);
-                            ui.label(format!("Internal Gates: {}", blueprint.components.len()));
-
-                            ui.add_space(30.0);
-                            if ui.button("← Exit Inspection").clicked() {
-                                self.inspection_path.pop();
-                                self.selected_comp_id = None;
-                            }
-                        }
-                    } else {
-                        // Delete Selected Button (Touch / UI alternative to Delete key)
-                        if !self.selected_comp_ids.is_empty() {
-                            ui.add_space(5.0);
-                            if ui.button("🗑 Delete Selected").clicked() {
-                                self.components
-                                    .retain(|c| !self.selected_comp_ids.contains(&c.id));
-                                self.connections.retain(|c| {
-                                    !self.selected_comp_ids.contains(&c.src_comp_id)
-                                        && !self.selected_comp_ids.contains(&c.tgt_comp_id)
-                                });
-                                self.selected_comp_ids.clear();
-                                self.selected_comp_id = None;
-                                self.compile();
-                            }
-                            ui.separator();
-                            ui.add_space(5.0);
-                        }
-
-                        // If a component is selected, allow inspecting & editing properties
-                        if let Some(sel_id) = self.selected_comp_id {
-                            let mut comp_opt = None;
-                            for c in &mut self.components {
-                                if c.id == sel_id {
-                                    comp_opt = Some(c);
-                                    break;
-                                }
-                            }
-
-                            if let Some(comp) = comp_opt {
-                                ui.heading("Selected Component");
-                                ui.label(format!("ID: {}", comp.id));
-                                ui.label(format!("Type: {:?}", comp.comp_type));
-
-                                ui.add_space(5.0);
-                                ui.label("Label / Name:");
-                                let mut label = comp.label.clone();
-                                if ui.text_edit_singleline(&mut label).changed() {
-                                    comp.label = label;
-                                }
-
-                                if let ComponentType::SubChip(_) = comp.comp_type {
-                                    ui.add_space(5.0);
-                                    if ui.button("🔍 Look Inside").clicked() {
-                                        self.inspection_path.push(comp.id);
+                // 2. Full Control Drawer (overlay)
+                if self.show_menu_mobile {
+                    egui::Window::new("Simulator Drawer")
+                        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+                        .collapsible(false)
+                        .title_bar(true)
+                        .resizable(false)
+                        .default_width(320.0)
+                        .show(ctx, |ui| {
+                            ui.vertical(|ui| {
+                                if !self.inspection_path.is_empty() {
+                                    if ui.button("← Exit Inspection").clicked() {
+                                        self.inspection_path.pop();
                                         self.selected_comp_id = None;
                                     }
+                                    ui.separator();
                                 }
 
-                                if let ComponentType::Clock = comp.comp_type {
-                                    ui.add_space(5.0);
-                                    let mut period = comp.clock_period.unwrap_or(20);
-                                    ui.label("Clock Period (ticks):");
-                                    if ui
-                                        .add(egui::Slider::new(&mut period, 2..=1000).text("ticks"))
-                                        .changed()
-                                    {
-                                        comp.clock_period = Some(period);
-                                        // Directly update the compiled active_clocks array!
-                                        if let Some(active_clk) = self
-                                            .active_clocks
-                                            .iter_mut()
-                                            .find(|ac| ac.visual_id == Some(comp.id))
-                                        {
-                                            active_clk.period = period;
-                                        }
+                                // Simulator Stats & Options
+                                ui.heading("Options");
+                                ui.horizontal(|ui| {
+                                    if ui.button("💾 Save").clicked() { self.save_project(); }
+                                    if ui.button("📂 Load").clicked() { self.load_project(); }
+                                    if ui.button("⚙ Settings").clicked() { self.show_settings = !self.show_settings; }
+                                });
+                                
+                                ui.horizontal(|ui| {
+                                    ui.label("Speed:");
+                                    ui.add(egui::Slider::new(&mut self.ticks_per_frame, 1..=500).show_value(true));
+                                });
+
+                                ui.separator();
+
+                                // Parts Catalog inside drawer
+                                if self.inspection_path.is_empty() {
+                                    ui.heading("Parts Catalog");
+                                    self.draw_catalog_ui(ui);
+                                    ui.separator();
+                                }
+
+                                // Properties section inside drawer
+                                self.draw_properties_ui(ui);
+
+                                ui.add_space(10.0);
+                                if ui.button("❌ Close Menu").clicked() {
+                                    self.show_menu_mobile = false;
+                                }
+                            });
+                        });
+                }
+            } else {
+                // --- DESKTOP LAYOUT (Big screens) ---
+                // 1. Floating Bottom Toolbar for Parts Catalog
+                if self.inspection_path.is_empty() {
+                    egui::Window::new("Tools")
+                        .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -20.0))
+                        .collapsible(false)
+                        .title_bar(false)
+                        .resizable(false)
+                        .frame(egui::Frame::window(&ctx.style()).inner_margin(8.0))
+                        .show(ctx, |ui| {
+                            self.draw_catalog_ui(ui);
+                        });
+                }
+
+                // 2. Control Toolbar (Top Floating Panel)
+                egui::Window::new("Controls")
+                    .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 15.0))
+                    .collapsible(false)
+                    .title_bar(false)
+                    .resizable(false)
+                    .frame(egui::Frame::window(&ctx.style()).inner_margin(8.0))
+                    .show(ctx, |ui| {
+                        egui::ScrollArea::horizontal().show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                if !self.inspection_path.is_empty() {
+                                    if ui.button("← Exit Inspection").clicked() {
+                                        self.inspection_path.pop();
+                                        self.selected_comp_id = None;
                                     }
+                                    ui.separator();
+                                }
+                                
+                                if ui.button(if self.is_playing { "⏸ Pause" } else { "▶ Play" }).clicked() {
+                                    self.is_playing = !self.is_playing;
+                                }
+                                if ui.button("⏭ Step").clicked() {
+                                    let _ = self.simulator.propagate_events(50);
                                 }
 
                                 ui.separator();
-                                ui.add_space(15.0);
-                            }
-                        }
+                                ui.label("Speed:");
+                                ui.add(egui::Slider::new(&mut self.ticks_per_frame, 1..=500).show_value(false));
 
-                        if let Some(idx) = self.selected_annotation_idx
-                            && let Some(ann) = self.annotations.get_mut(idx)
-                        {
-                            ui.heading("Selected Text Label");
-                            ui.label("Text Content:");
-                            ui.text_edit_multiline(&mut ann.text);
+                                ui.separator();
+                                if ui.button("💾").on_hover_text("Save Project").clicked() { self.save_project(); }
+                                if ui.button("📂").on_hover_text("Load Project").clicked() { self.load_project(); }
+                                if ui.button("⚙").on_hover_text("Settings").clicked() {
+                                    self.show_settings = !self.show_settings;
+                                    if self.show_settings {
+                                        self.temp_is_fullscreen = self.is_fullscreen;
+                                        self.temp_resolution_idx = self.resolution_idx;
+                                        self.temp_ui_scale = self.ui_scale;
+                                    }
+                                }
+                            });
+                        });
+                    });
 
-                            ui.separator();
-                            ui.add_space(15.0);
-                        }
+                // 3. Properties Panel (Right Floating Window)
+                egui::Window::new("Properties")
+                    .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-15.0, 80.0))
+                    .collapsible(true)
+                    .resizable(false)
+                    .default_width(220.0)
+                    .show(ctx, |ui| {
+                        self.draw_properties_ui(ui);
+                    });
+            }
 
-                        ui.heading("Package Chip");
-                        ui.separator();
-                        ui.add_space(5.0);
-
-                        ui.label(
-                            "Create a reusable custom block out of your current canvas layout.",
-                        );
-                        ui.add_space(10.0);
-
-                        ui.label("Chip Name:");
-                        ui.text_edit_singleline(&mut self.chip_name_input);
-
-                        ui.add_space(15.0);
-
-                        if ui.button("Compile & Save to Catalog").clicked()
-                            && let Some(new_bp) = self.package_current_canvas()
-                        {
-                            self.library.push(new_bp);
-                            self.components.clear();
-                            self.connections.clear();
-                            self.compile();
-                        }
-                    }
-                });
-
+            // Settings Dialog Window
             if self.show_settings {
                 let mut show_settings = self.show_settings;
                 egui::Window::new("Settings")
                     .open(&mut show_settings)
                     .resizable(false)
+                    .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
                     .show(ctx, |ui| {
                         if let Some(timer) = self.resolution_revert_timer {
                             ui.heading("Confirm Resolution Change");
                             ui.add_space(10.0);
-                            ui.label(format!("Resolution has been updated. Reverting automatically in {:.1} seconds...", timer));
-                            ui.add_space(15.0);
-
+                            ui.label(format!("Reverting in {:.1}s...", timer));
                             ui.horizontal(|ui| {
                                 if ui.button("Keep Changes").clicked() {
                                     self.resolution_revert_timer = None;
                                 }
                                 if ui.button("Revert Now").clicked() {
-                                    // Trigger immediate revert
                                     self.resolution_revert_timer = Some(0.0);
                                 }
                             });
                         } else {
                             ui.heading("Graphics Settings");
-                            ui.add_space(5.0);
-
-                            // 1. Fullscreen Toggle (temporary)
                             let mut temp_fs = self.temp_is_fullscreen;
                             ui.checkbox(&mut temp_fs, "Fullscreen");
                             self.temp_is_fullscreen = temp_fs;
 
-                            ui.add_space(5.0);
-
-                            // 2. Resolution Choice (temporary)
-                            ui.label("Window Resolution:");
+                            ui.label("Resolution:");
                             let resolutions = &[
                                 (800, 600, "800 x 600"),
                                 (1024, 768, "1024 x 768"),
@@ -388,19 +221,11 @@ impl Editor {
                                 });
                             self.temp_resolution_idx = temp_res;
 
-                            ui.add_space(10.0);
-                            ui.heading("UI Scaling");
-                            ui.add_space(5.0);
-
-                            // 3. UI Scale (temporary)
                             let mut temp_scale = self.temp_ui_scale;
-                            ui.add(egui::Slider::new(&mut temp_scale, 0.5..=2.0).text("UI Scale"));
+                            ui.add(egui::Slider::new(&mut temp_scale, 0.5..=3.0).text("UI Scale"));
                             self.temp_ui_scale = temp_scale;
 
-                            ui.add_space(15.0);
-                            ui.separator();
-                            ui.add_space(5.0);
-
+                            ui.add_space(10.0);
                             if ui.button("Apply Settings").clicked() {
                                 self.prev_is_fullscreen = self.is_fullscreen;
                                 self.prev_resolution_idx = self.resolution_idx;
