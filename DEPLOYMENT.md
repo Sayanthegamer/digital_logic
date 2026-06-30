@@ -56,18 +56,29 @@ You can also build the application as a standalone Android APK. Because the inte
 
 ### Prerequisites
 
+#### Option A: Docker (Recommended - No local setup required)
+If you have Docker installed, you do not need to install the Android NDK, SDK, or Rust targets manually. 
+
+1. **Generate a Keystore**:
+   Follow step 1 in the build section below.
+2. **Build the APK**:
+   ```bash
+   docker run --rm -v $(pwd):/root/src -w /root/src notfl3/cargo-apk cargo quad-apk build --release
+   ```
+
+#### Option B: Manual Local Setup
 1. **Install Android NDK & SDK**:
    - Ensure the Android SDK and NDK are installed on your machine.
-   - Set the `ANDROID_NDK_ROOT` environment variable to point to your NDK installation directory (e.g. version `r25c`).
+   - Set the `ANDROID_NDK_ROOT` environment variable to point to your NDK installation directory.
 
 2. **Add Android Targets**:
    ```bash
    rustup target add aarch64-linux-android armv7-linux-androideabi
    ```
 
-3. **Install cargo-apk**:
+3. **Install cargo-quad-apk**:
    ```bash
-   cargo install cargo-apk
+   cargo install cargo-quad-apk
    ```
 
 ### Building the Release APK
@@ -79,11 +90,11 @@ You can also build the application as a standalone Android APK. Because the inte
    ```
    *(Note: The keystore credentials `android` and alias `release-key` match the pre-configured settings in `Cargo.toml`).*
 
-2. **Compile the APK**:
+2. **Compile the APK (Local Setup)**:
    ```bash
-   cargo apk build --release
+   cargo quad-apk build --release
    ```
 
 The resulting signed APK will be located at:
-- `.\target\release\apk\logic_simulator.apk`
+- `.\target\android-artifacts\release\apk\logic_simulator.apk`
 
