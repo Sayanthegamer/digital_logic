@@ -21,11 +21,12 @@ impl Editor {
             next_component_id: self.next_component_id,
             annotations: self.annotations.clone(),
         };
-        if let Ok(serialized) = serde_json::to_string_pretty(&project)
-            && let Ok(mut file) = std::fs::File::create(path)
+        if let Ok(serialized) = serde_json::to_string_pretty(&project) {
+            if let Ok(mut file) = std::fs::File::create(path)
         {
             use std::io::Write;
             let _ = file.write_all(serialized.as_bytes());
+            }
         }
     }
 
@@ -33,8 +34,8 @@ impl Editor {
         if let Ok(mut file) = std::fs::File::open(path) {
             let mut contents = String::new();
             use std::io::Read;
-            if file.read_to_string(&mut contents).is_ok()
-                && let Ok(project) = serde_json::from_str::<ProjectFile>(&contents)
+            if file.read_to_string(&mut contents).is_ok() {
+                if let Ok(project) = serde_json::from_str::<ProjectFile>(&contents)
             {
                 self.library = project.library;
                 self.components = project.components;
@@ -45,6 +46,7 @@ impl Editor {
                 self.selected_annotation_idx = None;
                 self.inspection_path.clear();
                 self.compile();
+                }
             }
         }
     }
