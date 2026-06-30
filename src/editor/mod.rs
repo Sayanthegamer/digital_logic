@@ -34,6 +34,9 @@ pub struct Editor {
     pub annotations: Vec<TextAnnotation>,
     pub selected_annotation_idx: Option<usize>,
     pub dragging_annotation_idx: Option<usize>,
+    pub last_click_time: f64,
+    pub last_clicked_annotation_idx: Option<usize>,
+    pub focus_annotation_text: bool,
 
     // Zoom/Pan
     pub pan: Vec2,
@@ -128,6 +131,9 @@ impl Editor {
             annotations: Vec::new(),
             selected_annotation_idx: None,
             dragging_annotation_idx: None,
+            last_click_time: 0.0,
+            last_clicked_annotation_idx: None,
+            focus_annotation_text: false,
             pan: Vec2::new(200.0, 100.0),
             zoom: 1.0,
             last_mouse_pos: Vec2::ZERO,

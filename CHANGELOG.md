@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-alpha.4] - 2026-06-30
+
+### Added
+- **Text Annotation Editing & Deletion:**
+  - Added double-click/double-tap detection on text annotations to automatically focus and edit text.
+  - Added keyboard shortcut deletion support (via `Delete` or `Backspace` keys) for selected annotations.
+  - Added a "Delete Selected" button to the properties panel when an annotation is selected.
+
 ## [0.2.0-alpha.3] - 2026-06-30
 
 ### Fixed

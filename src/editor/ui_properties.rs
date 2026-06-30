@@ -80,13 +80,27 @@ impl Editor {
                 }
             }
 
+            let mut delete_annotation_idx = None;
             if let Some(idx) = self.selected_annotation_idx {
                 if let Some(ann) = self.annotations.get_mut(idx) {
                     has_selection = true;
                     ui.heading("Text Label");
-                    ui.text_edit_multiline(&mut ann.text);
+                    let response = ui.text_edit_multiline(&mut ann.text);
+                    if self.focus_annotation_text {
+                        response.request_focus();
+                        self.focus_annotation_text = false;
+                    }
+                    ui.add_space(5.0);
+                    if ui.button("🗑 Delete Selected").clicked() {
+                        delete_annotation_idx = Some(idx);
+                    }
                     ui.separator();
                 }
+            }
+
+            if let Some(idx) = delete_annotation_idx {
+                self.annotations.remove(idx);
+                self.selected_annotation_idx = None;
             }
 
             if !has_selection {
