@@ -52,6 +52,10 @@ jobs:
         cargo generate-lockfile
         sed -i 's/version = 4/version = 3/g' Cargo.lock
       
+
+    - name: Fix libunwind linking for newer Rust
+      run: find ${{ steps.setup-ndk.outputs.ndk-path }} -name libgcc.a -print -execdir ln -sf libgcc.a libunwind.a \;
+
     - name: Build APK
       env:
         NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
