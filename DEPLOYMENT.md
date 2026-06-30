@@ -56,17 +56,6 @@ You can also build the application as a standalone Android APK. Because the inte
 
 ### Prerequisites
 
-#### Option A: Docker (Recommended - No local setup required)
-If you have Docker installed, you do not need to install the Android NDK, SDK, or Rust targets manually. 
-
-1. **Generate a Keystore**:
-   Follow step 1 in the build section below.
-2. **Build the APK**:
-   ```bash
-   docker run --rm -v $(pwd):/root/src -w /root/src notfl3/cargo-apk cargo quad-apk build --release
-   ```
-
-#### Option B: Manual Local Setup
 1. **Install Android NDK & SDK**:
    - Ensure the Android SDK and NDK are installed on your machine.
    - Set the `ANDROID_NDK_ROOT` environment variable to point to your NDK installation directory.

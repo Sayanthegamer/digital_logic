@@ -24,12 +24,32 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
     
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v4
+      with:
+        packages: "platforms;android-33 build-tools;33.0.0 platform-tools"
+    
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: aarch64-linux-android, armv7-linux-androideabi
+        
+    - name: Setup NDK
+      id: setup-ndk
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25c
+        
+    - name: Install cargo-quad-apk
+      run: cargo install cargo-quad-apk
+
     - name: Generate self-signed keystore for release build
       run: keytool -genkey -v -keystore release.keystore -alias release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android, O=Android, C=US" -storepass android -keypass android
       
-    - name: Build APK using Docker
-      run: |
-        docker run --rm -v ${{ github.workspace }}:/root/src -w /root/src notfl3/cargo-apk cargo quad-apk build --release
+    - name: Build APK
+      env:
+        ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+      run: cargo quad-apk build --release
 
       
     - name: Upload APK Artifact
