@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Implemented target-gated platform features (e.g., file dialogs are target-gated on desktop, falling back to a fixed directory on Android).
   - Created automated build and code-signing pipelines in GitHub Actions.
 
+- **CI/CD & Release Automation:**
+  - Integrated automated GitHub Release creation and asset deployment triggered by version tags (`v*`).
+  - Added cryptographic build attestation (provenance verification) for both Windows and Android builds.
+  - Integrated automated VirusTotal scanning for release binaries.
+
 - **Documentation:**
   - Added ARCHITECTURE.md, DESIGN.md, SPEC.md, SYSTEM.md, DEPLOYMENT.md, and README.md detailing the core philosophy.
+
 
