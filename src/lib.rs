@@ -35,7 +35,7 @@ pub async fn main() {
 }
 
 #[cfg(target_os = "android")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn quad_main() {
     main();
 }
