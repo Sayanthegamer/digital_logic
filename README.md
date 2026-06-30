@@ -25,7 +25,7 @@ By utilizing a Data-Oriented Design (struct-of-arrays) and a completely flat com
 - **Multi-Domain Clocks**: Native support for clocks with localized periods running synchronously.
 - **Oscillation Detection**: Prevents the application from freezing when infinite zero-delay feedback loops are accidentally created.
 - **Clean UI**: Built with Macroquad (for high-speed 2D canvas rendering) and egui (for the immediate-mode interface).
-- **Multi-Platform & Mobile Ready**: Compiles natively to Windows, Linux, macOS, and Android (featuring touch screen pan/zoom controls).
+- **Multi-Platform & Mobile Ready**: Compiles natively to Windows, Android (featuring touch screen pan/zoom controls).
 
 
 ## Documentation
