@@ -1,3 +1,4 @@
+#![windows_subsystem = "windows"]
 #![allow(clippy::type_complexity)]
 #![allow(dead_code)]
 
