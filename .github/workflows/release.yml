@@ -1,0 +1,141 @@
+name: Publish GitHub Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-pc-windows-msvc
+
+    - name: Setup MSVC
+      uses: ilammy/msvc-dev-cmd@v1
+
+    - name: Build EXE
+      run: cargo build --release
+
+    - name: Generate Build Attestation
+      uses: actions/attest-build-provenance@v2
+      with:
+        subject-path: 'target/release/logic_simulator.exe'
+
+    - name: VirusTotal Scan
+      uses: crazy-max/ghaction-virustotal@v5
+      with:
+        vt_api_key: ${{ secrets.VT_API_KEY }}
+        files: |
+          target/release/logic_simulator.exe
+
+    - name: Upload Windows Asset
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-release-bin
+        path: target/release/logic_simulator.exe
+
+  build-android:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: Setup Java (JDK 17)
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+    
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v4
+      with:
+        packages: "platforms;android-33 build-tools;33.0.0 platform-tools"
+    
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: aarch64-linux-android, armv7-linux-androideabi
+        
+    - name: Setup NDK
+      id: setup-ndk
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25c
+        
+    - name: Install cargo-apk
+      run: cargo install cargo-apk
+      
+    - name: Generate self-signed keystore for release build
+      run: keytool -genkey -v -keystore release.keystore -alias release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android, O=Android, C=US" -storepass android -keypass android
+      
+    - name: Build APK
+      env:
+        ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+      run: cargo apk build --release
+      
+    - name: Generate Build Attestation
+      uses: actions/attest-build-provenance@v2
+      with:
+        subject-path: 'target/release/apk/logic_simulator.apk'
+
+    - name: VirusTotal Scan
+      uses: crazy-max/ghaction-virustotal@v5
+      with:
+        vt_api_key: ${{ secrets.VT_API_KEY }}
+        files: |
+          target/release/apk/logic_simulator.apk
+
+    - name: Upload Android Asset
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-release-bin
+        path: target/release/apk/logic_simulator.apk
+
+  publish-release:
+    needs: [build-windows, build-android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Download Windows Asset
+      uses: actions/download-artifact@v4
+      with:
+        name: windows-release-bin
+        path: ./release-assets
+
+    - name: Download Android Asset
+      uses: actions/download-artifact@v4
+      with:
+        name: android-release-bin
+        path: ./release-assets
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          ./release-assets/logic_simulator.exe
+          ./release-assets/logic_simulator.apk
+        draft: false
+        prerelease: false
+        generate_release_notes: true
