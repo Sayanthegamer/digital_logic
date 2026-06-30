@@ -87,6 +87,9 @@ jobs:
     - name: Generate self-signed keystore for release build
       run: keytool -genkey -v -keystore release.keystore -alias release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android, O=Android, C=US" -storepass android -keypass android
       
+    - name: Downgrade Cargo.lock for cargo-quad-apk
+      run: sed -i 's/version = 4/version = 3/g' Cargo.lock
+      
     - name: Build APK
       env:
         NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
