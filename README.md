@@ -24,7 +24,7 @@ By utilizing a Data-Oriented Design (struct-of-arrays) and a completely flat com
 - **Flat Sub-Chip Compilation**: Build complex nested logic without sacrificing a single frame of performance.
 - **Multi-Domain Clocks**: Native support for clocks with localized periods running synchronously.
 - **Oscillation Detection**: Prevents the application from freezing when infinite zero-delay feedback loops are accidentally created.
-- **Clean UI**: Built with Macroquad (for high-speed 2D canvas rendering) and egui (for the immediate-mode interface).
+- **Clean UI**: Built with Macroquad (for high-speed 2D canvas rendering) and egui (for the immediate-mode interface), fully modularized for easy expansion and testing.
 - **Multi-Platform & Mobile Ready**: Compiles natively to Windows, Android (featuring touch screen pan/zoom controls).
 
 

@@ -25,5 +25,11 @@ The frontend combines two rendering paradigms:
 1. **Macroquad**: Used for the 2D logic canvas (rendering wires, components, and the grid). It provides high-performance, low-level rendering capabilities.
 2. **egui**: Used for the immediate-mode graphical user interface (menus, inspection panels, sidebars). It is integrated via `egui-macroquad` to render on top of the Macroquad canvas.
 
+### Separation of Concerns
+The Editor UI has been modularized to ensure high maintainability:
+- **`gui.rs` & `ui_*.rs`**: Handles layout orchestration, toolbars, and properties panels (egui).
+- **`drawing.rs` & `drawing_*.rs`**: Handles primitive math, shape rendering, and routing of manhattan wires (Macroquad).
+- **`inspection_logic.rs` & `inspection_ui.rs`**: Handles tracing states deep inside sub-chips and visualizing them in a read-only overlay.
+
 ### Separation of State
 The `Editor` struct maintains the visual state (positions, zooming, tool selection) and interacts with the `Simulator`. Visual components are mapped to underlying simulation indices (`port_to_sim_gate_map`, `visual_to_sim_map`), meaning the UI is just a "viewer" and "controller" for the high-performance core, never dragging down the simulation speed.
