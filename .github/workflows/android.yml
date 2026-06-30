@@ -22,7 +22,7 @@ jobs:
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '8'
+        java-version: '17'
     
     - name: Setup Android SDK
       uses: android-actions/setup-android@v4
@@ -55,6 +55,13 @@ jobs:
 
     - name: Fix libunwind linking for newer Rust
       run: find ${{ steps.setup-ndk.outputs.ndk-path }} -name libgcc.a -print -execdir ln -sf libgcc.a libunwind.a \;
+
+
+    - name: Setup Java 8 for cargo-quad-apk
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '8'
 
     - name: Build APK
       env:
