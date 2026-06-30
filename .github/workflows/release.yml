@@ -26,7 +26,8 @@ jobs:
       uses: ilammy/msvc-dev-cmd@v1
 
     - name: Build EXE
-      run: cargo build --release
+      run: cargo build --workspace --release
+
 
     - name: Generate Build Attestation
       uses: actions/attest-build-provenance@v2
