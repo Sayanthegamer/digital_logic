@@ -104,6 +104,10 @@ pub struct Editor {
     // Mobile specific layout controls
     pub show_menu_mobile: bool,
     pub catalog_page: usize,
+
+    // Programmatic scrolling requests
+    pub catalog_scroll_request: Option<f32>,
+    pub controls_scroll_request: Option<f32>,
 }
 
 impl Default for Editor {
@@ -166,6 +170,8 @@ impl Editor {
             font,
             show_menu_mobile: false,
             catalog_page: 0,
+            catalog_scroll_request: None,
+            controls_scroll_request: None,
         };
 
         // Add some basic chips to the library as initial examples

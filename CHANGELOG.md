@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0-alpha.2] - 2026-06-30
 
+### Added
+- **UI Menu Scrolling & Navigation:**
+  - Added flanking scroll buttons (◀ and ▶) to the top Controls panel and the bottom Parts Catalog.
+  - Implemented vertical mouse wheel redirection to horizontal scrolling for improved menu navigation on desktop.
+
 ### Changed
 - **Editor Architecture:**
   - Decomposed massive monolithic files (`gui.rs`, `drawing.rs`, `inspection.rs`) into smaller, modular, maintainable, and highly cohesive domain-specific files (`drawing_shapes.rs`, `ui_properties.rs`, `inspection_logic.rs`, etc.).

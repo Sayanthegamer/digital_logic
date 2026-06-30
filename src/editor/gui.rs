@@ -130,39 +130,62 @@ impl Editor {
                     .resizable(false)
                     .frame(egui::Frame::window(&ctx.style()).inner_margin(8.0))
                     .show(ctx, |ui| {
-                        egui::ScrollArea::horizontal().show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                if !self.inspection_path.is_empty() {
-                                    if ui.button("← Exit Inspection").clicked() {
-                                        self.inspection_path.pop();
-                                        self.selected_comp_id = None;
+                        let mut scroll_by = self.controls_scroll_request.take();
+
+                        // Handle vertical mouse wheel as horizontal scroll
+                        let scroll_delta = ui.input(|i| i.raw_scroll_delta);
+                        if scroll_delta.y != 0.0 {
+                            scroll_by = Some(scroll_delta.y * 3.0);
+                        }
+
+                        ui.horizontal(|ui| {
+                            // Scroll Left Button
+                            if ui.button("◀").on_hover_text("Scroll Left").clicked() {
+                                self.controls_scroll_request = Some(100.0);
+                            }
+
+                            egui::ScrollArea::horizontal().show(ui, |ui| {
+                                if let Some(delta) = scroll_by {
+                                    ui.scroll_with_delta(egui::vec2(delta, 0.0));
+                                }
+                                ui.horizontal(|ui| {
+                                    if !self.inspection_path.is_empty() {
+                                        if ui.button("← Exit Inspection").clicked() {
+                                            self.inspection_path.pop();
+                                            self.selected_comp_id = None;
+                                        }
+                                        ui.separator();
                                     }
+                                    
+                                    if ui.button(if self.is_playing { "⏸ Pause" } else { "▶ Play" }).clicked() {
+                                        self.is_playing = !self.is_playing;
+                                    }
+                                    if ui.button("⏭ Step").clicked() {
+                                        let _ = self.simulator.propagate_events(50);
+                                    }
+
                                     ui.separator();
-                                }
-                                
-                                if ui.button(if self.is_playing { "⏸ Pause" } else { "▶ Play" }).clicked() {
-                                    self.is_playing = !self.is_playing;
-                                }
-                                if ui.button("⏭ Step").clicked() {
-                                    let _ = self.simulator.propagate_events(50);
-                                }
+                                    ui.label("Speed:");
+                                    ui.add(egui::Slider::new(&mut self.ticks_per_frame, 1..=500).show_value(false));
 
-                                ui.separator();
-                                ui.label("Speed:");
-                                ui.add(egui::Slider::new(&mut self.ticks_per_frame, 1..=500).show_value(false));
-
-                                ui.separator();
-                                if ui.button("💾").on_hover_text("Save Project").clicked() { self.save_project(); }
-                                if ui.button("📂").on_hover_text("Load Project").clicked() { self.load_project(); }
-                                if ui.button("⚙").on_hover_text("Settings").clicked() {
-                                    self.show_settings = !self.show_settings;
-                                    if self.show_settings {
-                                        self.temp_is_fullscreen = self.is_fullscreen;
-                                        self.temp_resolution_idx = self.resolution_idx;
-                                        self.temp_ui_scale = self.ui_scale;
+                                    ui.separator();
+                                    if ui.button("💾").on_hover_text("Save Project").clicked() { self.save_project(); }
+                                    if ui.button("📂").on_hover_text("Load Project").clicked() { self.load_project(); }
+                                    if ui.button("⚙").on_hover_text("Settings").clicked() {
+                                        self.show_settings = !self.show_settings;
+                                        if self.show_settings {
+                                            self.temp_is_fullscreen = self.is_fullscreen;
+                                            self.temp_resolution_idx = self.resolution_idx;
+                                            self.temp_ui_scale = self.ui_scale;
+                                        }
                                     }
-                                }
+                                });
                             });
+
+                            // Scroll Right Button
+                            if ui.button("▶").on_hover_text("Scroll Right").clicked() {
+                                self.controls_scroll_request = Some(-100.0);
+                            }
                         });
                     });
 
