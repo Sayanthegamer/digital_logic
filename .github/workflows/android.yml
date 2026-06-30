@@ -37,11 +37,16 @@ jobs:
         
     - name: Install cargo-apk
       run: cargo install cargo-apk
-      
+
+    - name: Generate self-signed keystore for release build
+      run: keytool -genkey -v -keystore release.keystore -alias release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android, O=Android, C=US" -storepass android -keypass android
+
+
     - name: Build APK
       env:
         ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
       run: cargo apk build --release
+
       
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
