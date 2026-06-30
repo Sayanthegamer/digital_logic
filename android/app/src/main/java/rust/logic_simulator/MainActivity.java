@@ -265,6 +265,7 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
     }
 
+    @SuppressWarnings("deprecation")
     public void setFullScreen(final boolean fullscreen) {
         runOnUiThread(new Runnable() {
                 @Override

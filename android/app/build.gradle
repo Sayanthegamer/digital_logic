@@ -26,6 +26,10 @@ android {
             jniLibs.srcDirs = ['src/main/jniLibs']
         }
     }
+
+    packaging {
+        jniLibs.keepDebugSymbols += ['**/*.so']
+    }
 }
 
 dependencies {
