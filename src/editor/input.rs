@@ -36,15 +36,14 @@ impl Editor {
             let current_dist = t1.position.distance(t2.position);
             let current_center = (t1.position + t2.position) * 0.5;
 
-            if let Some(last_dist) = self.last_touch_dist {
-                if last_dist > 0.0
+            if let Some(last_dist) = self.last_touch_dist
+                && last_dist > 0.0
             {
                 let prev_zoom = self.zoom;
                 self.zoom *= current_dist / last_dist;
                 self.zoom = self.zoom.clamp(0.15, 4.0);
                 // Zoom towards the center of the pinch
                 self.pan = current_center - (current_center - self.pan) * (self.zoom / prev_zoom);
-                }
             }
 
             if let Some(last_center) = self.last_touch_center {
@@ -214,8 +213,7 @@ impl Editor {
                 }
 
                 // If nothing was clicked and a tool is active, place the component or annotation
-                if !clicked_something {
-                    if let Some(tool) = self.selected_tool {
+                if !clicked_something && let Some(tool) = self.selected_tool {
                     match tool {
                         ActiveTool::PlaceComponent(comp_type) => {
                             let (inputs, outputs) = self.get_component_ports_count(comp_type);
@@ -269,7 +267,6 @@ impl Editor {
                         }
                     }
                 }
-                }
             } else if is_mouse_button_down(MouseButton::Left) {
                 self.drag_dist_pixels += mouse_delta.length();
                 // Drag component (multi-selection snapped drag)
@@ -286,20 +283,19 @@ impl Editor {
                     }
                 }
                 // Drag annotation
-                if let Some(idx) = self.dragging_annotation_idx {
-                    if idx < self.annotations.len()
+                if let Some(idx) = self.dragging_annotation_idx
+                    && idx < self.annotations.len()
                 {
                     let target_pos = mouse_pos_world + self.drag_offset;
                     self.annotations[idx].pos = Vec2::new(
                         (target_pos.x / 20.0).round() * 20.0,
                         (target_pos.y / 20.0).round() * 20.0,
                     );
-                    }
                 }
             } else if is_mouse_button_released(MouseButton::Left) {
                 // If it was an Input component and it was clicked (not dragged far)
-                if let Some(comp_id) = self.dragging_comp_id {
-                    if self.drag_dist_pixels < 5.0
+                if let Some(comp_id) = self.dragging_comp_id
+                    && self.drag_dist_pixels < 5.0
                 {
                     let mut comp_type = None;
                     for comp in &self.components {
@@ -308,8 +304,8 @@ impl Editor {
                             break;
                         }
                     }
-                    if comp_type == Some(ComponentType::Input) {
-                        if let Some(&gate_idx) = self.visual_to_sim_map.get(&comp_id)
+                    if comp_type == Some(ComponentType::Input)
+                        && let Some(&gate_idx) = self.visual_to_sim_map.get(&comp_id)
                     {
                         let curr_val = self.simulator.get_state(gate_idx);
                         self.simulator.set_input(gate_idx, !curr_val);
@@ -319,8 +315,6 @@ impl Editor {
                             Err(e) => self.propagation_error = Some(e),
                         }
                     }
-                    }
-                }
                 }
 
                 // If drag selection box was active, parse selection

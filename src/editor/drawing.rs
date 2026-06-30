@@ -212,8 +212,8 @@ impl Editor {
         }
 
         // Draw active wire drag preview
-        if let Some((src_id, src_port)) = self.active_wire_drag {
-            if let Some(src) = self.components.iter().find(|c| c.id == src_id)
+        if let Some((src_id, src_port)) = self.active_wire_drag
+            && let Some(src) = self.components.iter().find(|c| c.id == src_id)
         {
             let (_, src_outputs) = self.get_component_ports_count(src.comp_type);
             let start_pos = self.to_screen_space(src.output_port_pos(src_port, src_outputs));
@@ -227,7 +227,6 @@ impl Editor {
                 2.0,
                 Color::new(0.5, 0.8, 1.0, 0.6), // Light blue preview wire
             );
-            }
         }
 
         // 1.5. Draw Text Annotations
@@ -407,13 +406,12 @@ impl Editor {
                             .get(&(wire.src_comp_id, wire.src_port))
                         {
                             input_active = self.simulator.get_state(gate_idx);
-                        } else if let Some(src_comp) = self.components.iter().find(|c| c.id == wire.src_comp_id) {
-                            if src_comp.comp_type == ComponentType::Input {
-                                if let Some(&gate_idx) = self.visual_to_sim_map.get(&src_comp.id)
+                        } else if let Some(src_comp) =
+                            self.components.iter().find(|c| c.id == wire.src_comp_id)
+                            && src_comp.comp_type == ComponentType::Input
+                            && let Some(&gate_idx) = self.visual_to_sim_map.get(&src_comp.id)
                         {
                             input_active = self.simulator.get_state(gate_idx);
-                        }
-                        }
                         }
                     }
                 }
@@ -478,8 +476,8 @@ impl Editor {
             }
 
             // Draw custom port names inside sub-chip boundary boxes
-            if let ComponentType::SubChip(idx) = comp.comp_type {
-                if let Some(bp) = self.library.get(idx)
+            if let ComponentType::SubChip(idx) = comp.comp_type
+                && let Some(bp) = self.library.get(idx)
             {
                 let text_size_px = (10.0 * self.zoom).max(5.0);
                 for i in 0..inputs_count {
@@ -512,7 +510,6 @@ impl Editor {
                         text_size_px,
                         Color::new(0.5, 0.55, 0.6, 1.0),
                     );
-                }
                 }
             }
         }
