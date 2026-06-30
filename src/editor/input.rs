@@ -190,6 +190,7 @@ impl Editor {
                     if let Some(comp) = found_comp {
                         self.selected_comp_id = Some(comp.id);
                         self.selected_annotation_idx = None;
+                        self.last_clicked_annotation_idx = None;
 
                         // Handle multi-selection tracking
                         if self.selected_comp_ids.contains(&comp.id) {
@@ -230,6 +231,13 @@ impl Editor {
                         }
 
                         if let Some(idx) = clicked_ann {
+                            let now = get_time();
+                            if Some(idx) == self.last_clicked_annotation_idx && now - self.last_click_time < 0.3 {
+                                self.focus_annotation_text = true;
+                            }
+                            self.last_click_time = now;
+                            self.last_clicked_annotation_idx = Some(idx);
+
                             self.selected_annotation_idx = Some(idx);
                             self.dragging_annotation_idx = Some(idx);
                             self.selected_comp_id = None;
@@ -240,6 +248,7 @@ impl Editor {
                             // Clicked empty space
                             self.selected_comp_id = None;
                             self.selected_annotation_idx = None;
+                            self.last_clicked_annotation_idx = None;
 
                             // Start drag selection box if no placement tool is active
                             if self.selected_tool.is_none() {
@@ -420,12 +429,17 @@ impl Editor {
             }
         }
 
-        // 4. Delete selected components (only in main canvas)
+        // 4. Delete selected components or annotations (only in main canvas)
         if !egui_wants_pointer
             && self.inspection_path.is_empty()
             && (is_key_pressed(KeyCode::Delete) || is_key_pressed(KeyCode::Backspace))
         {
-            if !self.selected_comp_ids.is_empty() {
+            if let Some(idx) = self.selected_annotation_idx {
+                if idx < self.annotations.len() {
+                    self.annotations.remove(idx);
+                }
+                self.selected_annotation_idx = None;
+            } else if !self.selected_comp_ids.is_empty() {
                 self.components
                     .retain(|c| !self.selected_comp_ids.contains(&c.id));
                 self.connections.retain(|c| {

@@ -10,8 +10,8 @@ android {
         applicationId "rust.logic_simulator"
         minSdk 21
         targetSdk 34
-        versionCode 3
-        versionName "0.2.0-alpha.3"
+        versionCode 4
+        versionName "0.2.0-alpha.4"
     }
 
     buildTypes {
