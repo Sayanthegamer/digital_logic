@@ -17,7 +17,7 @@ This simulator is built using Rust. It compiles to native standalone executables
 To build and run the simulator in debug mode (faster compilation, slower runtime performance):
 
 ```bash
-cargo run
+cargo run -p desktop
 ```
 
 To run the test suite:
@@ -30,8 +30,16 @@ cargo test
 
 For maximum performance (crucial when testing large circuits like the 8-bit or 16-bit CPUs), you **must** build in release mode. The release mode enables heavy compiler optimizations.
 
+To build all packages in the workspace (including the desktop binary and the library target):
+
 ```bash
-cargo build --release
+cargo build --workspace --release
+```
+
+Alternatively, to build only the desktop binary:
+
+```bash
+cargo build -p desktop --release
 ```
 
 The resulting executable will be located at:
@@ -41,8 +49,9 @@ The resulting executable will be located at:
 You can run it directly:
 
 ```bash
-cargo run --release
+cargo run -p desktop --release
 ```
+
 
 ## Distribution
 
