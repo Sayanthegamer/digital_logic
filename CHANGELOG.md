@@ -22,5 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Wire routing and connection mechanics.
   - Persistence layer allowing saving and loading of `.logic` project files using `serde`.
 
+- **Android Support:**
+  - Configured `cargo-apk` integration for compiling to native Android APKs.
+  - Implemented target-gated platform features (e.g., file dialogs are target-gated on desktop, falling back to a fixed directory on Android).
+  - Created automated build and code-signing pipelines in GitHub Actions.
+
 - **Documentation:**
   - Added ARCHITECTURE.md, DESIGN.md, SPEC.md, SYSTEM.md, DEPLOYMENT.md, and README.md detailing the core philosophy.
+
