@@ -47,3 +47,41 @@ cargo run --release
 ## Distribution
 
 Because the application compiles to a statically linked binary (aside from system libraries like OpenGL/X11), you can simply zip the executable generated in the `target/release/` directory and share it with users on the same operating system.
+
+## Android Build
+
+You can also build the application as a standalone Android APK. Because the interface is built with Macroquad and egui, it is fully compatible with touch screens and compiles directly to native Android code.
+
+### Prerequisites
+
+1. **Install Android NDK & SDK**:
+   - Ensure the Android SDK and NDK are installed on your machine.
+   - Set the `ANDROID_NDK_ROOT` environment variable to point to your NDK installation directory (e.g. version `r25c`).
+
+2. **Add Android Targets**:
+   ```bash
+   rustup target add aarch64-linux-android armv7-linux-androideabi
+   ```
+
+3. **Install cargo-apk**:
+   ```bash
+   cargo install cargo-apk
+   ```
+
+### Building the Release APK
+
+1. **Generate a Keystore**:
+   To build in release mode, a keystore file named `release.keystore` must exist in the root directory of the `logic_simulator` package. You can generate a self-signed one using:
+   ```bash
+   keytool -genkey -v -keystore release.keystore -alias release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android, O=Android, C=US" -storepass android -keypass android
+   ```
+   *(Note: The keystore credentials `android` and alias `release-key` match the pre-configured settings in `Cargo.toml`).*
+
+2. **Compile the APK**:
+   ```bash
+   cargo apk build --release
+   ```
+
+The resulting signed APK will be located at:
+- `.\target\release\apk\logic_simulator.apk`
+
