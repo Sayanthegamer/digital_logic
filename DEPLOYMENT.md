@@ -58,7 +58,7 @@ You can also build the application as a standalone Android APK. Because the inte
 
 1. **Install Android NDK & SDK**:
    - Ensure the Android SDK and NDK are installed on your machine.
-   - Set the `ANDROID_NDK_ROOT` environment variable to point to your NDK installation directory.
+   - Set the `NDK_HOME` environment variable to point to your NDK installation directory.
 
 2. **Add Android Targets**:
    ```bash
