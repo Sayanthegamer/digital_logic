@@ -1153,7 +1153,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "logic_simulator"
-version = "0.1.0-alpha.1"
+version = "0.2.0-alpha.2"
 dependencies = [
  "egui",
  "egui-macroquad",

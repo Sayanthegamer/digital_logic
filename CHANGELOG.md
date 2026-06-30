@@ -5,8 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0-alpha.1] - 2026-06-30
+## [0.2.0-alpha.2] - 2026-06-30
 
+### Changed
+- **Editor Architecture:**
+  - Decomposed massive monolithic files (`gui.rs`, `drawing.rs`, `inspection.rs`) into smaller, modular, maintainable, and highly cohesive domain-specific files (`drawing_shapes.rs`, `ui_properties.rs`, `inspection_logic.rs`, etc.).
+
+## [0.2.0-alpha.1] - 2026-06-30
 ### Changed
 - **Android Build Pipeline:**
   - Transitioned from `cargo-quad-apk` to native Gradle-based build system using `cargo-ndk`.

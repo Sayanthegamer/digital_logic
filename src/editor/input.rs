@@ -85,6 +85,54 @@ impl Editor {
             {
                 self.load_project();
             }
+            
+            // Tool Shortcuts
+            if is_key_pressed(KeyCode::Key1) || is_key_pressed(KeyCode::I) {
+                self.selected_tool = Some(ActiveTool::PlaceComponent(ComponentType::Input));
+            }
+            if is_key_pressed(KeyCode::Key2) || is_key_pressed(KeyCode::O) {
+                self.selected_tool = Some(ActiveTool::PlaceComponent(ComponentType::Output));
+            }
+            if is_key_pressed(KeyCode::Key3) || is_key_pressed(KeyCode::N) {
+                self.selected_tool = Some(ActiveTool::PlaceComponent(ComponentType::Nand));
+            }
+            if is_key_pressed(KeyCode::Key4) || is_key_pressed(KeyCode::K) {
+                self.selected_tool = Some(ActiveTool::PlaceComponent(ComponentType::Clock));
+            }
+            if is_key_pressed(KeyCode::Key5) || is_key_pressed(KeyCode::T) {
+                self.selected_tool = Some(ActiveTool::PlaceAnnotation);
+            }
+        }
+
+        // --- Magnetic Port Hover Detection ---
+        self.hovered_port = None;
+        if !egui_wants_pointer && self.inspection_path.is_empty() {
+            let mut closest_dist = 40.0; // 40 pixels on screen radius
+            for comp in &self.components {
+                let (inputs_count, outputs_count) = self.get_component_ports_count(comp.comp_type);
+                
+                // Check inputs
+                for i in 0..inputs_count {
+                    let port_pos = comp.input_port_pos(i, inputs_count);
+                    let screen_port_pos = self.to_screen_space(port_pos);
+                    let dist = screen_port_pos.distance(mouse_pos_screen);
+                    if dist < closest_dist {
+                        closest_dist = dist;
+                        self.hovered_port = Some((comp.id, i, true));
+                    }
+                }
+                
+                // Check outputs
+                for o in 0..outputs_count {
+                    let port_pos = comp.output_port_pos(o, outputs_count);
+                    let screen_port_pos = self.to_screen_space(port_pos);
+                    let dist = screen_port_pos.distance(mouse_pos_screen);
+                    if dist < closest_dist {
+                        closest_dist = dist;
+                        self.hovered_port = Some((comp.id, o, false));
+                    }
+                }
+            }
         }
 
         // 1. Zoom with mouse wheel
@@ -118,20 +166,10 @@ impl Editor {
                 let mut clicked_something = false;
 
                 // Check ports first (wiring starts here)
-                for comp in &self.components {
-                    let (_, outputs_count) = self.get_component_ports_count(comp.comp_type);
-
-                    // Click on output ports
-                    for o in 0..outputs_count {
-                        let port_pos = comp.output_port_pos(o, outputs_count);
-                        if port_pos.distance(mouse_pos_world) < 8.0 {
-                            self.active_wire_drag = Some((comp.id, o));
-                            clicked_something = true;
-                            break;
-                        }
-                    }
-                    if clicked_something {
-                        break;
+                if let Some((comp_id, port_idx, is_input)) = self.hovered_port {
+                    if !is_input {
+                        self.active_wire_drag = Some((comp_id, port_idx));
+                        clicked_something = true;
                     }
                 }
 
@@ -182,7 +220,7 @@ impl Editor {
                         // Check if we clicked an annotation
                         let mut clicked_ann = None;
                         for (idx, ann) in self.annotations.iter().enumerate() {
-                            let text_w = measure_text(&ann.text, None, 15, 1.0).width;
+                            let text_w = measure_text(&ann.text, Some(&self.font), 15, 1.0).width;
                             let rect =
                                 Rect::new(ann.pos.x - 5.0, ann.pos.y - 14.0, text_w + 10.0, 20.0);
                             if rect.contains(mouse_pos_world) {
@@ -357,34 +395,23 @@ impl Editor {
 
                 // Handle wiring connection release
                 if let Some((src_id, src_port)) = self.active_wire_drag {
-                    // Look for target input port
                     let mut connection_made = false;
-                    for comp in &self.components {
-                        if comp.id == src_id {
-                            continue;
-                        }
-                        let (inputs_count, _) = self.get_component_ports_count(comp.comp_type);
-
-                        for i in 0..inputs_count {
-                            let port_pos = comp.input_port_pos(i, inputs_count);
-                            if port_pos.distance(mouse_pos_world) < 8.0 {
-                                // Add wire connection, remove duplicates targeting this port
-                                self.connections
-                                    .retain(|c| !(c.tgt_comp_id == comp.id && c.tgt_port == i));
-                                self.connections.push(VisualConnection {
-                                    src_comp_id: src_id,
-                                    src_port,
-                                    tgt_comp_id: comp.id,
-                                    tgt_port: i,
-                                });
-                                connection_made = true;
-                                break;
-                            }
-                        }
-                        if connection_made {
-                            break;
+                    
+                    if let Some((tgt_id, tgt_port, is_input)) = self.hovered_port {
+                        if is_input && tgt_id != src_id {
+                            // Add wire connection, remove duplicates targeting this port
+                            self.connections
+                                .retain(|c| !(c.tgt_comp_id == tgt_id && c.tgt_port == tgt_port));
+                            self.connections.push(VisualConnection {
+                                src_comp_id: src_id,
+                                src_port,
+                                tgt_comp_id: tgt_id,
+                                tgt_port,
+                            });
+                            connection_made = true;
                         }
                     }
+                    
                     self.active_wire_drag = None;
                     if connection_made {
                         self.compile();
