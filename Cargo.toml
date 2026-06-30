@@ -5,8 +5,6 @@ edition = "2021"
 
 [package.metadata.android]
 label = "Digital Logic Sim"
-
-[package.metadata.android.sdk]
 target_sdk_version = 33
 min_sdk_version = 21
 
@@ -16,7 +14,9 @@ egui = "0.31"
 egui-macroquad = "0.17"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+[target.'cfg(not(target_os = "android"))'.dependencies]
 rfd = { version = "0.15", default-features = false, features = ["gtk3", "async-std"] }
+
 
 [lib]
 crate-type = ["cdylib", "rlib"]
