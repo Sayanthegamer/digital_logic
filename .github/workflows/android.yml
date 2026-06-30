@@ -35,13 +35,13 @@ jobs:
       with:
         ndk-version: r25c
         
-    - name: Install cargo-quad-apk
-      run: cargo install cargo-quad-apk
+    - name: Install cargo-apk
+      run: cargo install cargo-apk
       
     - name: Build APK
       env:
         ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
-      run: cargo quad-apk build --release
+      run: cargo apk build --release
       
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
