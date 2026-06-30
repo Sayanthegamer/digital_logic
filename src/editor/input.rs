@@ -36,15 +36,14 @@ impl Editor {
             let current_dist = t1.position.distance(t2.position);
             let current_center = (t1.position + t2.position) * 0.5;
 
-            if let Some(last_dist) = self.last_touch_dist {
-                if last_dist > 0.0 {
-                    let prev_zoom = self.zoom;
-                    self.zoom *= current_dist / last_dist;
-                    self.zoom = self.zoom.clamp(0.15, 4.0);
-                    // Zoom towards the center of the pinch
-                    self.pan =
-                        current_center - (current_center - self.pan) * (self.zoom / prev_zoom);
-                }
+            if let Some(last_dist) = self.last_touch_dist
+                && last_dist > 0.0
+            {
+                let prev_zoom = self.zoom;
+                self.zoom *= current_dist / last_dist;
+                self.zoom = self.zoom.clamp(0.15, 4.0);
+                // Zoom towards the center of the pinch
+                self.pan = current_center - (current_center - self.pan) * (self.zoom / prev_zoom);
             }
 
             if let Some(last_center) = self.last_touch_center {
