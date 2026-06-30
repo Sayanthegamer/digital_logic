@@ -38,7 +38,7 @@ jobs:
       id: setup-ndk
       uses: nttld/setup-ndk@v1
       with:
-        ndk-version: r22b
+        ndk-version: r21e
         
     - name: Install cargo-quad-apk
       run: cargo install cargo-quad-apk
