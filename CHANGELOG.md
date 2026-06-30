@@ -31,7 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integrated automated GitHub Release creation and asset deployment triggered by version tags (`v*`).
   - Added cryptographic build attestation (provenance verification) for both Windows and Android builds.
   - Integrated automated VirusTotal scanning for release binaries.
-  - Restructured codebase into a Cargo Workspace (isolating the `desktop` binary crate from the root `logic_simulator` library crate) to solve `cargo-apk` build conflicts.
 
 
 - **Documentation:**

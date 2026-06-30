@@ -27,10 +27,7 @@ jobs:
       uses: ilammy/msvc-dev-cmd@v1
 
     - name: Build EXE
-      run: cargo build --workspace --release
-
-    - name: Prepare EXE for upload
-      run: Copy-Item -Path target\release\logic_simulator_desktop.exe -Destination target\release\logic_simulator.exe
+      run: cargo build --release
 
 
 
