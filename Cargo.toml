@@ -7,15 +7,6 @@ edition = "2021"
 [package.metadata.android]
 label = "Digital Logic Sim"
 
-[package.metadata.android.sdk]
-target_sdk_version = 33
-min_sdk_version = 21
-
-[package.metadata.android.signing.release]
-path = "release.keystore"
-keystore_password = "android"
-key_alias = "release-key"
-key_password = "android"
 
 [dependencies]
 macroquad = "0.4"
