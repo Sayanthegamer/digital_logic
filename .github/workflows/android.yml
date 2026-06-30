@@ -8,6 +8,11 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
+
     
     steps:
     - name: Checkout Code
@@ -53,4 +58,10 @@ jobs:
       with:
         name: logic-simulator-alpha-apk
         path: target/release/apk/*.apk
+
+    - name: Generate Build Attestation
+      uses: actions/attest-build-provenance@v2
+      with:
+        subject-path: 'target/release/apk/logic_simulator.apk'
+
 
