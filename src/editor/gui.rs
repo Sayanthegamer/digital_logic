@@ -301,8 +301,8 @@ impl Editor {
                             }
                         }
 
-                        if let Some(idx) = self.selected_annotation_idx {
-                            if let Some(ann) = self.annotations.get_mut(idx)
+                        if let Some(idx) = self.selected_annotation_idx
+                            && let Some(ann) = self.annotations.get_mut(idx)
                         {
                             ui.heading("Selected Text Label");
                             ui.label("Text Content:");
@@ -310,7 +310,6 @@ impl Editor {
 
                             ui.separator();
                             ui.add_space(15.0);
-                        }
                         }
 
                         ui.heading("Package Chip");
@@ -327,14 +326,13 @@ impl Editor {
 
                         ui.add_space(15.0);
 
-                        if ui.button("Compile & Save to Catalog").clicked() {
-                            if let Some(new_bp) = self.package_current_canvas()
+                        if ui.button("Compile & Save to Catalog").clicked()
+                            && let Some(new_bp) = self.package_current_canvas()
                         {
                             self.library.push(new_bp);
                             self.components.clear();
                             self.connections.clear();
                             self.compile();
-                        }
                         }
                     }
                 });

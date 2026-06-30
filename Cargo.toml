@@ -1,14 +1,14 @@
 [package]
 name = "logic_simulator"
 version = "0.1.0-alpha.1"
-edition = "2021"
+edition = "2024"
 
 
-[package.metadata.android]
-label = "Digital Logic Sim"
-android_version = 33
-target_sdk_version = 33
-min_sdk_version = 21
+[lib]
+name = "logic_simulator"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
 
 [dependencies]
 macroquad = "0.4"
