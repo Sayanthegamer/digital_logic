@@ -52,4 +52,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: logic-simulator-alpha-apk
-        path: target/android-artifacts/release/apk/*.apk
+        path: target/release/apk/*.apk
+
