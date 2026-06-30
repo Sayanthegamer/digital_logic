@@ -28,6 +28,10 @@ jobs:
     - name: Build EXE
       run: cargo build --workspace --release
 
+    - name: Prepare EXE for upload
+      run: Copy-Item -Path target\release\logic_simulator_desktop.exe -Destination target\release\logic_simulator.exe
+
+
 
     - name: Generate Build Attestation
       uses: actions/attest-build-provenance@v2
