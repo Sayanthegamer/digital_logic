@@ -24,52 +24,31 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
     
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v4
-      with:
-        packages: "platforms;android-33 build-tools;33.0.0 platform-tools"
-    
-    - name: Install Rust Toolchain
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: aarch64-linux-android, armv7-linux-androideabi
-        
-    - name: Setup NDK
-      id: setup-ndk
-      uses: nttld/setup-ndk@v1
-      with:
-        ndk-version: r25c
-        
-    - name: Install cargo-apk
-      run: cargo install cargo-apk
-
     - name: Generate self-signed keystore for release build
       run: keytool -genkey -v -keystore release.keystore -alias release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android, O=Android, C=US" -storepass android -keypass android
-
-
-    - name: Build APK
-      env:
-        ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
-      run: cargo apk build --release
+      
+    - name: Build APK using Docker
+      run: |
+        docker run --rm -v ${{ github.workspace }}:/root/src -w /root/src notfl3/cargo-apk cargo quad-apk build --release
 
       
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: logic-simulator-alpha-apk
-        path: target/release/apk/*.apk
+        path: target/android-artifacts/release/apk/*.apk
 
     - name: Generate Build Attestation
       uses: actions/attest-build-provenance@v2
       with:
-        subject-path: 'target/release/apk/logic_simulator.apk'
+        subject-path: 'target/android-artifacts/release/apk/logic_simulator.apk'
 
     - name: VirusTotal Scan
       uses: crazy-max/ghaction-virustotal@v5
       with:
         vt_api_key: ${{ secrets.VT_API_KEY }}
         files: |
-          target/release/apk/logic_simulator.apk
+          target/android-artifacts/release/apk/logic_simulator.apk
 
 
 
