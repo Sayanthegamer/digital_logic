@@ -33,3 +33,9 @@ pub async fn run() {
 pub async fn main() {
     run().await;
 }
+
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "C" fn quad_main() {
+    main();
+}
