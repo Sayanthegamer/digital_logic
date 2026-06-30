@@ -40,3 +40,9 @@ The following core libraries are utilized (see `Cargo.toml` for exact versions):
 - `egui-macroquad`: Binding layer between Macroquad and egui.
 - `serde` & `serde_json`: Serialization and deserialization for saving/loading `.logic` blueprint files.
 - `rfd`: Native file dialogs for cross-platform file saving/loading.
+
+## Workspace Structure
+The project is structured as a Cargo Workspace containing:
+- **`logic_simulator` (Root Crate)**: A pure library containing the core simulator engine and visual editor components. It compiles to a C dynamic library (`cdylib`) on Android.
+- **`desktop` (Sub-Crate)**: A binary wrapper that compiles to a standalone desktop executable on Windows, Linux, and macOS, linking against the main library crate.
+
