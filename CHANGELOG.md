@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-alpha.1] - 2026-06-30
+
+### Changed
+- **Android Build Pipeline:**
+  - Transitioned from `cargo-quad-apk` to native Gradle-based build system using `cargo-ndk`.
+  - Upgraded project target SDK, build tools, and Android support structures.
+  - Manually injected JNI `quad_main` entry point to prevent runtime loading issues.
+- **Rust Toolchain:**
+  - Upgraded codebase to Rust 2024 Edition.
+  - Re-enabled modern features (e.g. `let_chains`) across the project.
+
 ## [0.1.0-alpha.1] - Initial Baseline
 
 ### Added
