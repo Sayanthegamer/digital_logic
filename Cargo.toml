@@ -2,7 +2,6 @@
 name = "logic_simulator"
 version = "0.1.0-alpha.1"
 edition = "2024"
-autobins = false
 
 [package.metadata.android]
 label = "Digital Logic Sim"
@@ -29,4 +28,3 @@ rfd = { version = "0.15", default-features = false, features = ["gtk3", "async-s
 
 [lib]
 crate-type = ["cdylib", "rlib"]
-path = "src/main.rs"
