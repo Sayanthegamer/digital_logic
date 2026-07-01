@@ -255,9 +255,11 @@ impl Editor {
 
                         // Store starting positions of all selected components
                         self.canvas.drag_start_positions.clear();
+                        self.canvas.drag_start_sizes.clear();
                         for &id in &self.canvas.selected_comp_ids {
                             if let Some(c) = self.components.iter().find(|x| x.id == id) {
                                 self.canvas.drag_start_positions.insert(id, c.pos);
+                                self.canvas.drag_start_sizes.insert(id, Vec2::new(c.width, c.height));
                             }
                         }
                         clicked_something = true;
@@ -434,15 +436,30 @@ impl Editor {
                     for (&id, &start_pos) in &self.canvas.drag_start_positions {
                         if let Some(c) = self.components.iter_mut().find(|x| x.id == id) {
                             if c.comp_type == crate::engine::ComponentType::Junction && shift_pressed {
+                                let start_size = self.canvas.drag_start_sizes.get(&id).copied().unwrap_or(Vec2::new(12.0, 12.0));
 
                                 // Stretching logic instead of moving
                                 // We stretch horizontally or vertically depending on dominant translation
                                 if translation.x.abs() > translation.y.abs() {
-                                    c.width = (12.0 + snapped_translation.x).max(12.0);
-                                    c.height = 12.0;
+                                    if snapped_translation.x < 0.0 {
+                                        c.pos.x = start_pos.x + snapped_translation.x;
+                                        c.width = (start_size.x - snapped_translation.x).max(12.0);
+                                    } else {
+                                        c.pos.x = start_pos.x;
+                                        c.width = (start_size.x + snapped_translation.x).max(12.0);
+                                    }
+                                    c.height = start_size.y;
+                                    c.pos.y = start_pos.y;
                                 } else {
-                                    c.height = (12.0 + snapped_translation.y).max(12.0);
-                                    c.width = 12.0;
+                                    if snapped_translation.y < 0.0 {
+                                        c.pos.y = start_pos.y + snapped_translation.y;
+                                        c.height = (start_size.y - snapped_translation.y).max(12.0);
+                                    } else {
+                                        c.pos.y = start_pos.y;
+                                        c.height = (start_size.y + snapped_translation.y).max(12.0);
+                                    }
+                                    c.width = start_size.x;
+                                    c.pos.x = start_pos.x;
                                 }
                             } else {
                                 c.pos = start_pos + snapped_translation;
