@@ -24,3 +24,5 @@ serde_json = "1.0"
 [target.'cfg(not(target_os = "android"))'.dependencies]
 rfd = { version = "0.15", default-features = false, features = ["gtk3", "async-std"] }
 
+[build-dependencies]
+winres = "0.1.12"
