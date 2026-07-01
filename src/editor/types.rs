@@ -54,7 +54,7 @@ impl VisualComponent {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Hash)]
 pub struct VisualConnection {
     pub src_comp_id: usize,
     pub src_port: usize,

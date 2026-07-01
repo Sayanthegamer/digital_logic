@@ -21,14 +21,16 @@ impl Editor {
             }
         } else {
             // Delete Selected Button (Touch / UI alternative to Delete key)
-            if !self.selected_comp_ids.is_empty() {
+            if !self.selected_comp_ids.is_empty() || !self.selected_connections.is_empty() {
                 if ui.button("🗑 Delete Selected").clicked() {
                     self.components.retain(|c| !self.selected_comp_ids.contains(&c.id));
                     self.connections.retain(|c| {
                         !self.selected_comp_ids.contains(&c.src_comp_id)
                             && !self.selected_comp_ids.contains(&c.tgt_comp_id)
+                            && !self.selected_connections.contains(c)
                     });
                     self.selected_comp_ids.clear();
+                    self.selected_connections.clear();
                     self.selected_comp_id = None;
                     self.compile();
                 }

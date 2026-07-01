@@ -14,6 +14,7 @@ impl Editor {
             ComponentType::Input => (0, 1),
             ComponentType::Output => (1, 0),
             ComponentType::Clock => (0, 1),
+            ComponentType::SevenSegment => (7, 0),
             ComponentType::SubChip(idx) => {
                 if let Some(bp) = self.library.get(idx) {
                     (bp.inputs, bp.outputs)
@@ -30,6 +31,7 @@ impl Editor {
             ComponentType::Input => "IN".to_string(),
             ComponentType::Output => "OUT".to_string(),
             ComponentType::Clock => "CLK".to_string(),
+            ComponentType::SevenSegment => "7SEG".to_string(),
             ComponentType::SubChip(idx) => {
                 if let Some(bp) = self.library.get(idx) {
                     bp.name.clone()
@@ -87,6 +89,20 @@ impl Editor {
 
                     component_ports
                         .insert(comp.id, (vec![], vec![OutputSource::DrivenByGate(sim_idx)]));
+                }
+                ComponentType::SevenSegment => {
+                    // It has 7 inputs and no outputs
+                    let mut inputs = Vec::new();
+                    for _ in 0..7 {
+                        // Dummy gates acting as input anchors for the 7seg display
+                        let sim_idx = sim.add_gate(GateType::Output);
+                        inputs.push(vec![(sim_idx, 0)]);
+                    }
+                    component_ports.insert(comp.id, (inputs, vec![]));
+
+                    // Note: We don't really have a strict single sim gate for 7Seg to put in visual_to_sim_map,
+                    // but we can map the first input if we want, or nothing. Let's just not add to visual_to_sim_map.
+                    // The drawing system will inspect the incoming connections to determine states.
                 }
                 ComponentType::SubChip(sub_idx) => {
                     let path = vec![comp.id];
