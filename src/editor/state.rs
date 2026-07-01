@@ -79,6 +79,10 @@ pub struct UiState {
     pub chip_name_input: String,
     pub catalog_search_text: String,
     pub egui_wants_pointer: bool,
+
+    /// Screen-space canvas viewport rect (x, y, w, h) after egui panels are laid out.
+    /// Used for camera fit/recenter calculations.
+    pub canvas_viewport: Option<(f32, f32, f32, f32)>,
 }
 
 impl Default for UiState {
@@ -101,6 +105,7 @@ impl Default for UiState {
             chip_name_input: "MY_CHIP".to_string(),
             catalog_search_text: String::new(),
             egui_wants_pointer: false,
+            canvas_viewport: None,
         }
     }
 }
@@ -126,6 +131,8 @@ pub struct CanvasState {
     pub selected_connections: HashSet<VisualConnection>,
     pub selection_box_start: Option<Vec2>,
     pub drag_start_positions: HashMap<usize, Vec2>,
+    /// True once we've pushed an undo snapshot for the current drag gesture.
+    pub drag_snapshot_pushed: bool,
     
     // Annotations interaction
     pub selected_annotation_idx: Option<usize>,
@@ -163,6 +170,7 @@ impl Default for CanvasState {
             selected_connections: HashSet::new(),
             selection_box_start: None,
             drag_start_positions: HashMap::new(),
+            drag_snapshot_pushed: false,
             selected_annotation_idx: None,
             dragging_annotation_idx: None,
             last_click_time: 0.0,
