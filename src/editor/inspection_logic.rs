@@ -148,7 +148,7 @@ impl Editor {
                             OutputSource::Floating
                         }
                     }
-                    ComponentType::Input | ComponentType::Output => OutputSource::Floating,
+                    ComponentType::Input | ComponentType::Output | ComponentType::SevenSegment => OutputSource::Floating,
                 }
             }
             TraceNode::CompInput {

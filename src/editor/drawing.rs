@@ -81,7 +81,8 @@ impl Editor {
                     false
                 };
 
-                self.draw_manhattan_wire(src_pos, tgt_pos, wire_state);
+                let is_selected = self.selected_connections.contains(wire);
+                self.draw_manhattan_wire(src_pos, tgt_pos, wire_state, is_selected);
             }
         }
 
@@ -236,6 +237,7 @@ impl Editor {
                     }
                 }
                 ComponentType::SubChip(_) => Color::new(0.40, 0.45, 0.85, 1.0), // Royal indigo
+                ComponentType::SevenSegment => Color::new(0.9, 0.2, 0.2, 1.0),
             };
             let stripe_height = 4.0 * self.zoom;
             draw_rounded_rect(

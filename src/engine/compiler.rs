@@ -49,6 +49,17 @@ impl Simulator {
                         vec![OutputSource::DrivenByGate(clock_idx)],
                     ));
                 }
+                ComponentType::SevenSegment => {
+                    let mut inputs = Vec::new();
+                    for _ in 0..7 {
+                        let sim_idx = self.add_gate(GateType::Output);
+                        inputs.push(vec![(sim_idx, 0)]);
+                    }
+                    component_ports.push((
+                        inputs,
+                        vec![],
+                    ));
+                }
                 ComponentType::SubChip(sub_idx) => {
                     // Recursively compile sub-chip with sub-path
                     let mut sub_path = path.to_vec();
@@ -120,7 +131,7 @@ impl Simulator {
                 } => {
                     let component = &blueprint.components[*component_idx];
                     match &component.component_type {
-                        ComponentType::Nand
+                        ComponentType::SevenSegment | ComponentType::Nand
                         | ComponentType::Input
                         | ComponentType::Output
                         | ComponentType::Clock => None,
@@ -173,7 +184,7 @@ impl Simulator {
                     } => {
                         let component = &blueprint.components[component_idx];
                         match &component.component_type {
-                            ComponentType::Nand | ComponentType::Clock => {
+                            ComponentType::SevenSegment | ComponentType::Nand | ComponentType::Clock => {
                                 let (_, ref outputs) = component_ports[component_idx];
                                 match outputs[0] {
                                     OutputSource::DrivenByGate(g_idx) => {
@@ -226,6 +237,7 @@ impl Simulator {
                 ComponentType::Input => 0,
                 ComponentType::Output => 1,
                 ComponentType::Clock => 0,
+                    ComponentType::SevenSegment => 7,
                 ComponentType::SubChip(sub_idx) => library[*sub_idx].inputs,
             };
 
@@ -255,6 +267,7 @@ impl Simulator {
                     ComponentType::Input => 0,
                     ComponentType::Output => 1,
                     ComponentType::Clock => 0,
+                    ComponentType::SevenSegment => 7,
                     ComponentType::SubChip(sub_idx) => library[*sub_idx].inputs,
                 };
 

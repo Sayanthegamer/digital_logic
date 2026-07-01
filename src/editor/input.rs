@@ -201,6 +201,7 @@ impl Editor {
                             self.selected_comp_ids.insert(comp.id);
                         } else {
                             self.selected_comp_ids.clear();
+                            self.selected_connections.clear();
                             self.selected_comp_ids.insert(comp.id);
                         }
 
@@ -242,6 +243,7 @@ impl Editor {
                             self.dragging_annotation_idx = Some(idx);
                             self.selected_comp_id = None;
                             self.selected_comp_ids.clear();
+                            self.selected_connections.clear();
                             self.drag_offset = self.annotations[idx].pos - mouse_pos_world;
                             clicked_something = true;
                         } else {
@@ -252,9 +254,39 @@ impl Editor {
 
                             // Start drag selection box if no placement tool is active
                             if self.selected_tool.is_none() {
+                            // Check if a wire was clicked
+                            let mut clicked_wire = None;
+                            for conn in &self.connections {
+                                let src_comp_opt = self.components.iter().find(|c| c.id == conn.src_comp_id);
+                                let tgt_comp_opt = self.components.iter().find(|c| c.id == conn.tgt_comp_id);
+                                if let (Some(src), Some(tgt)) = (src_comp_opt, tgt_comp_opt) {
+                                    let (_, outputs) = self.get_component_ports_count(src.comp_type);
+                                    let (inputs, _) = self.get_component_ports_count(tgt.comp_type);
+                                    let src_pos = src.output_port_pos(conn.src_port, outputs);
+                                    let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
+
+                                    if self.hit_test_manhattan_wire(src_pos, tgt_pos, mouse_pos_world, 10.0 / self.zoom) {
+                                        clicked_wire = Some(*conn);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if let Some(wire) = clicked_wire {
+                                if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) {
+                                    self.selected_connections.insert(wire);
+                                } else {
+                                    self.selected_comp_ids.clear();
+                                    self.selected_connections.clear();
+                                    self.selected_connections.insert(wire);
+                                }
+                                clicked_something = true;
+                            } else {
                                 self.selected_comp_ids.clear();
+                                self.selected_connections.clear();
                                 self.selection_box_start = Some(mouse_pos_world);
                             }
+                        }
                         }
                     }
                 }
@@ -377,13 +409,36 @@ impl Editor {
 
                     if box_w > 5.0 || box_h > 5.0 {
                         self.selected_comp_ids.clear();
+                        self.selected_connections.clear();
                         self.selected_comp_id = None;
+                        let box_rect = Rect::new(x_min, y_min, box_w, box_h);
+
                         for comp in &self.components {
-                            let comp_rect =
-                                Rect::new(comp.pos.x, comp.pos.y, comp.width, comp.height);
-                            let box_rect = Rect::new(x_min, y_min, box_w, box_h);
+                            let comp_rect = Rect::new(comp.pos.x, comp.pos.y, comp.width, comp.height);
                             if comp_rect.overlaps(&box_rect) {
                                 self.selected_comp_ids.insert(comp.id);
+                            }
+                        }
+
+                        for conn in &self.connections {
+                            let src_comp_opt = self.components.iter().find(|c| c.id == conn.src_comp_id);
+                            let tgt_comp_opt = self.components.iter().find(|c| c.id == conn.tgt_comp_id);
+                            if let (Some(src), Some(tgt)) = (src_comp_opt, tgt_comp_opt) {
+                                let (_, outputs) = self.get_component_ports_count(src.comp_type);
+                                let (inputs, _) = self.get_component_ports_count(tgt.comp_type);
+                                let src_pos = src.output_port_pos(conn.src_port, outputs);
+                                let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
+
+                                // Basic bounding box check for the wire
+                                let wire_x_min = src_pos.x.min(tgt_pos.x);
+                                let wire_x_max = src_pos.x.max(tgt_pos.x);
+                                let wire_y_min = src_pos.y.min(tgt_pos.y);
+                                let wire_y_max = src_pos.y.max(tgt_pos.y);
+                                let wire_rect = Rect::new(wire_x_min, wire_y_min, wire_x_max - wire_x_min, wire_y_max - wire_y_min);
+
+                                if wire_rect.overlaps(&box_rect) {
+                                    self.selected_connections.insert(*conn);
+                                }
                             }
                         }
                         if self.selected_comp_ids.len() == 1 {
@@ -392,6 +447,7 @@ impl Editor {
                     } else {
                         // Clicked empty space: clear selection
                         self.selected_comp_ids.clear();
+                        self.selected_connections.clear();
                         self.selected_comp_id = None;
                     }
                     self.selection_box_start = None;
@@ -439,14 +495,16 @@ impl Editor {
                     self.annotations.remove(idx);
                 }
                 self.selected_annotation_idx = None;
-            } else if !self.selected_comp_ids.is_empty() {
+            } else if !self.selected_comp_ids.is_empty() || !self.selected_connections.is_empty() {
                 self.components
                     .retain(|c| !self.selected_comp_ids.contains(&c.id));
                 self.connections.retain(|c| {
                     !self.selected_comp_ids.contains(&c.src_comp_id)
                         && !self.selected_comp_ids.contains(&c.tgt_comp_id)
+                        && !self.selected_connections.contains(c)
                 });
                 self.selected_comp_ids.clear();
+                self.selected_connections.clear();
                 self.selected_comp_id = None;
                 self.compile();
             } else if let Some(id) = self.selected_comp_id {
