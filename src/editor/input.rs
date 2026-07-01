@@ -107,29 +107,44 @@ impl Editor {
         // --- Magnetic Port Hover Detection ---
         self.canvas.hovered_port = None;
         if !egui_wants_pointer && self.canvas.inspection_path.is_empty() {
-            let mut closest_dist = 40.0; // 40 pixels on screen radius
+            let mut hovered_chip = false;
             for comp in &self.components {
-                let (inputs_count, outputs_count) = self.get_component_ports_count(comp.comp_type);
-                
-                // Check inputs
-                for i in 0..inputs_count {
-                    let port_pos = comp.input_port_pos(i, inputs_count);
-                    let screen_port_pos = self.to_screen_space(port_pos);
-                    let dist = screen_port_pos.distance(mouse_pos_screen);
-                    if dist < closest_dist {
-                        closest_dist = dist;
-                        self.canvas.hovered_port = Some((comp.id, i, true));
-                    }
+                // Define the chip's inner body (excluding a small margin for ports)
+                if mouse_pos_world.x >= comp.pos.x + 8.0
+                    && mouse_pos_world.x <= comp.pos.x + comp.width - 8.0
+                    && mouse_pos_world.y >= comp.pos.y + 4.0
+                    && mouse_pos_world.y <= comp.pos.y + comp.height - 4.0
+                {
+                    hovered_chip = true;
+                    break;
                 }
-                
-                // Check outputs
-                for o in 0..outputs_count {
-                    let port_pos = comp.output_port_pos(o, outputs_count);
-                    let screen_port_pos = self.to_screen_space(port_pos);
-                    let dist = screen_port_pos.distance(mouse_pos_screen);
-                    if dist < closest_dist {
-                        closest_dist = dist;
-                        self.canvas.hovered_port = Some((comp.id, o, false));
+            }
+
+            if !hovered_chip {
+                let mut closest_dist = 25.0; // Reduced screen radius for snapping
+                for comp in &self.components {
+                    let (inputs_count, outputs_count) = self.get_component_ports_count(comp.comp_type);
+                    
+                    // Check inputs
+                    for i in 0..inputs_count {
+                        let port_pos = comp.input_port_pos(i, inputs_count);
+                        let screen_port_pos = self.to_screen_space(port_pos);
+                        let dist = screen_port_pos.distance(mouse_pos_screen);
+                        if dist < closest_dist {
+                            closest_dist = dist;
+                            self.canvas.hovered_port = Some((comp.id, i, true));
+                        }
+                    }
+                    
+                    // Check outputs
+                    for o in 0..outputs_count {
+                        let port_pos = comp.output_port_pos(o, outputs_count);
+                        let screen_port_pos = self.to_screen_space(port_pos);
+                        let dist = screen_port_pos.distance(mouse_pos_screen);
+                        if dist < closest_dist {
+                            closest_dist = dist;
+                            self.canvas.hovered_port = Some((comp.id, o, false));
+                        }
                     }
                 }
             }
