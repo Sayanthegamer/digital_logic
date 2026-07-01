@@ -83,6 +83,10 @@ pub struct UiState {
     /// Screen-space canvas viewport rect (x, y, w, h) after egui panels are laid out.
     /// Used for camera fit/recenter calculations.
     pub canvas_viewport: Option<(f32, f32, f32, f32)>,
+    
+    // Custom chips DND state
+    pub dragging_catalog_idx: Option<usize>,
+    pub drag_hovered_idx: Option<usize>,
 }
 
 impl Default for UiState {
@@ -106,6 +110,8 @@ impl Default for UiState {
             catalog_search_text: String::new(),
             egui_wants_pointer: false,
             canvas_viewport: None,
+            dragging_catalog_idx: None,
+            drag_hovered_idx: None,
         }
     }
 }
