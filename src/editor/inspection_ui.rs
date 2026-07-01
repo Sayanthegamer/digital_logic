@@ -32,11 +32,7 @@ impl Editor {
         let (inputs_count, outputs_count) = self.get_component_ports_count(comp.component_type);
         let max_ports = inputs_count.max(outputs_count);
         let height = 40.0 + (max_ports as f32 * 16.0);
-        let width = if let ComponentType::SubChip(_) = comp.component_type {
-            100.0
-        } else {
-            70.0
-        };
+        let (width, _) = self.get_component_dimensions(comp.component_type);
 
         let x = comp.pos.0 + width;
         let spacing = height / (outputs_count + 1) as f32;
@@ -62,20 +58,48 @@ impl Editor {
         let inputs_count = blueprint.inputs;
         let outputs_count = blueprint.outputs;
 
-        let border_y_start = 100.0;
+        let mut min_x = f32::MAX;
+        let mut max_x = f32::MIN;
+        let mut min_y = f32::MAX;
+        let mut max_y = f32::MIN;
+
+        for comp in &internal_components {
+            let (w, h) = self.get_component_dimensions(comp.component_type);
+            min_x = min_x.min(comp.pos.0);
+            max_x = max_x.max(comp.pos.0 + w);
+            min_y = min_y.min(comp.pos.1);
+            max_y = max_y.max(comp.pos.1 + h);
+        }
+
+        if min_x > max_x {
+            min_x = 200.0;
+            max_x = 600.0;
+            min_y = 100.0;
+            max_y = 100.0;
+        }
+
+        let input_x = min_x - 150.0;
+        let output_x = max_x + 150.0;
         let spacing_y = 60.0;
 
+        let center_y = (min_y + max_y) / 2.0;
+        let inputs_height = (inputs_count.max(1) - 1) as f32 * spacing_y;
+        let outputs_height = (outputs_count.max(1) - 1) as f32 * spacing_y;
+
+        let input_y_start = center_y - (inputs_height / 2.0);
+        let output_y_start = center_y - (outputs_height / 2.0);
+
         let get_chip_input_pos =
-            |idx: usize| -> Vec2 { Vec2::new(50.0, border_y_start + idx as f32 * spacing_y) };
+            |idx: usize| -> Vec2 { Vec2::new(input_x, input_y_start + idx as f32 * spacing_y) };
         let get_chip_output_pos =
-            |idx: usize| -> Vec2 { Vec2::new(750.0, border_y_start + idx as f32 * spacing_y) };
+            |idx: usize| -> Vec2 { Vec2::new(output_x, output_y_start + idx as f32 * spacing_y) };
 
         // Draw outer chip boundary labels & circles
         for i in 0..inputs_count {
             let world_pos = get_chip_input_pos(i);
             let screen_pos = self.to_screen_space(world_pos);
-            let state =
-                self.get_raw_node_state_at_path(&TraceNode::ChipInput(i), &self.canvas.inspection_path);
+            let state = self
+                .get_raw_node_state_at_path(&TraceNode::ChipInput(i), &self.canvas.inspection_path);
             let port_color = match state {
                 0b00 => theme::ACCENT_GENERIC.mq(),
                 0b01 => theme::ACCENT_INACTIVE.mq(),
@@ -83,7 +107,12 @@ impl Editor {
                 _ => theme::COMP_NAND.mq(),
             };
 
-            draw_circle(screen_pos.x, screen_pos.y, 6.0 * self.canvas.zoom, port_color);
+            draw_circle(
+                screen_pos.x,
+                screen_pos.y,
+                6.0 * self.canvas.zoom,
+                port_color,
+            );
             draw_circle(
                 screen_pos.x,
                 screen_pos.y,
@@ -107,8 +136,10 @@ impl Editor {
         for j in 0..outputs_count {
             let world_pos = get_chip_output_pos(j);
             let screen_pos = self.to_screen_space(world_pos);
-            let state =
-                self.get_raw_node_state_at_path(&TraceNode::ChipOutput(j), &self.canvas.inspection_path);
+            let state = self.get_raw_node_state_at_path(
+                &TraceNode::ChipOutput(j),
+                &self.canvas.inspection_path,
+            );
             let port_color = match state {
                 0b00 => theme::ACCENT_GENERIC.mq(),
                 0b01 => theme::ACCENT_INACTIVE.mq(),
@@ -116,7 +147,12 @@ impl Editor {
                 _ => theme::COMP_NAND.mq(),
             };
 
-            draw_circle(screen_pos.x, screen_pos.y, 6.0 * self.canvas.zoom, port_color);
+            draw_circle(
+                screen_pos.x,
+                screen_pos.y,
+                6.0 * self.canvas.zoom,
+                port_color,
+            );
             draw_circle(
                 screen_pos.x,
                 screen_pos.y,
@@ -181,13 +217,7 @@ impl Editor {
         // Draw internal components
         for (comp_idx, comp) in internal_components.iter().enumerate() {
             let (inputs_count, outputs_count) = self.get_component_ports_count(comp.component_type);
-            let max_ports = inputs_count.max(outputs_count);
-            let height = 40.0 + (max_ports as f32 * 16.0);
-            let width = if let ComponentType::SubChip(_) = comp.component_type {
-                100.0
-            } else {
-                70.0
-            };
+            let (width, height) = self.get_component_dimensions(comp.component_type);
 
             let comp_pos = Vec2::new(comp.pos.0, comp.pos.1);
             let screen_pos = self.to_screen_space(comp_pos);
@@ -321,7 +351,13 @@ impl Editor {
 
         // Draw info overlay
         let title = format!("LOOK INSIDE: {}", blueprint.name);
-        draw_text(&title, 15.0, 20.0, 16.0, theme::ACCENT_PRIMARY.mq_with_alpha(0.95));
+        draw_text(
+            &title,
+            15.0,
+            20.0,
+            16.0,
+            theme::ACCENT_PRIMARY.mq_with_alpha(0.95),
+        );
         draw_text(
             "Inspection Mode (Read-Only) | Drag mouse wheel/right-click to pan | Scroll to zoom",
             15.0,

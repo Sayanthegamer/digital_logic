@@ -1,5 +1,5 @@
-use crate::engine::ComponentType;
 use crate::editor::theme;
+use crate::engine::ComponentType;
 
 use super::Editor;
 
@@ -11,7 +11,7 @@ impl Editor {
                 ui.heading(format!("{} Inspecting Block", theme::ICON_SETTINGS));
                 ui.colored_label(egui::Color32::from_rgb(0, 180, 255), &blueprint.name);
                 ui.separator();
-                
+
                 egui::Grid::new("inspection_grid")
                     .num_columns(2)
                     .spacing([10.0, 10.0])
@@ -30,15 +30,24 @@ impl Editor {
                 ui.add_space(10.0);
                 if ui.button("← Exit Inspection").clicked() {
                     self.canvas.inspection_path.pop();
+                    if let Some((stashed_pan, stashed_zoom)) =
+                        self.canvas.inspection_camera_stack.pop()
+                    {
+                        self.canvas.pan = stashed_pan;
+                        self.canvas.zoom = stashed_zoom;
+                    }
                     self.canvas.selected_comp_id = None;
                 }
             }
         } else {
             // Delete Selected Button (Touch / UI alternative to Delete key)
-            if !self.canvas.selected_comp_ids.is_empty() || !self.canvas.selected_connections.is_empty() {
+            if !self.canvas.selected_comp_ids.is_empty()
+                || !self.canvas.selected_connections.is_empty()
+            {
                 if ui.button("🗑 Delete Selected").clicked() {
                     self.push_history_snapshot();
-                    self.components.retain(|c| !self.canvas.selected_comp_ids.contains(&c.id));
+                    self.components
+                        .retain(|c| !self.canvas.selected_comp_ids.contains(&c.id));
                     self.connections.retain(|c| {
                         !self.canvas.selected_comp_ids.contains(&c.src_comp_id)
                             && !self.canvas.selected_comp_ids.contains(&c.tgt_comp_id)
@@ -54,12 +63,12 @@ impl Editor {
 
             // If a component is selected, allow inspecting & editing properties
             let mut has_selection = false;
-            
+
             let mut trigger_history = false;
             let mut new_label: Option<String> = None;
             let mut new_period: Option<usize> = None;
             let mut do_inspection = false;
-            
+
             if let Some(sel_id) = self.canvas.selected_comp_id {
                 let mut comp_clone = None;
                 for c in &self.components {
@@ -105,7 +114,9 @@ impl Editor {
                                     .show(ui, |ui| {
                                         ui.label("Period:");
                                         let mut period = comp.clock_period.unwrap_or(20);
-                                        let response = ui.add(egui::Slider::new(&mut period, 2..=1000).text("ticks"));
+                                        let response = ui.add(
+                                            egui::Slider::new(&mut period, 2..=1000).text("ticks"),
+                                        );
                                         if response.drag_started() {
                                             trigger_history = true;
                                         }
@@ -122,67 +133,83 @@ impl Editor {
                         egui::CollapsingHeader::new("Actions")
                             .default_open(true)
                             .show(ui, |ui| {
-                                if ui.button(format!("{} Look Inside", theme::ICON_FOLDER)).clicked() {
+                                if ui
+                                    .button(format!("{} Look Inside", theme::ICON_FOLDER))
+                                    .clicked()
+                                {
                                     do_inspection = true;
                                 }
-                                if ui.button(format!("{} Edit Blueprint", theme::ICON_EDIT)).clicked() {
+                                if ui
+                                    .button(format!("{} Edit Blueprint", theme::ICON_EDIT))
+                                    .clicked()
+                                {
                                     self.unpack_blueprint_to_canvas(bp_idx);
                                 }
                             });
                     }
-                    
+
                     ui.add_space(5.0);
                     ui.separator();
                 }
             }
-            
+
             if trigger_history {
                 self.push_history_snapshot();
             }
-            
-            if do_inspection
-                && let Some(sel_id) = self.canvas.selected_comp_id {
-                    self.canvas.inspection_path.push(sel_id);
-                    self.canvas.selected_comp_id = None;
-                }
-            
+
+            if do_inspection && let Some(sel_id) = self.canvas.selected_comp_id {
+                self.canvas
+                    .inspection_camera_stack
+                    .push((self.canvas.pan, self.canvas.zoom));
+                self.canvas.inspection_path.push(sel_id);
+                self.canvas.selected_comp_id = None;
+                self.center_camera_on_inspection_view();
+            }
+
             if (new_label.is_some() || new_period.is_some())
-                && let Some(sel_id) = self.canvas.selected_comp_id {
-                    for c in &mut self.components {
-                        if c.id == sel_id {
-                            if let Some(ref l) = new_label {
-                                c.label = l.clone();
-                            }
-                            if let Some(p) = new_period {
-                                c.clock_period = Some(p);
-                                if let Some(active_clk) = self.engine.active_clocks.iter_mut().find(|ac| ac.visual_id == Some(sel_id)) {
-                                    active_clk.period = p;
-                                }
+                && let Some(sel_id) = self.canvas.selected_comp_id
+            {
+                for c in &mut self.components {
+                    if c.id == sel_id {
+                        if let Some(ref l) = new_label {
+                            c.label = l.clone();
+                        }
+                        if let Some(p) = new_period {
+                            c.clock_period = Some(p);
+                            if let Some(active_clk) = self
+                                .engine
+                                .active_clocks
+                                .iter_mut()
+                                .find(|ac| ac.visual_id == Some(sel_id))
+                            {
+                                active_clk.period = p;
                             }
                         }
                     }
                 }
+            }
 
             let mut delete_annotation_idx = None;
             if let Some(idx) = self.canvas.selected_annotation_idx
-                && let Some(ann) = self.annotations.get_mut(idx) {
-                    has_selection = true;
-                    egui::CollapsingHeader::new(format!("{} Text Note", theme::ICON_SETTINGS))
-                        .default_open(true)
-                        .show(ui, |ui| {
-                            let response = ui.text_edit_multiline(&mut ann.text);
-                            if self.canvas.focus_annotation_text {
-                                response.request_focus();
-                                self.canvas.focus_annotation_text = false;
-                            }
-                        });
-                    ui.add_space(5.0);
-                    if ui.button("🗑 Delete Note").clicked() {
-                        self.push_history_snapshot();
-                        delete_annotation_idx = Some(idx);
-                    }
-                    ui.separator();
+                && let Some(ann) = self.annotations.get_mut(idx)
+            {
+                has_selection = true;
+                egui::CollapsingHeader::new(format!("{} Text Note", theme::ICON_SETTINGS))
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        let response = ui.text_edit_multiline(&mut ann.text);
+                        if self.canvas.focus_annotation_text {
+                            response.request_focus();
+                            self.canvas.focus_annotation_text = false;
+                        }
+                    });
+                ui.add_space(5.0);
+                if ui.button("🗑 Delete Note").clicked() {
+                    self.push_history_snapshot();
+                    delete_annotation_idx = Some(idx);
                 }
+                ui.separator();
+            }
 
             if let Some(idx) = delete_annotation_idx {
                 self.annotations.remove(idx);
@@ -201,18 +228,21 @@ impl Editor {
                                 ui.text_edit_singleline(&mut self.ui.chip_name_input);
                                 ui.end_row();
                             });
-                            
+
                         ui.add_space(5.0);
-                        if ui.button(format!("{} Compile Chip", theme::ICON_SAVE)).clicked()
-                            && let Some(new_bp) = self.package_current_canvas() {
-                                self.push_history_snapshot();
-                                self.engine.library.push(new_bp);
-                                self.components.clear();
-                                self.connections.clear();
-                                self.compile();
-                            }
+                        if ui
+                            .button(format!("{} Compile Chip", theme::ICON_SAVE))
+                            .clicked()
+                            && let Some(new_bp) = self.package_current_canvas()
+                        {
+                            self.push_history_snapshot();
+                            self.engine.library.push(new_bp);
+                            self.components.clear();
+                            self.connections.clear();
+                            self.compile();
+                        }
                     });
-                    
+
                 ui.add_space(5.0);
                 egui::CollapsingHeader::new("Actions")
                     .default_open(true)

@@ -43,7 +43,8 @@ impl Editor {
                 self.canvas.zoom *= current_dist / last_dist;
                 self.canvas.zoom = self.canvas.zoom.clamp(0.15, 4.0);
                 // Zoom towards the center of the pinch
-                self.canvas.pan = current_center - (current_center - self.canvas.pan) * (self.canvas.zoom / prev_zoom);
+                self.canvas.pan = current_center
+                    - (current_center - self.canvas.pan) * (self.canvas.zoom / prev_zoom);
             }
 
             if let Some(last_center) = self.canvas.last_touch_center {
@@ -85,7 +86,7 @@ impl Editor {
             {
                 self.load_project();
             }
-            
+
             // Tool Shortcuts
             if is_key_pressed(KeyCode::Key1) || is_key_pressed(KeyCode::I) {
                 self.canvas.selected_tool = Some(ActiveTool::PlaceComponent(ComponentType::Input));
@@ -151,7 +152,8 @@ impl Editor {
                         continue;
                     }
 
-                    let (inputs_count, outputs_count) = self.get_component_ports_count(comp.comp_type);
+                    let (inputs_count, outputs_count) =
+                        self.get_component_ports_count(comp.comp_type);
 
                     // Check inputs
                     for i in 0..inputs_count {
@@ -191,8 +193,8 @@ impl Editor {
                 self.canvas.zoom = self.canvas.zoom.clamp(0.15, 4.0);
 
                 // Pan adjustment to zoom on mouse cursor
-                self.canvas.pan =
-                    mouse_pos_screen - (mouse_pos_screen - self.canvas.pan) * (self.canvas.zoom / prev_zoom);
+                self.canvas.pan = mouse_pos_screen
+                    - (mouse_pos_screen - self.canvas.pan) * (self.canvas.zoom / prev_zoom);
             }
         }
 
@@ -208,17 +210,19 @@ impl Editor {
                 // Click on a port or component
                 let mut clicked_something = false;
 
-                let bypass_wiring = is_key_down(KeyCode::LeftShift) 
-                    || is_key_down(KeyCode::RightShift) 
-                    || is_key_down(KeyCode::LeftControl) 
+                let bypass_wiring = is_key_down(KeyCode::LeftShift)
+                    || is_key_down(KeyCode::RightShift)
+                    || is_key_down(KeyCode::LeftControl)
                     || is_key_down(KeyCode::RightControl);
 
                 // Check ports first (wiring starts here)
-                if !bypass_wiring && let Some((comp_id, port_idx, is_input)) = self.canvas.hovered_port
-                    && !is_input {
-                        self.canvas.active_wire_drag = Some((comp_id, port_idx));
-                        clicked_something = true;
-                    }
+                if !bypass_wiring
+                    && let Some((comp_id, port_idx, is_input)) = self.canvas.hovered_port
+                    && !is_input
+                {
+                    self.canvas.active_wire_drag = Some((comp_id, port_idx));
+                    clicked_something = true;
+                }
 
                 // Check clicking inside components (dragging, toggling)
                 if !clicked_something {
@@ -264,7 +268,9 @@ impl Editor {
                         for &id in &self.canvas.selected_comp_ids {
                             if let Some(c) = self.components.iter().find(|x| x.id == id) {
                                 self.canvas.drag_start_positions.insert(id, c.pos);
-                                self.canvas.drag_start_sizes.insert(id, Vec2::new(c.width, c.height));
+                                self.canvas
+                                    .drag_start_sizes
+                                    .insert(id, Vec2::new(c.width, c.height));
                             }
                         }
                         clicked_something = true;
@@ -283,7 +289,9 @@ impl Editor {
 
                         if let Some(idx) = clicked_ann {
                             let now = get_time();
-                            if Some(idx) == self.canvas.last_clicked_annotation_idx && now - self.canvas.last_click_time < 0.3 {
+                            if Some(idx) == self.canvas.last_clicked_annotation_idx
+                                && now - self.canvas.last_click_time < 0.3
+                            {
                                 self.canvas.focus_annotation_text = true;
                             }
                             self.canvas.last_click_time = now;
@@ -304,48 +312,52 @@ impl Editor {
 
                             // Start drag selection box if no placement tool is active
                             if self.canvas.selected_tool.is_none() {
-                            // Check if a wire was clicked
-                            let mut clicked_wire = None;
-                            let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
-                                self.components.iter().map(|c| (c.id, c)).collect();
-                            for conn in &self.connections {
-                                let (src_comp_opt, tgt_comp_opt) = (
-                                    comp_by_id.get(&conn.src_comp_id),
-                                    comp_by_id.get(&conn.tgt_comp_id),
-                                );
-                                if let (Some(&src), Some(&tgt)) = (src_comp_opt, tgt_comp_opt) {
-                                    let (_, outputs) = self.get_component_ports_count(src.comp_type);
-                                    let (inputs, _) = self.get_component_ports_count(tgt.comp_type);
-                                    let src_pos = src.output_port_pos(conn.src_port, outputs);
-                                    let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
+                                // Check if a wire was clicked
+                                let mut clicked_wire = None;
+                                let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
+                                    self.components.iter().map(|c| (c.id, c)).collect();
+                                for conn in &self.connections {
+                                    let (src_comp_opt, tgt_comp_opt) = (
+                                        comp_by_id.get(&conn.src_comp_id),
+                                        comp_by_id.get(&conn.tgt_comp_id),
+                                    );
+                                    if let (Some(&src), Some(&tgt)) = (src_comp_opt, tgt_comp_opt) {
+                                        let (_, outputs) =
+                                            self.get_component_ports_count(src.comp_type);
+                                        let (inputs, _) =
+                                            self.get_component_ports_count(tgt.comp_type);
+                                        let src_pos = src.output_port_pos(conn.src_port, outputs);
+                                        let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
 
-                                    if self.hit_test_manhattan_wire(
-                                        src_pos,
-                                        tgt_pos,
-                                        mouse_pos_world,
-                                        10.0 / self.canvas.zoom,
-                                    ) {
-                                        clicked_wire = Some(*conn);
-                                        break;
+                                        if self.hit_test_manhattan_wire(
+                                            src_pos,
+                                            tgt_pos,
+                                            mouse_pos_world,
+                                            10.0 / self.canvas.zoom,
+                                        ) {
+                                            clicked_wire = Some(*conn);
+                                            break;
+                                        }
                                     }
                                 }
-                            }
 
-                            if let Some(wire) = clicked_wire {
-                                if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) {
-                                    self.canvas.selected_connections.insert(wire);
+                                if let Some(wire) = clicked_wire {
+                                    if is_key_down(KeyCode::LeftShift)
+                                        || is_key_down(KeyCode::RightShift)
+                                    {
+                                        self.canvas.selected_connections.insert(wire);
+                                    } else {
+                                        self.canvas.selected_comp_ids.clear();
+                                        self.canvas.selected_connections.clear();
+                                        self.canvas.selected_connections.insert(wire);
+                                    }
+                                    clicked_something = true;
                                 } else {
                                     self.canvas.selected_comp_ids.clear();
                                     self.canvas.selected_connections.clear();
-                                    self.canvas.selected_connections.insert(wire);
+                                    self.canvas.selection_box_start = Some(mouse_pos_world);
                                 }
-                                clicked_something = true;
-                            } else {
-                                self.canvas.selected_comp_ids.clear();
-                                self.canvas.selected_connections.clear();
-                                self.canvas.selection_box_start = Some(mouse_pos_world);
                             }
-                        }
                         }
                     }
                 }
@@ -362,7 +374,7 @@ impl Editor {
                                 ComponentType::SubChip(_) => 100.0,
                                 _ => 70.0,
                             };
-                            
+
                             if comp_type == ComponentType::Junction {
                                 width = 12.0;
                                 height = 12.0;
@@ -422,12 +434,15 @@ impl Editor {
                         (translation.y / 20.0).round() * 20.0,
                     );
 
-                    let shift_pressed = is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift);
+                    let shift_pressed =
+                        is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift);
 
                     let mut needs_snapshot = false;
                     if shift_pressed && !self.canvas.drag_snapshot_pushed {
                         for &id in self.canvas.drag_start_positions.keys() {
-                            if self.components.iter().any(|c| c.id == id && c.comp_type == crate::engine::ComponentType::Junction) {
+                            if self.components.iter().any(|c| {
+                                c.id == id && c.comp_type == crate::engine::ComponentType::Junction
+                            }) {
                                 needs_snapshot = true;
                                 break;
                             }
@@ -440,8 +455,15 @@ impl Editor {
 
                     for (&id, &start_pos) in &self.canvas.drag_start_positions {
                         if let Some(c) = self.components.iter_mut().find(|x| x.id == id) {
-                            if c.comp_type == crate::engine::ComponentType::Junction && shift_pressed {
-                                let start_size = self.canvas.drag_start_sizes.get(&id).copied().unwrap_or(Vec2::new(12.0, 12.0));
+                            if c.comp_type == crate::engine::ComponentType::Junction
+                                && shift_pressed
+                            {
+                                let start_size = self
+                                    .canvas
+                                    .drag_start_sizes
+                                    .get(&id)
+                                    .copied()
+                                    .unwrap_or(Vec2::new(12.0, 12.0));
                                 let center = start_pos + start_size / 2.0;
                                 let is_right = self.canvas.drag_offset.x > center.x;
                                 let is_bottom = self.canvas.drag_offset.y > center.y;
@@ -453,7 +475,8 @@ impl Editor {
                                         c.pos.x = start_pos.x;
                                         c.width = (start_size.x + snapped_translation.x).max(12.0);
                                     } else {
-                                        let new_width = (start_size.x - snapped_translation.x).max(12.0);
+                                        let new_width =
+                                            (start_size.x - snapped_translation.x).max(12.0);
                                         let actual_delta = start_size.x - new_width;
                                         c.pos.x = start_pos.x + actual_delta;
                                         c.width = new_width;
@@ -465,7 +488,8 @@ impl Editor {
                                         c.pos.y = start_pos.y;
                                         c.height = (start_size.y + snapped_translation.y).max(12.0);
                                     } else {
-                                        let new_height = (start_size.y - snapped_translation.y).max(12.0);
+                                        let new_height =
+                                            (start_size.y - snapped_translation.y).max(12.0);
                                         let actual_delta = start_size.y - new_height;
                                         c.pos.y = start_pos.y + actual_delta;
                                         c.height = new_height;
@@ -532,7 +556,8 @@ impl Editor {
                         let box_rect = Rect::new(x_min, y_min, box_w, box_h);
 
                         for comp in &self.components {
-                            let comp_rect = Rect::new(comp.pos.x, comp.pos.y, comp.width, comp.height);
+                            let comp_rect =
+                                Rect::new(comp.pos.x, comp.pos.y, comp.width, comp.height);
                             if comp_rect.overlaps(&box_rect) {
                                 self.canvas.selected_comp_ids.insert(comp.id);
                             }
@@ -593,7 +618,8 @@ impl Editor {
                             }
                         }
                         if self.canvas.selected_comp_ids.len() == 1 {
-                            self.canvas.selected_comp_id = self.canvas.selected_comp_ids.iter().next().copied();
+                            self.canvas.selected_comp_id =
+                                self.canvas.selected_comp_ids.iter().next().copied();
                         }
                     } else {
                         // Clicked empty space: clear selection
@@ -613,30 +639,34 @@ impl Editor {
                 // Handle wiring connection release
                 if let Some((src_id, src_port)) = self.canvas.active_wire_drag {
                     let mut connection_made = false;
-                    
+
                     if let Some((tgt_id, tgt_port, is_input)) = self.canvas.hovered_port
-                        && is_input && tgt_id != src_id {
-                            self.push_history_snapshot();
-                            let mut is_junction = false;
-                            for comp in &self.components {
-                                if comp.id == tgt_id && comp.comp_type == crate::engine::ComponentType::Junction {
-                                    is_junction = true;
-                                    break;
-                                }
+                        && is_input
+                        && tgt_id != src_id
+                    {
+                        self.push_history_snapshot();
+                        let mut is_junction = false;
+                        for comp in &self.components {
+                            if comp.id == tgt_id
+                                && comp.comp_type == crate::engine::ComponentType::Junction
+                            {
+                                is_junction = true;
+                                break;
                             }
-                            if !is_junction {
-                                self.connections
-                                    .retain(|c| !(c.tgt_comp_id == tgt_id && c.tgt_port == tgt_port));
-                            }
-                            self.connections.push(VisualConnection {
-                                src_comp_id: src_id,
-                                src_port,
-                                tgt_comp_id: tgt_id,
-                                tgt_port,
-                            });
-                            connection_made = true;
                         }
-                    
+                        if !is_junction {
+                            self.connections
+                                .retain(|c| !(c.tgt_comp_id == tgt_id && c.tgt_port == tgt_port));
+                        }
+                        self.connections.push(VisualConnection {
+                            src_comp_id: src_id,
+                            src_port,
+                            tgt_comp_id: tgt_id,
+                            tgt_port,
+                        });
+                        connection_made = true;
+                    }
+
                     self.canvas.active_wire_drag = None;
                     if connection_made {
                         self.compile();
@@ -650,7 +680,11 @@ impl Editor {
             && self.canvas.inspection_path.is_empty()
             && (is_key_pressed(KeyCode::Delete) || is_key_pressed(KeyCode::Backspace))
         {
-            if self.canvas.selected_annotation_idx.is_some() || !self.canvas.selected_comp_ids.is_empty() || !self.canvas.selected_connections.is_empty() || self.canvas.selected_comp_id.is_some() {
+            if self.canvas.selected_annotation_idx.is_some()
+                || !self.canvas.selected_comp_ids.is_empty()
+                || !self.canvas.selected_connections.is_empty()
+                || self.canvas.selected_comp_id.is_some()
+            {
                 self.push_history_snapshot();
             }
             if let Some(idx) = self.canvas.selected_annotation_idx {
@@ -658,7 +692,9 @@ impl Editor {
                     self.annotations.remove(idx);
                 }
                 self.canvas.selected_annotation_idx = None;
-            } else if !self.canvas.selected_comp_ids.is_empty() || !self.canvas.selected_connections.is_empty() {
+            } else if !self.canvas.selected_comp_ids.is_empty()
+                || !self.canvas.selected_connections.is_empty()
+            {
                 self.components
                     .retain(|c| !self.canvas.selected_comp_ids.contains(&c.id));
                 self.connections.retain(|c| {
@@ -690,7 +726,9 @@ impl Editor {
                     if clock.counter >= half_period {
                         clock.counter = 0;
                         let current_state = self.engine.simulator.get_state(clock.gate_idx);
-                        self.engine.simulator.set_input(clock.gate_idx, !current_state);
+                        self.engine
+                            .simulator
+                            .set_input(clock.gate_idx, !current_state);
                     }
                 }
 

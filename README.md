@@ -64,6 +64,7 @@ The goal, stated plainly: **run a real 8-bit (eventually 16-bit) CPU, built enti
 | | |
 |---|---|
 | 🔌 **Event-Driven Simulation** | Gates only re-evaluate when their inputs actually change — not every frame. Oscillation detection stops runaway feedback loops (e.g. an inverter wired to itself) from freezing the app. |
+| 🎮 **App Mode Routing** | Navigate seamlessly through a dedicated Main Menu, Project Manager, Settings Overlay, and Credits, keeping the Editor clean and focused. |
 | 🧩 **Custom Chips (Sub-Chips)** | Package any circuit into a named, reusable chip with custom input/output labels. Drop it into future circuits like any primitive. |
 | 🔍 **Look-Inside Inspection** | Step *into* any chip — even ones nested many layers deep — and watch the live 4-state (Floating / Low / High / Contention) signal on every internal wire, read-only. |
 | ⏱️ **Multi-Domain Clocks** | Every clock component has its own independent period. Run a fast CPU clock alongside a slow peripheral clock, both ticking correctly in the same simulation. |

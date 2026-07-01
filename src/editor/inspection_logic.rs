@@ -62,8 +62,10 @@ impl Editor {
                     component_idx,
                     port_idx,
                 } => {
-                    if let Some(&g_idx) =
-                        self.engine.port_to_sim_gate_map.get(&(*component_idx, *port_idx))
+                    if let Some(&g_idx) = self
+                        .engine
+                        .port_to_sim_gate_map
+                        .get(&(*component_idx, *port_idx))
                     {
                         return self.engine.simulator.get_state(g_idx);
                     }
@@ -131,8 +133,10 @@ impl Editor {
                     component_idx,
                     port_idx,
                 } => {
-                    if let Some(&g_idx) =
-                        self.engine.port_to_sim_gate_map.get(&(*component_idx, *port_idx))
+                    if let Some(&g_idx) = self
+                        .engine
+                        .port_to_sim_gate_map
+                        .get(&(*component_idx, *port_idx))
                     {
                         return self.engine.simulator.get_raw_state(g_idx);
                     }
@@ -196,7 +200,8 @@ impl Editor {
                 match component.component_type {
                     ComponentType::Nand | ComponentType::Clock | ComponentType::TriStateBuffer => {
                         if let Some(&gate_idx) = self
-                            .engine.instance_to_sim_map
+                            .engine
+                            .instance_to_sim_map
                             .get(&(path.to_vec(), *component_idx))
                         {
                             OutputSource::DrivenByGate(gate_idx)
@@ -205,8 +210,10 @@ impl Editor {
                         }
                     }
                     ComponentType::SubChip(_) => {
-                        if let Some(outputs) =
-                            self.engine.instance_outputs.get(&(path.to_vec(), *component_idx))
+                        if let Some(outputs) = self
+                            .engine
+                            .instance_outputs
+                            .get(&(path.to_vec(), *component_idx))
                         {
                             if *port_idx < outputs.len() {
                                 outputs[*port_idx]
@@ -224,7 +231,9 @@ impl Editor {
                         };
                         self.trace_local_driver(&in_node, blueprint, path)
                     }
-                    ComponentType::Input | ComponentType::Output | ComponentType::SevenSegment => OutputSource::Floating,
+                    ComponentType::Input | ComponentType::Output | ComponentType::SevenSegment => {
+                        OutputSource::Floating
+                    }
                 }
             }
             TraceNode::CompInput {

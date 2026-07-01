@@ -10,10 +10,12 @@ impl Editor {
             connections: self.connections.clone(),
             annotations: self.annotations.clone(),
             next_component_id: self.next_component_id,
+            pan: self.canvas.pan,
+            zoom: self.canvas.zoom,
         };
 
         self.history.undo_stack.push(snapshot);
-        
+
         // Truncate if we exceed max_steps
         if self.history.undo_stack.len() > self.history.max_steps {
             self.history.undo_stack.remove(0);
@@ -32,6 +34,8 @@ impl Editor {
                 connections: self.connections.clone(),
                 annotations: self.annotations.clone(),
                 next_component_id: self.next_component_id,
+                pan: self.canvas.pan,
+                zoom: self.canvas.zoom,
             };
             self.history.redo_stack.push(current_snapshot);
 
@@ -40,10 +44,12 @@ impl Editor {
             self.connections = prev_state.connections;
             self.annotations = prev_state.annotations;
             self.next_component_id = prev_state.next_component_id;
+            self.canvas.pan = prev_state.pan;
+            self.canvas.zoom = prev_state.zoom;
 
             // Recompile the simulation engine
             self.compile();
-            
+
             // Clear any lingering selection or interactions
             self.canvas.selected_comp_id = None;
             self.canvas.selected_comp_ids.clear();
@@ -64,6 +70,8 @@ impl Editor {
                 connections: self.connections.clone(),
                 annotations: self.annotations.clone(),
                 next_component_id: self.next_component_id,
+                pan: self.canvas.pan,
+                zoom: self.canvas.zoom,
             };
             self.history.undo_stack.push(current_snapshot);
 
@@ -72,13 +80,14 @@ impl Editor {
             self.connections = next_state.connections;
             self.annotations = next_state.annotations;
             self.next_component_id = next_state.next_component_id;
+            self.canvas.pan = next_state.pan;
+            self.canvas.zoom = next_state.zoom;
 
             // Recompile the simulation engine
             self.compile();
-            
+
             // Clear any lingering selection or interactions
             self.canvas.selected_comp_id = None;
-            self.canvas.selected_comp_ids.clear();
             self.canvas.selected_connections.clear();
             self.canvas.active_wire_drag = None;
             self.canvas.dragging_comp_id = None;
