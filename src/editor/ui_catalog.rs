@@ -99,11 +99,47 @@ impl Editor {
                 ui.vertical(|ui| {
                     let total_chips = self.engine.library.len();
                     if total_chips > 0 {
+                        let mut move_operation = None;
                         for (idx, bp) in self.engine.library.iter().enumerate() {
                             let is_sel = self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::SubChip(idx)));
-                            if ui.selectable_label(is_sel, format!("{} {}", theme::ICON_FOLDER, bp.name)).clicked() {
+                            let mut response = ui.selectable_label(is_sel, format!("{} {}", theme::ICON_FOLDER, bp.name));
+                            
+                            // Add drag sensing to the label
+                            response = response.interact(egui::Sense::drag());
+                            
+                            if response.drag_started() {
+                                self.ui.dragging_catalog_idx = Some(idx);
+                            }
+                            
+                            if let Some(dragged_idx) = self.ui.dragging_catalog_idx {
+                                if response.hovered() {
+                                    self.ui.drag_hovered_idx = Some(idx);
+                                }
+                                
+                                if self.ui.drag_hovered_idx == Some(idx) && dragged_idx != idx {
+                                    let rect = response.rect;
+                                    let y = if idx > dragged_idx { rect.max.y } else { rect.min.y };
+                                    ui.painter().hline(rect.min.x..=rect.max.x, y, (2.0, egui::Color32::WHITE));
+                                }
+                            }
+                            
+                            if response.clicked() {
                                 self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::SubChip(idx)));
                             }
+                        }
+                        
+                        if ui.input(|i| i.pointer.any_released()) {
+                            if let (Some(from), Some(to)) = (self.ui.dragging_catalog_idx, self.ui.drag_hovered_idx) {
+                                if from != to {
+                                    move_operation = Some((from, to));
+                                }
+                            }
+                            self.ui.dragging_catalog_idx = None;
+                            self.ui.drag_hovered_idx = None;
+                        }
+                        
+                        if let Some((from, to)) = move_operation {
+                            self.remap_library_chip(from, to);
                         }
                     } else {
                         ui.weak("No custom chips created.");

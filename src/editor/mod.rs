@@ -450,4 +450,45 @@ impl Editor {
             ],
         });
     }
+
+    pub fn remap_library_chip(&mut self, from: usize, to: usize) {
+        let len = self.engine.library.len();
+        if from == to || from >= len || to >= len { return; }
+        
+        let mut new_order: Vec<usize> = (0..len).collect();
+        let item = new_order.remove(from);
+        new_order.insert(to, item);
+
+        let mut map = vec![0; len];
+        for (new_idx, &old_idx) in new_order.iter().enumerate() {
+            map[old_idx] = new_idx;
+        }
+
+        let mut new_library = Vec::with_capacity(len);
+        for &old_idx in &new_order {
+            new_library.push(self.engine.library[old_idx].clone());
+        }
+        self.engine.library = new_library;
+
+        // Remap in main canvas
+        for comp in &mut self.components {
+            if let ComponentType::SubChip(ref mut idx) = comp.comp_type {
+                *idx = map[*idx];
+            }
+        }
+        
+        // Remap in library blueprints
+        for bp in &mut self.engine.library {
+            for comp in &mut bp.components {
+                if let ComponentType::SubChip(ref mut idx) = comp.component_type {
+                    *idx = map[*idx];
+                }
+            }
+        }
+        
+        // Remap selected_tool if it points to a SubChip
+        if let Some(crate::editor::types::ActiveTool::PlaceComponent(ComponentType::SubChip(ref mut idx))) = self.canvas.selected_tool {
+            *idx = map[*idx];
+        }
+    }
 }
