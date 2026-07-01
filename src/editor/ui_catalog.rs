@@ -9,23 +9,32 @@ impl Editor {
         ui.heading(format!("{} Toolbox", theme::ICON_FOLDER));
         ui.add_space(5.0);
 
+        ui.horizontal(|ui| {
+            ui.label("🔍");
+            ui.text_edit_singleline(&mut self.ui.catalog_search_text);
+        });
+        ui.add_space(5.0);
+        let search = self.ui.catalog_search_text.to_lowercase();
+
         egui::CollapsingHeader::new("Primitives")
             .default_open(true)
             .show(ui, |ui| {
                 ui.vertical(|ui| {
-                    if ui.selectable_label(
-                        self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Nand)),
-                        format!("{} NAND Gate", theme::ICON_SETTINGS),
-                    ).clicked() {
-                        self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Nand));
-                    }
+                    if (search.is_empty() || "nand gate".contains(&search))
+                        && ui.selectable_label(
+                            self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Nand)),
+                            format!("{} NAND Gate", theme::ICON_SETTINGS),
+                        ).clicked() {
+                            self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Nand));
+                        }
                     
-                    if ui.selectable_label(
-                        self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Clock)),
-                        format!("{} Clock", theme::ICON_SETTINGS),
-                    ).clicked() {
-                        self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Clock));
-                    }
+                    if (search.is_empty() || "clock".contains(&search))
+                        && ui.selectable_label(
+                            self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Clock)),
+                            format!("{} Clock", theme::ICON_SETTINGS),
+                        ).clicked() {
+                            self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Clock));
+                        }
                 });
             });
 
@@ -35,18 +44,20 @@ impl Editor {
             .default_open(true)
             .show(ui, |ui| {
                 ui.vertical(|ui| {
-                    if ui.selectable_label(
-                        self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Junction)),
-                        format!("{} Bus Junction", theme::ICON_SETTINGS),
-                    ).clicked() {
-                        self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Junction));
-                    }
-                    if ui.selectable_label(
-                        self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::TriStateBuffer)),
-                        format!("{} Tri-State Buffer", theme::ICON_SETTINGS),
-                    ).clicked() {
-                        self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::TriStateBuffer));
-                    }
+                    if (search.is_empty() || "bus junction".contains(&search))
+                        && ui.selectable_label(
+                            self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Junction)),
+                            format!("{} Bus Junction", theme::ICON_SETTINGS),
+                        ).clicked() {
+                            self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Junction));
+                        }
+                    if (search.is_empty() || "tri-state buffer".contains(&search))
+                        && ui.selectable_label(
+                            self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::TriStateBuffer)),
+                            format!("{} Tri-State Buffer", theme::ICON_SETTINGS),
+                        ).clicked() {
+                            self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::TriStateBuffer));
+                        }
                 });
             });
 
@@ -56,24 +67,27 @@ impl Editor {
             .default_open(true)
             .show(ui, |ui| {
                 ui.vertical(|ui| {
-                    if ui.selectable_label(
-                        self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Input)),
-                        format!("{} Switch Input", theme::ICON_SETTINGS),
-                    ).clicked() {
-                        self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Input));
-                    }
-                    if ui.selectable_label(
-                        self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Output)),
-                        format!("{} Light Output", theme::ICON_SETTINGS),
-                    ).clicked() {
-                        self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Output));
-                    }
-                    if ui.selectable_label(
-                        self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::SevenSegment)),
-                        format!("{} 7-Segment", theme::ICON_SETTINGS),
-                    ).clicked() {
-                        self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::SevenSegment));
-                    }
+                    if (search.is_empty() || "switch input".contains(&search))
+                        && ui.selectable_label(
+                            self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Input)),
+                            format!("{} Switch Input", theme::ICON_SETTINGS),
+                        ).clicked() {
+                            self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Input));
+                        }
+                    if (search.is_empty() || "light output".contains(&search))
+                        && ui.selectable_label(
+                            self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Output)),
+                            format!("{} Light Output", theme::ICON_SETTINGS),
+                        ).clicked() {
+                            self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Output));
+                        }
+                    if (search.is_empty() || "7-segment".contains(&search))
+                        && ui.selectable_label(
+                            self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::SevenSegment)),
+                            format!("{} 7-Segment", theme::ICON_SETTINGS),
+                        ).clicked() {
+                            self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::SevenSegment));
+                        }
                 });
             });
 
@@ -103,19 +117,16 @@ impl Editor {
             .default_open(true)
             .show(ui, |ui| {
                 ui.vertical(|ui| {
-                    if ui.selectable_label(
-                        self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceAnnotation),
-                        format!("{} Text Note", theme::ICON_SETTINGS),
-                    ).clicked() {
-                        self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceAnnotation);
-                    }
+                    if (search.is_empty() || "text note".contains(&search) || "annotation".contains(&search))
+                        && ui.selectable_label(
+                            self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceAnnotation),
+                            format!("{} Text Note", theme::ICON_SETTINGS),
+                        ).clicked() {
+                            self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceAnnotation);
+                        }
                 });
             });
 
-        ui.add_space(10.0);
-        ui.separator();
-        if ui.button("❌ Clear Tool").clicked() {
-            self.canvas.selected_tool = None;
-        }
+
     }
 }

@@ -77,6 +77,7 @@ pub struct UiState {
     pub catalog_scroll_request: Option<f32>,
     pub controls_scroll_request: Option<f32>,
     pub chip_name_input: String,
+    pub catalog_search_text: String,
     pub egui_wants_pointer: bool,
 }
 
@@ -98,6 +99,7 @@ impl Default for UiState {
             catalog_scroll_request: None,
             controls_scroll_request: None,
             chip_name_input: "MY_CHIP".to_string(),
+            catalog_search_text: String::new(),
             egui_wants_pointer: false,
         }
     }

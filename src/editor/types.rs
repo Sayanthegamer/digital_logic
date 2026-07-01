@@ -36,6 +36,9 @@ pub struct VisualComponent {
 
 impl VisualComponent {
     pub fn input_port_pos(&self, port_idx: usize, num_inputs: usize) -> Vec2 {
+        if self.comp_type == ComponentType::Junction {
+            return Vec2::new(self.pos.x + self.width / 2.0, self.pos.y + self.height / 2.0);
+        }
         if num_inputs == 0 {
             return self.pos;
         }
@@ -45,6 +48,9 @@ impl VisualComponent {
     }
 
     pub fn output_port_pos(&self, port_idx: usize, num_outputs: usize) -> Vec2 {
+        if self.comp_type == ComponentType::Junction {
+            return Vec2::new(self.pos.x + self.width / 2.0, self.pos.y + self.height / 2.0);
+        }
         if num_outputs == 0 {
             return self.pos + Vec2::new(self.width, 0.0);
         }
