@@ -1,6 +1,6 @@
 [package]
 name = "logic_simulator"
-version = "1.1.0-alpha.1"
+version = "1.2.0-alpha.1"
 edition = "2024"
 
 
@@ -8,6 +8,10 @@ edition = "2024"
 name = "logic_simulator"
 path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "logic_simulator_bin"
+path = "src/main.rs"
 
 
 [dependencies]
