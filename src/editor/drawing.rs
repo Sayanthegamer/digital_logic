@@ -118,14 +118,16 @@ impl Editor {
         // 1.5. Draw Text Annotations
         for (idx, ann) in self.annotations.iter().enumerate() {
             let screen_pos = self.to_screen_space(ann.pos);
-            let font_size = (15.0 * self.canvas.zoom).max(8.0);
+            let target_font_size = (15.0 * self.canvas.zoom).max(8.0);
+            let base_font_size = 32.0;
+            let font_scale = target_font_size / base_font_size;
 
             // Frustum culling for annotations
-            let text_w = measure_text(&ann.text, self.font.as_ref(), font_size as u16, 1.0).width;
+            let text_w = measure_text(&ann.text, self.font.as_ref(), base_font_size as u16, font_scale).width;
             if screen_pos.x + text_w < 0.0
                 || screen_pos.x > screen_width()
                 || screen_pos.y < 0.0
-                || screen_pos.y - font_size > screen_height()
+                || screen_pos.y - target_font_size > screen_height()
             {
                 continue;
             }
@@ -138,7 +140,8 @@ impl Editor {
             };
             draw_text_ex(&ann.text, screen_pos.x, screen_pos.y, TextParams {
                 font: self.font.as_ref(),
-                font_size: font_size as u16,
+                font_size: base_font_size as u16,
+                font_scale,
                 color,
                 ..Default::default()
             });
@@ -147,9 +150,9 @@ impl Editor {
                 let pad = 4.0 * self.canvas.zoom;
                 draw_rectangle_lines(
                     screen_pos.x - pad,
-                    screen_pos.y - font_size - pad + 3.0 * self.canvas.zoom,
+                    screen_pos.y - target_font_size - pad + 3.0 * self.canvas.zoom,
                     text_w + pad * 2.0,
-                    font_size + pad * 2.0,
+                    target_font_size + pad * 2.0,
                     1.5 * self.canvas.zoom,
                     theme::ACCENT_PRIMARY.mq_with_alpha(0.6),
                 );
@@ -321,8 +324,8 @@ impl Editor {
             }
 
             // Draw text label
-            let font_size = (13.0 * self.canvas.zoom).max(6.0);
-            let text_size = measure_text(&comp.label, self.font.as_ref(), font_size as u16, 1.0);
+            let base_font_size = 13.0;
+            let text_size = measure_text(&comp.label, self.font.as_ref(), base_font_size as u16, self.canvas.zoom);
             let text_x = screen_pos.x + (comp_width - text_size.width) / 2.0;
             let text_y = screen_pos.y + (comp_height + text_size.height) / 2.0;
 
@@ -330,7 +333,8 @@ impl Editor {
             if comp.comp_type != ComponentType::SevenSegment {
                 draw_text_ex(&comp.label, text_x, text_y, TextParams {
                     font: self.font.as_ref(),
-                    font_size: font_size as u16,
+                    font_size: base_font_size as u16,
+                    font_scale: self.canvas.zoom,
                     color: text_color,
                     ..Default::default()
                 });
@@ -430,7 +434,10 @@ impl Editor {
             if let ComponentType::SubChip(idx) = comp.comp_type
                 && let Some(bp) = self.engine.library.get(idx)
             {
-                let text_size_px = (10.0 * self.canvas.zoom).max(5.0);
+                let target_text_size_px = (10.0 * self.canvas.zoom).max(5.0);
+                let base_font_size = 32.0;
+                let font_scale = target_text_size_px / base_font_size;
+                
                 for i in 0..inputs_count {
                     let port_pos = self.to_screen_space(comp.input_port_pos(i, inputs_count));
                     let name = bp
@@ -440,7 +447,8 @@ impl Editor {
                         .unwrap_or_else(|| format!("{}", i));
                     draw_text_ex(&name, port_pos.x + 6.0 * self.canvas.zoom, port_pos.y + 3.0 * self.canvas.zoom, TextParams {
                         font: self.font.as_ref(),
-                        font_size: text_size_px as u16,
+                        font_size: base_font_size as u16,
+                        font_scale,
                         color: theme::TEXT_SECONDARY.mq(),
                         ..Default::default()
                     });
@@ -452,10 +460,11 @@ impl Editor {
                         .get(o)
                         .cloned()
                         .unwrap_or_else(|| format!("{}", o));
-                    let text_w = measure_text(&name, self.font.as_ref(), text_size_px as u16, 1.0).width;
+                    let text_w = measure_text(&name, self.font.as_ref(), base_font_size as u16, font_scale).width;
                     draw_text_ex(&name, port_pos.x - 6.0 * self.canvas.zoom - text_w, port_pos.y + 3.0 * self.canvas.zoom, TextParams {
                         font: self.font.as_ref(),
-                        font_size: text_size_px as u16,
+                        font_size: base_font_size as u16,
+                        font_scale,
                         color: theme::TEXT_SECONDARY.mq(),
                         ..Default::default()
                     });
