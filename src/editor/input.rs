@@ -306,11 +306,16 @@ impl Editor {
                             self.push_history_snapshot();
                             let (inputs, outputs) = self.get_component_ports_count(comp_type);
                             let max_ports = inputs.max(outputs);
-                            let height = 40.0 + (max_ports as f32 * 16.0);
-                            let width = match comp_type {
+                            let mut height = 40.0 + (max_ports as f32 * 16.0);
+                            let mut width = match comp_type {
                                 ComponentType::SubChip(_) => 100.0,
                                 _ => 70.0,
                             };
+                            
+                            if comp_type == ComponentType::Junction {
+                                width = 12.0;
+                                height = 12.0;
+                            }
 
                             let label = self.get_component_label(comp_type);
 
@@ -568,7 +573,7 @@ impl Editor {
                     let half_period = (clock.period / 2).max(1);
                     if clock.counter >= half_period {
                         clock.counter = 0;
-                        let current_state = self.engine.simulator.states[clock.gate_idx];
+                        let current_state = self.engine.simulator.get_state(clock.gate_idx);
                         self.engine.simulator.set_input(clock.gate_idx, !current_state);
                     }
                 }

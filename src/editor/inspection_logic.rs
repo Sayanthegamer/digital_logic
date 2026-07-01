@@ -112,6 +112,75 @@ impl Editor {
         }
     }
 
+    pub fn get_raw_node_state_at_path(&self, node: &TraceNode, path: &[usize]) -> u8 {
+        if path.is_empty() {
+            match node {
+                TraceNode::ChipInput(idx) => {
+                    let inputs: Vec<&super::types::VisualComponent> = self
+                        .components
+                        .iter()
+                        .filter(|c| c.comp_type == ComponentType::Input)
+                        .collect();
+                    if let Some(comp) = inputs.get(*idx)
+                        && let Some(&g_idx) = self.engine.visual_to_sim_map.get(&comp.id)
+                    {
+                        return self.engine.simulator.get_raw_state(g_idx);
+                    }
+                }
+                TraceNode::CompOutput {
+                    component_idx,
+                    port_idx,
+                } => {
+                    if let Some(&g_idx) =
+                        self.engine.port_to_sim_gate_map.get(&(*component_idx, *port_idx))
+                    {
+                        return self.engine.simulator.get_raw_state(g_idx);
+                    }
+                }
+                TraceNode::CompInput {
+                    component_idx,
+                    port_idx,
+                } => {
+                    if let Some(conn) = self
+                        .connections
+                        .iter()
+                        .find(|c| c.tgt_comp_id == *component_idx && c.tgt_port == *port_idx)
+                    {
+                        let src_node = TraceNode::CompOutput {
+                            component_idx: conn.src_comp_id,
+                            port_idx: conn.src_port,
+                        };
+                        return self.get_raw_node_state_at_path(&src_node, &[]);
+                    }
+                }
+                _ => {}
+            }
+            return 0b00;
+        }
+
+        let parent_path = &path[..path.len() - 1];
+        let comp_id_in_parent = path[path.len() - 1];
+
+        if let Some(bp_idx) = self.get_blueprint_idx_for_path(path) {
+            let blueprint = &self.engine.library[bp_idx];
+            let driver = self.trace_local_driver(node, blueprint, path);
+
+            match driver {
+                OutputSource::DrivenByGate(g_idx) => self.engine.simulator.get_raw_state(g_idx),
+                OutputSource::PassedThrough(in_idx) => {
+                    let parent_node = TraceNode::CompInput {
+                        component_idx: comp_id_in_parent,
+                        port_idx: in_idx,
+                    };
+                    self.get_raw_node_state_at_path(&parent_node, parent_path)
+                }
+                OutputSource::Floating => 0b00,
+            }
+        } else {
+            0b00
+        }
+    }
+
     pub(crate) fn trace_local_driver(
         &self,
         node: &TraceNode,
@@ -125,7 +194,7 @@ impl Editor {
             } => {
                 let component = &blueprint.components[*component_idx];
                 match component.component_type {
-                    ComponentType::Nand | ComponentType::Clock => {
+                    ComponentType::Nand | ComponentType::Clock | ComponentType::TriStateBuffer => {
                         if let Some(&gate_idx) = self
                             .engine.instance_to_sim_map
                             .get(&(path.to_vec(), *component_idx))
@@ -147,6 +216,13 @@ impl Editor {
                         } else {
                             OutputSource::Floating
                         }
+                    }
+                    ComponentType::Junction => {
+                        let in_node = TraceNode::CompInput {
+                            component_idx: *component_idx,
+                            port_idx: 0,
+                        };
+                        self.trace_local_driver(&in_node, blueprint, path)
                     }
                     ComponentType::Input | ComponentType::Output | ComponentType::SevenSegment => OutputSource::Floating,
                 }

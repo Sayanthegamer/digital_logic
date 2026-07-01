@@ -70,15 +70,15 @@ impl Editor {
                 let wire_state = if let Some(&gate_idx) = self.engine.port_to_sim_gate_map
                     .get(&(wire.src_comp_id, wire.src_port))
                 {
-                    self.engine.simulator.get_state(gate_idx)
+                    self.engine.simulator.get_raw_state(gate_idx)
                 } else if src.comp_type == ComponentType::Input {
                     if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&src.id) {
-                        self.engine.simulator.get_state(gate_idx)
+                        self.engine.simulator.get_raw_state(gate_idx)
                     } else {
-                        false
+                        0b00
                     }
                 } else {
-                    false
+                    0b00
                 };
 
                 let is_selected = self.canvas.selected_connections.contains(wire);
@@ -191,6 +191,23 @@ impl Editor {
             let bg_color = theme::BG_PANEL.mq_with_alpha(0.95);
             let border_color = theme::BORDER.mq();
 
+            if comp.comp_type == ComponentType::Junction {
+                let center_x = screen_pos.x + comp_width / 2.0;
+                let center_y = screen_pos.y + comp_height / 2.0;
+                let radius = 6.0 * self.canvas.zoom;
+                
+                // Outer circle
+                draw_circle(center_x, center_y, radius, theme::BORDER.mq());
+                // Inner filled circle
+                draw_circle(center_x, center_y, radius * 0.7, theme::TEXT_PRIMARY.mq());
+                
+                if self.canvas.selected_comp_id == Some(comp.id) || self.canvas.selected_comp_ids.contains(&comp.id) {
+                    draw_circle_lines(center_x, center_y, radius + 3.0 * self.canvas.zoom, 1.5 * self.canvas.zoom, theme::ACCENT_PRIMARY.mq());
+                }
+                
+                continue;
+            }
+
             // Draw component box with rounded corners and drop shadow
             let corner_radius = 6.0 * self.canvas.zoom;
 
@@ -236,6 +253,8 @@ impl Editor {
                 }
                 ComponentType::SubChip(_) => theme::COMP_SUBCHIP.mq(), // Royal indigo
                 ComponentType::SevenSegment => theme::COMP_SEVENSEG.mq(),
+                ComponentType::TriStateBuffer => theme::COMP_NAND.mq(),
+                ComponentType::Junction => theme::ACCENT_GENERIC.mq(),
             };
             let stripe_height = 4.0 * self.canvas.zoom;
             draw_rounded_rect(

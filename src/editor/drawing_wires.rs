@@ -33,21 +33,22 @@ impl Editor {
         }
     }
 
-    pub(crate) fn draw_manhattan_wire(&self, src_pos: Vec2, tgt_pos: Vec2, wire_state: bool, is_selected: bool) {
-        let color = if wire_state {
-            theme::ACCENT_PRIMARY.mq() // electric cyan
-        } else {
-            theme::ACCENT_INACTIVE.mq() // muted slate gray
+    pub(crate) fn draw_manhattan_wire(&self, src_pos: Vec2, tgt_pos: Vec2, wire_state: u8, is_selected: bool) {
+        let (color, thickness, is_active) = match wire_state {
+            0b00 => (theme::ACCENT_GENERIC.mq(), 1.3 * self.canvas.zoom, false),
+            0b01 => (theme::ACCENT_INACTIVE.mq(), 1.6 * self.canvas.zoom, false),
+            0b10 => (theme::ACCENT_PRIMARY.mq(), 2.2 * self.canvas.zoom, true),
+            0b11 | _ => (theme::COMP_NAND.mq(), 2.8 * self.canvas.zoom, true),
         };
-        let thickness = if wire_state { 2.2 } else { 1.3 } * self.canvas.zoom;
 
         // Active glow bloom effect under active wires
-        if wire_state || is_selected {
+        if is_active || is_selected {
             let glow_color = if is_selected {
                 theme::ACCENT_PRIMARY.mq_with_alpha(0.4) // Strong cyan glow for selection
             } else {
-                theme::ACCENT_PRIMARY.mq_with_alpha(0.15)
+                color.clone() // Glow matches the wire color
             };
+            let glow_color = Color::new(glow_color.r, glow_color.g, glow_color.b, 0.2);
             let glow_thickness = thickness + (if is_selected { 6.0 } else { 4.0 }) * self.canvas.zoom;
             Self::draw_manhattan_wire_segments(
                 src_pos,
@@ -62,7 +63,7 @@ impl Editor {
 
         // Draw concentric terminal circle/indicator at target
         let port_radius = 4.0 * self.canvas.zoom;
-        if wire_state {
+        if is_active {
             draw_circle(
                 tgt_pos.x,
                 tgt_pos.y,

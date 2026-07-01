@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 
 pub struct Simulator {
     pub gates: Vec<PrimitiveGate>,
-    pub states: Vec<bool>,
+    pub states: Vec<u8>,
     pub dependents: Vec<Vec<usize>>,
     pub event_queue: VecDeque<usize>,
     pub in_queue: Vec<bool>,
@@ -37,12 +37,12 @@ impl Simulator {
             input_b_source: None,
         });
 
-        // Floating inputs default to false (Logic 0).
-        // A NAND gate with floating inputs evaluates to !(false && false) = true.
-        // Input and Output gates default to false.
+        // 0b00 = Floating, 0b01 = Low, 0b10 = High, 0b11 = Contention
         let initial_state = match gate_type {
-            GateType::Nand => true,
-            GateType::Input | GateType::Output => false,
+            GateType::Nand => 0b10,
+            GateType::Input | GateType::Output => 0b01,
+            GateType::TriStateBuffer => 0b00,
+            GateType::BusResolver => 0b00,
         };
 
         self.states.push(initial_state);
@@ -96,8 +96,9 @@ impl Simulator {
             self.gates[gate_idx].gate_type
         );
 
-        if self.states[gate_idx] != value {
-            self.states[gate_idx] = value;
+        let new_state = if value { 0b10 } else { 0b01 };
+        if self.states[gate_idx] != new_state {
+            self.states[gate_idx] = new_state;
             for &dep_idx in &self.dependents[gate_idx] {
                 if !self.in_queue[dep_idx] {
                     self.in_queue[dep_idx] = true;
@@ -107,8 +108,18 @@ impl Simulator {
         }
     }
 
-    /// Gets the current state of a gate by its index.
+    /// Gets the boolean evaluation of the current state of a gate by its index.
     pub fn get_state(&self, gate_idx: usize) -> bool {
+        assert!(
+            gate_idx < self.states.len(),
+            "Gate index out of bounds: {}",
+            gate_idx
+        );
+        (self.states[gate_idx] & 0b10) != 0
+    }
+
+    /// Gets the raw 2-bit state of a gate by its index (00=Float, 01=Low, 10=High, 11=Contention).
+    pub fn get_raw_state(&self, gate_idx: usize) -> u8 {
         assert!(
             gate_idx < self.states.len(),
             "Gate index out of bounds: {}",
@@ -136,7 +147,7 @@ impl Simulator {
     }
 
     /// Propagates events through the network using the event queue.
-    /// Floating inputs default to false.
+    /// Floating inputs default to 00.
     /// Returns the number of events processed or an Err if it exceeds max_steps (oscillation).
     pub fn propagate_events(&mut self, max_steps: usize) -> Result<usize, String> {
         let mut steps = 0;
@@ -153,16 +164,33 @@ impl Simulator {
             let val_a = gate
                 .input_a_source
                 .map(|s_idx| self.states[s_idx])
-                .unwrap_or(false);
+                .unwrap_or(0b00);
             let val_b = gate
                 .input_b_source
                 .map(|s_idx| self.states[s_idx])
-                .unwrap_or(false);
+                .unwrap_or(0b00);
 
             let new_state = match gate.gate_type {
                 GateType::Input => self.states[idx],
                 GateType::Output => val_a,
-                GateType::Nand => !(val_a && val_b),
+                GateType::Nand => {
+                    let a_bool = (val_a & 0b10) != 0;
+                    let b_bool = (val_b & 0b10) != 0;
+                    if !(a_bool && b_bool) { 0b10 } else { 0b01 }
+                }
+                GateType::TriStateBuffer => {
+                    // a = Data, b = Enable
+                    let en_bool = (val_b & 0b10) != 0;
+                    if en_bool {
+                        let data_bool = (val_a & 0b10) != 0;
+                        if data_bool { 0b10 } else { 0b01 }
+                    } else {
+                        0b00 // Floating
+                    }
+                }
+                GateType::BusResolver => {
+                    val_a | val_b // The bitwise magic!
+                }
             };
 
             if self.states[idx] != new_state {
