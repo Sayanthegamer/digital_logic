@@ -75,11 +75,12 @@ impl Editor {
             let world_pos = get_chip_input_pos(i);
             let screen_pos = self.to_screen_space(world_pos);
             let state =
-                self.get_node_state_at_path(&TraceNode::ChipInput(i), &self.canvas.inspection_path);
-            let port_color = if state {
-                theme::ACCENT_PRIMARY.mq()
-            } else {
-                theme::ACCENT_INACTIVE.mq()
+                self.get_raw_node_state_at_path(&TraceNode::ChipInput(i), &self.canvas.inspection_path);
+            let port_color = match state {
+                0b00 => theme::ACCENT_GENERIC.mq(),
+                0b01 => theme::ACCENT_INACTIVE.mq(),
+                0b10 => theme::ACCENT_PRIMARY.mq(),
+                _ => theme::COMP_NAND.mq(),
             };
 
             draw_circle(screen_pos.x, screen_pos.y, 6.0 * self.canvas.zoom, port_color);
@@ -107,11 +108,12 @@ impl Editor {
             let world_pos = get_chip_output_pos(j);
             let screen_pos = self.to_screen_space(world_pos);
             let state =
-                self.get_node_state_at_path(&TraceNode::ChipOutput(j), &self.canvas.inspection_path);
-            let port_color = if state {
-                theme::ACCENT_PRIMARY.mq()
-            } else {
-                theme::ACCENT_INACTIVE.mq()
+                self.get_raw_node_state_at_path(&TraceNode::ChipOutput(j), &self.canvas.inspection_path);
+            let port_color = match state {
+                0b00 => theme::ACCENT_GENERIC.mq(),
+                0b01 => theme::ACCENT_INACTIVE.mq(),
+                0b10 => theme::ACCENT_PRIMARY.mq(),
+                _ => theme::COMP_NAND.mq(),
             };
 
             draw_circle(screen_pos.x, screen_pos.y, 6.0 * self.canvas.zoom, port_color);
@@ -172,7 +174,7 @@ impl Editor {
                 },
             };
 
-            let state = self.get_node_state_at_path(&src_node, &self.canvas.inspection_path);
+            let state = self.get_raw_node_state_at_path(&src_node, &self.canvas.inspection_path);
             self.draw_manhattan_wire(src_pos, tgt_pos, state, false);
         }
 
@@ -217,14 +219,14 @@ impl Editor {
                 ComponentType::Clock => theme::ACCENT_PRIMARY.mq(),
                 ComponentType::Input | ComponentType::Output => {
                     // Check output port 0 to see if it is active in the flat simulation state path
-                    let state = self.get_node_state_at_path(
+                    let state = self.get_raw_node_state_at_path(
                         &TraceNode::CompOutput {
                             component_idx: comp_idx,
                             port_idx: 0,
                         },
                         &self.canvas.inspection_path,
                     );
-                    if state {
+                    if (state & 0b10) != 0 {
                         theme::ACCENT_ACTIVE.mq()
                     } else {
                         theme::ACCENT_GENERIC.mq()
@@ -232,6 +234,8 @@ impl Editor {
                 }
                 ComponentType::SubChip(_) => theme::COMP_SUBCHIP.mq(),
                 ComponentType::SevenSegment => theme::COMP_SEVENSEG.mq(),
+                ComponentType::TriStateBuffer => theme::COMP_NAND.mq(),
+                ComponentType::Junction => theme::ACCENT_GENERIC.mq(),
             };
             let stripe_height = 4.0 * self.canvas.zoom;
             draw_rectangle(
@@ -264,17 +268,18 @@ impl Editor {
             for i in 0..inputs_count {
                 let w_pos = self.get_bp_comp_input_port_pos(comp_idx, i, &internal_components);
                 let port_pos = self.to_screen_space(w_pos);
-                let state = self.get_node_state_at_path(
+                let state = self.get_raw_node_state_at_path(
                     &TraceNode::CompInput {
                         component_idx: comp_idx,
                         port_idx: i,
                     },
                     &self.canvas.inspection_path,
                 );
-                let port_color = if state {
-                    theme::ACCENT_PRIMARY.mq()
-                } else {
-                    theme::ACCENT_INACTIVE.mq()
+                let port_color = match state {
+                    0b00 => theme::ACCENT_GENERIC.mq(),
+                    0b01 => theme::ACCENT_INACTIVE.mq(),
+                    0b10 => theme::ACCENT_PRIMARY.mq(),
+                    _ => theme::COMP_NAND.mq(),
                 };
                 draw_circle(port_pos.x, port_pos.y, 4.0 * self.canvas.zoom, port_color);
                 draw_circle(
@@ -290,17 +295,18 @@ impl Editor {
                 let w_pos = self.get_bp_comp_output_port_pos(comp_idx, o, &internal_components);
                 let port_pos = self.to_screen_space(w_pos);
 
-                let state = self.get_node_state_at_path(
+                let state = self.get_raw_node_state_at_path(
                     &TraceNode::CompOutput {
                         component_idx: comp_idx,
                         port_idx: o,
                     },
                     &self.canvas.inspection_path,
                 );
-                let port_color = if state {
-                    theme::ACCENT_PRIMARY.mq()
-                } else {
-                    theme::ACCENT_INACTIVE.mq()
+                let port_color = match state {
+                    0b00 => theme::ACCENT_GENERIC.mq(),
+                    0b01 => theme::ACCENT_INACTIVE.mq(),
+                    0b10 => theme::ACCENT_PRIMARY.mq(),
+                    _ => theme::COMP_NAND.mq(),
                 };
 
                 draw_circle(port_pos.x, port_pos.y, 4.0 * self.canvas.zoom, port_color);

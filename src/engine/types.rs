@@ -3,6 +3,8 @@ pub enum GateType {
     Nand,
     Input,
     Output,
+    TriStateBuffer,
+    BusResolver,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -20,6 +22,8 @@ pub enum ComponentType {
     Clock,
     SubChip(usize),
     SevenSegment,
+    TriStateBuffer,
+    Junction,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

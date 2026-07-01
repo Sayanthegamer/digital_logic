@@ -31,6 +31,20 @@ impl Simulator {
                         vec![OutputSource::DrivenByGate(nand_idx)],
                     ));
                 }
+                ComponentType::TriStateBuffer => {
+                    let sim_idx = self.add_gate(GateType::TriStateBuffer);
+                    instance_map.insert((path.to_vec(), comp_idx), sim_idx);
+                    component_ports.push((
+                        vec![vec![(sim_idx, 0)], vec![(sim_idx, 1)]],
+                        vec![OutputSource::DrivenByGate(sim_idx)],
+                    ));
+                }
+                ComponentType::Junction => {
+                    component_ports.push((
+                        vec![vec![]],
+                        vec![OutputSource::PassedThrough(0)],
+                    ));
+                }
                 ComponentType::Clock => {
                     let clock_idx = self.add_gate(GateType::Input);
                     // Record visual component instance mapping
@@ -132,10 +146,11 @@ impl Simulator {
                     let component = &blueprint.components[*component_idx];
                     match &component.component_type {
                         ComponentType::SevenSegment | ComponentType::Nand
+                        | ComponentType::TriStateBuffer
                         | ComponentType::Input
                         | ComponentType::Output
                         | ComponentType::Clock => None,
-                        ComponentType::SubChip(_) => {
+                        ComponentType::SubChip(_) | ComponentType::Junction => {
                             let (_, ref outputs) = component_ports[*component_idx];
                             match outputs[*port_idx] {
                                 OutputSource::PassedThrough(in_idx) => Some(TraceNode::CompInput {
@@ -189,7 +204,7 @@ impl Simulator {
                                 // attempts to trace a ComponentOutput, treat it as floating.
                                 break OutputSource::Floating;
                             }
-                            ComponentType::Nand | ComponentType::Clock => {
+                            ComponentType::Nand | ComponentType::Clock | ComponentType::TriStateBuffer => {
                                 let (_, ref outputs) = component_ports[component_idx];
                                 match outputs.first() {
                                     Some(OutputSource::DrivenByGate(g_idx)) => {
@@ -198,7 +213,7 @@ impl Simulator {
                                     _ => break OutputSource::Floating,
                                 }
                             }
-                            ComponentType::SubChip(_) => {
+                            ComponentType::SubChip(_) | ComponentType::Junction => {
                                 let (_, ref outputs) = component_ports[component_idx];
                                 match outputs[port_idx] {
                                     OutputSource::DrivenByGate(g_idx) => {
@@ -242,7 +257,9 @@ impl Simulator {
                 ComponentType::Input => 0,
                 ComponentType::Output => 1,
                 ComponentType::Clock => 0,
-                    ComponentType::SevenSegment => 7,
+                ComponentType::SevenSegment => 7,
+                ComponentType::TriStateBuffer => 2,
+                ComponentType::Junction => 1,
                 ComponentType::SubChip(sub_idx) => library[*sub_idx].inputs,
             };
 
@@ -273,6 +290,8 @@ impl Simulator {
                     ComponentType::Output => 1,
                     ComponentType::Clock => 0,
                     ComponentType::SevenSegment => 7,
+                    ComponentType::TriStateBuffer => 2,
+                    ComponentType::Junction => 1,
                     ComponentType::SubChip(sub_idx) => library[*sub_idx].inputs,
                 };
 
