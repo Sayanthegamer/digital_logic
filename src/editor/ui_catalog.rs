@@ -112,6 +112,11 @@ impl Editor {
                             }
                             
                             if let Some(dragged_idx) = self.ui.dragging_catalog_idx {
+                                // Dim the item currently being dragged
+                                if dragged_idx == idx {
+                                    ui.painter().rect_filled(response.rect, 2.0, egui::Color32::from_black_alpha(150));
+                                }
+                                
                                 if response.hovered() {
                                     self.ui.drag_hovered_idx = Some(idx);
                                 }
@@ -119,12 +124,52 @@ impl Editor {
                                 if self.ui.drag_hovered_idx == Some(idx) && dragged_idx != idx {
                                     let rect = response.rect;
                                     let y = if idx > dragged_idx { rect.max.y } else { rect.min.y };
+                                    
+                                    // Draw a ghost gap indicator
+                                    let gap_rect = egui::Rect::from_min_size(
+                                        egui::pos2(rect.min.x, y - rect.height() / 2.0),
+                                        egui::vec2(rect.width(), rect.height())
+                                    );
+                                    ui.painter().rect_filled(gap_rect, 2.0, egui::Color32::from_white_alpha(30));
                                     ui.painter().hline(rect.min.x..=rect.max.x, y, (2.0, egui::Color32::WHITE));
                                 }
                             }
                             
                             if response.clicked() {
                                 self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::SubChip(idx)));
+                            }
+                        }
+                        
+                        // Draw floating ghost of the dragged item
+                        if let Some(dragged_idx) = self.ui.dragging_catalog_idx {
+                            if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
+                                if dragged_idx < self.engine.library.len() {
+                                    let bp = &self.engine.library[dragged_idx];
+                                    let tooltip_layer = egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("dnd_ghost"));
+                                    let painter = ui.ctx().layer_painter(tooltip_layer);
+                                    
+                                    let rect = egui::Rect::from_min_size(
+                                        pointer_pos + egui::vec2(12.0, 12.0),
+                                        egui::vec2(180.0, 24.0)
+                                    );
+                                    
+                                    painter.rect(
+                                        rect,
+                                        4.0,
+                                        ui.visuals().window_fill().linear_multiply(0.9),
+                                        ui.visuals().window_stroke(),
+                                        egui::StrokeKind::Middle,
+                                    );
+                                    
+                                    let text = format!("{} {}", theme::ICON_FOLDER, bp.name);
+                                    painter.text(
+                                        rect.min + egui::vec2(8.0, 4.0),
+                                        egui::Align2::LEFT_TOP,
+                                        text,
+                                        egui::FontId::proportional(14.0),
+                                        ui.visuals().text_color(),
+                                    );
+                                }
                             }
                         }
                         
