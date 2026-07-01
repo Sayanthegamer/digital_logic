@@ -49,6 +49,28 @@ impl Editor {
                 });
             }
 
+            // Edit Blueprint Panel
+            if let crate::editor::state::EditingTarget::LibraryChip(bp_idx) = self.canvas.editing_target {
+                let mut requested_repack = false;
+                egui::TopBottomPanel::top("editing_chip_panel").show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        let bp_name = self.engine.library.get(bp_idx).map(|bp| bp.name.clone()).unwrap_or_default();
+                        ui.colored_label(
+                            egui::Color32::from_rgb(100, 255, 100),
+                            format!("✏️ Editing Blueprint: {}", bp_name),
+                        );
+                        ui.add_space(20.0);
+                        if ui.button(format!("{} Save Changes & Return", theme::ICON_SAVE)).clicked() {
+                            requested_repack = true;
+                        }
+                    });
+                });
+                
+                if requested_repack {
+                    self.save_and_repack_blueprint();
+                }
+            }
+
             if is_mobile {
                 // --- MOBILE LAYOUT ---
                 // 1. Tiny Transparent FAB for Menu & Play/Pause at the top

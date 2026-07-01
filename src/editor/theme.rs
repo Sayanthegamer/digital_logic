@@ -72,3 +72,4 @@ pub const ICON_SAVE: &str = "\u{e161}";       // save
 pub const ICON_INFO: &str = "\u{e88e}";       // info
 pub const ICON_WARNING: &str = "\u{e002}";    // warning
 pub const ICON_FOLDER: &str = "\u{e2c7}";     // folder
+pub const ICON_EDIT: &str = "\u{e3c9}";       // edit
