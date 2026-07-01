@@ -19,6 +19,63 @@ Many visual logic simulators (including those built in Unity/C#) suffer from Obj
 
 By utilizing a Data-Oriented Design (struct-of-arrays) and a completely flat compilation step, nested chips have **zero runtime overhead**. When you build an ALU from Adders, and a CPU from ALUs, the compiler unwraps the entire hierarchy down to raw, contiguous NAND arrays. The simulation engine only ever processes flat arrays of boolean states, making it incredibly cache-friendly and extremely fast.
 
+## Architecture Overview
+
+```mermaid
+flowchart TB
+    %% Styling
+    classDef frontend fill:#f9f9f9,stroke:#333,stroke-width:2px;
+    classDef backend fill:#eef2f5,stroke:#2a5078,stroke-width:2px;
+    classDef core fill:#d4e1f9,stroke:#1a365d,stroke-width:2px,font-weight:bold;
+
+    subgraph Frontend["Frontend / IDE (src/editor)"]
+        direction TB
+        Input[Input Handler<br/><code>input.rs</code>]
+        Canvas[Visual Canvas<br/><code>canvas.rs</code>]
+        Draw[Rendering Engine<br/><code>drawing.rs & drawing_wires.rs</code>]
+        UI[Immediate Mode UI<br/><code>ui_catalog.rs & ui_properties.rs</code>]
+        Inspect[Inspection Logic<br/><code>inspection_ui.rs & inspection_logic.rs</code>]
+        History[Undo/Redo Stack<br/><code>history.rs</code>]
+    end
+
+    subgraph Backend["Backend / Simulation Engine (src/engine)"]
+        direction TB
+        Compiler[Compiler<br/><code>compiler.rs</code>]
+        Simulator[Event-Driven Simulator<br/><code>simulator.rs</code>]
+        Types[Data Types & Blueprint<br/><code>types.rs</code>]
+        SaveLoad[Serialization<br/><code>save_load.rs</code>]
+    end
+
+    %% Flow of data
+    User((User)) -->|Mouse / Keyboard| Input
+    Input -->|Modifies| Canvas
+    Input -->|Records Action| History
+    History -->|Restores State| Canvas
+    Canvas -->|Builds| Types
+    UI -->|Changes Tools / Props| Input
+    SaveLoad -.->|Persists to Disk| Types
+
+    %% Compilation Flow
+    Canvas ==>|Triggers Compilation| Compiler
+    Types -->|Reads Blueprints| Compiler
+    Compiler ==>|Flattens Hierarchy & Resolves Bus Nets| Simulator
+
+    %% Simulation & Render Flow
+    Simulator -->|4-State Logic Updates| Draw
+    Canvas -->|Viewport Data| Draw
+    Draw -->|Renders 2D Graphics| User
+    
+    %% Inspection Flow
+    Inspect -.->|Deep Tracing| Types
+    Inspect -.->|Live Probes| Simulator
+    Inspect -->|Overlays Data| Draw
+
+    class Frontend frontend;
+    class Backend backend;
+    class Simulator core;
+    class Compiler core;
+```
+
 ## Features
 - **Event-Driven Engine**: Gates only calculate when their inputs change, vastly reducing CPU load compared to tick-based simulators.
 - **Flat Sub-Chip Compilation**: Build complex nested logic without sacrificing a single frame of performance.
