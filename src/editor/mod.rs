@@ -339,5 +339,115 @@ impl Editor {
                 },
             ],
         });
+
+        // 3: NOT (1 NAND)
+        self.engine.library.push(ChipBlueprint {
+            name: "NOT".to_string(),
+            inputs: 1,
+            outputs: 1,
+            input_names: vec!["IN".to_string()],
+            output_names: vec!["OUT".to_string()],
+            components: vec![
+                Component {
+                    component_type: ComponentType::Nand,
+                    pos: (200.0, 150.0),
+                    clock_period: None,
+                }, // NAND 0
+            ],
+            connections: vec![
+                Connection {
+                    source: SourcePort::ChipInput(0),
+                    target: TargetPort::ComponentInput {
+                        component_idx: 0,
+                        port_idx: 0,
+                    },
+                },
+                Connection {
+                    source: SourcePort::ChipInput(0),
+                    target: TargetPort::ComponentInput {
+                        component_idx: 0,
+                        port_idx: 1,
+                    },
+                },
+                Connection {
+                    source: SourcePort::ComponentOutput {
+                        component_idx: 0,
+                        port_idx: 0,
+                    },
+                    target: TargetPort::ChipOutput(0),
+                },
+            ],
+        });
+
+        // 4: NOR (4 NANDs)
+        self.engine.library.push(ChipBlueprint {
+            name: "NOR".to_string(),
+            inputs: 2,
+            outputs: 1,
+            input_names: vec!["A".to_string(), "B".to_string()],
+            output_names: vec!["OUT".to_string()],
+            components: vec![
+                Component {
+                    component_type: ComponentType::Nand,
+                    pos: (200.0, 100.0),
+                    clock_period: None,
+                }, // NAND 0 (NOT A)
+                Component {
+                    component_type: ComponentType::Nand,
+                    pos: (200.0, 250.0),
+                    clock_period: None,
+                }, // NAND 1 (NOT B)
+                Component {
+                    component_type: ComponentType::Nand,
+                    pos: (400.0, 175.0),
+                    clock_period: None,
+                }, // NAND 2 (OR)
+                Component {
+                    component_type: ComponentType::Nand,
+                    pos: (550.0, 175.0),
+                    clock_period: None,
+                }, // NAND 3 (NOT)
+            ],
+            connections: vec![
+                Connection { source: SourcePort::ChipInput(0), target: TargetPort::ComponentInput { component_idx: 0, port_idx: 0 } },
+                Connection { source: SourcePort::ChipInput(0), target: TargetPort::ComponentInput { component_idx: 0, port_idx: 1 } },
+                Connection { source: SourcePort::ChipInput(1), target: TargetPort::ComponentInput { component_idx: 1, port_idx: 0 } },
+                Connection { source: SourcePort::ChipInput(1), target: TargetPort::ComponentInput { component_idx: 1, port_idx: 1 } },
+                Connection { source: SourcePort::ComponentOutput { component_idx: 0, port_idx: 0 }, target: TargetPort::ComponentInput { component_idx: 2, port_idx: 0 } },
+                Connection { source: SourcePort::ComponentOutput { component_idx: 1, port_idx: 0 }, target: TargetPort::ComponentInput { component_idx: 2, port_idx: 1 } },
+                Connection { source: SourcePort::ComponentOutput { component_idx: 2, port_idx: 0 }, target: TargetPort::ComponentInput { component_idx: 3, port_idx: 0 } },
+                Connection { source: SourcePort::ComponentOutput { component_idx: 2, port_idx: 0 }, target: TargetPort::ComponentInput { component_idx: 3, port_idx: 1 } },
+                Connection { source: SourcePort::ComponentOutput { component_idx: 3, port_idx: 0 }, target: TargetPort::ChipOutput(0) },
+            ],
+        });
+
+        // 5: XNOR (5 NANDs)
+        self.engine.library.push(ChipBlueprint {
+            name: "XNOR".to_string(),
+            inputs: 2,
+            outputs: 1,
+            input_names: vec!["A".to_string(), "B".to_string()],
+            output_names: vec!["OUT".to_string()],
+            components: vec![
+                Component { component_type: ComponentType::Nand, pos: (200.0, 175.0), clock_period: None }, // NAND 0
+                Component { component_type: ComponentType::Nand, pos: (350.0, 100.0), clock_period: None }, // NAND 1
+                Component { component_type: ComponentType::Nand, pos: (350.0, 250.0), clock_period: None }, // NAND 2
+                Component { component_type: ComponentType::Nand, pos: (500.0, 175.0), clock_period: None }, // NAND 3 (XOR)
+                Component { component_type: ComponentType::Nand, pos: (650.0, 175.0), clock_period: None }, // NAND 4 (NOT)
+            ],
+            connections: vec![
+                Connection { source: SourcePort::ChipInput(0), target: TargetPort::ComponentInput { component_idx: 0, port_idx: 0 } },
+                Connection { source: SourcePort::ChipInput(0), target: TargetPort::ComponentInput { component_idx: 1, port_idx: 0 } },
+                Connection { source: SourcePort::ChipInput(1), target: TargetPort::ComponentInput { component_idx: 0, port_idx: 1 } },
+                Connection { source: SourcePort::ChipInput(1), target: TargetPort::ComponentInput { component_idx: 2, port_idx: 1 } },
+                Connection { source: SourcePort::ComponentOutput { component_idx: 0, port_idx: 0 }, target: TargetPort::ComponentInput { component_idx: 1, port_idx: 1 } },
+                Connection { source: SourcePort::ComponentOutput { component_idx: 0, port_idx: 0 }, target: TargetPort::ComponentInput { component_idx: 2, port_idx: 0 } },
+                Connection { source: SourcePort::ComponentOutput { component_idx: 1, port_idx: 0 }, target: TargetPort::ComponentInput { component_idx: 3, port_idx: 0 } },
+                Connection { source: SourcePort::ComponentOutput { component_idx: 2, port_idx: 0 }, target: TargetPort::ComponentInput { component_idx: 3, port_idx: 1 } },
+                Connection { source: SourcePort::ComponentOutput { component_idx: 3, port_idx: 0 }, target: TargetPort::ComponentInput { component_idx: 4, port_idx: 0 } },
+                Connection { source: SourcePort::ComponentOutput { component_idx: 3, port_idx: 0 }, target: TargetPort::ComponentInput { component_idx: 4, port_idx: 1 } },
+                Connection { source: SourcePort::ComponentOutput { component_idx: 4, port_idx: 0 }, target: TargetPort::ChipOutput(0) },
+            ],
+        });
     }
 }
