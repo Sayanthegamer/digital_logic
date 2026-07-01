@@ -31,6 +31,27 @@ impl Editor {
 
         ui.add_space(5.0);
 
+        egui::CollapsingHeader::new("Bus & Routing")
+            .default_open(true)
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    if ui.selectable_label(
+                        self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::Junction)),
+                        format!("{} Bus Junction", theme::ICON_SETTINGS),
+                    ).clicked() {
+                        self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Junction));
+                    }
+                    if ui.selectable_label(
+                        self.canvas.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::TriStateBuffer)),
+                        format!("{} Tri-State Buffer", theme::ICON_SETTINGS),
+                    ).clicked() {
+                        self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::TriStateBuffer));
+                    }
+                });
+            });
+
+        ui.add_space(5.0);
+
         egui::CollapsingHeader::new("Input / Output")
             .default_open(true)
             .show(ui, |ui| {
