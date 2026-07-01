@@ -159,8 +159,8 @@ impl Editor {
 
                 match current {
                     CanvasNode::CompOutput { comp_id, port_idx } => {
-                        if let Some((_, outputs)) = component_ports.get(&comp_id) {
-                            if port_idx < outputs.len() {
+                        if let Some((_, outputs)) = component_ports.get(&comp_id)
+                            && port_idx < outputs.len() {
                                 match outputs[port_idx] {
                                     OutputSource::DrivenByGate(g_idx) => {
                                         if !drivers.contains(&g_idx) {
@@ -176,7 +176,6 @@ impl Editor {
                                     }
                                 }
                             }
-                        }
                     }
                     CanvasNode::CompInput { comp_id, port_idx } => {
                         // find all wires targeting this input

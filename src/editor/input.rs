@@ -385,9 +385,24 @@ impl Editor {
                         (translation.x / 20.0).round() * 20.0,
                         (translation.y / 20.0).round() * 20.0,
                     );
+
+                    let shift_pressed = is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift);
+
                     for (&id, &start_pos) in &self.canvas.drag_start_positions {
                         if let Some(c) = self.components.iter_mut().find(|x| x.id == id) {
-                            c.pos = start_pos + snapped_translation;
+                            if c.comp_type == crate::engine::ComponentType::Junction && shift_pressed {
+                                // Stretching logic instead of moving
+                                // We stretch horizontally or vertically depending on dominant translation
+                                if translation.x.abs() > translation.y.abs() {
+                                    c.width = (12.0 + snapped_translation.x).max(12.0);
+                                    c.height = 12.0;
+                                } else {
+                                    c.height = (12.0 + snapped_translation.y).max(12.0);
+                                    c.width = 12.0;
+                                }
+                            } else {
+                                c.pos = start_pos + snapped_translation;
+                            }
                         }
                     }
                 }
@@ -527,9 +542,18 @@ impl Editor {
                     
                     if let Some((tgt_id, tgt_port, is_input)) = self.canvas.hovered_port
                         && is_input && tgt_id != src_id {
-                            // Add wire connection, remove duplicates targeting this port
-                            self.connections
-                                .retain(|c| !(c.tgt_comp_id == tgt_id && c.tgt_port == tgt_port));
+                            self.push_history_snapshot();
+                            let mut is_junction = false;
+                            for comp in &self.components {
+                                if comp.id == tgt_id && comp.comp_type == crate::engine::ComponentType::Junction {
+                                    is_junction = true;
+                                    break;
+                                }
+                            }
+                            if !is_junction {
+                                self.connections
+                                    .retain(|c| !(c.tgt_comp_id == tgt_id && c.tgt_port == tgt_port));
+                            }
                             self.connections.push(VisualConnection {
                                 src_comp_id: src_id,
                                 src_port,
@@ -552,6 +576,9 @@ impl Editor {
             && self.canvas.inspection_path.is_empty()
             && (is_key_pressed(KeyCode::Delete) || is_key_pressed(KeyCode::Backspace))
         {
+            if self.canvas.selected_annotation_idx.is_some() || !self.canvas.selected_comp_ids.is_empty() || !self.canvas.selected_connections.is_empty() || self.canvas.selected_comp_id.is_some() {
+                self.push_history_snapshot();
+            }
             if let Some(idx) = self.canvas.selected_annotation_idx {
                 if idx < self.annotations.len() {
                     self.annotations.remove(idx);

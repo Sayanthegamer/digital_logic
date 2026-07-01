@@ -46,7 +46,7 @@ impl Editor {
             let glow_color = if is_selected {
                 theme::ACCENT_PRIMARY.mq_with_alpha(0.4) // Strong cyan glow for selection
             } else {
-                color.clone() // Glow matches the wire color
+                color // Glow matches the wire color
             };
             let glow_color = Color::new(glow_color.r, glow_color.g, glow_color.b, 0.2);
             let glow_thickness = thickness + (if is_selected { 6.0 } else { 4.0 }) * self.canvas.zoom;
