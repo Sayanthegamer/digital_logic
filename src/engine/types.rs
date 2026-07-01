@@ -18,7 +18,8 @@ pub enum ComponentType {
     Input,
     Output,
     Clock,
-    SubChip(usize), // Index of the sub-chip blueprint in the library/registry
+    SubChip(usize),
+    SevenSegment,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

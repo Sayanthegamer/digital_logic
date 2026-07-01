@@ -201,6 +201,7 @@ impl Editor {
                             self.selected_comp_ids.insert(comp.id);
                         } else {
                             self.selected_comp_ids.clear();
+                            self.selected_connections.clear();
                             self.selected_comp_ids.insert(comp.id);
                         }
 
@@ -242,6 +243,7 @@ impl Editor {
                             self.dragging_annotation_idx = Some(idx);
                             self.selected_comp_id = None;
                             self.selected_comp_ids.clear();
+                            self.selected_connections.clear();
                             self.drag_offset = self.annotations[idx].pos - mouse_pos_world;
                             clicked_something = true;
                         } else {
@@ -252,9 +254,48 @@ impl Editor {
 
                             // Start drag selection box if no placement tool is active
                             if self.selected_tool.is_none() {
+                            // Check if a wire was clicked
+                            let mut clicked_wire = None;
+                            let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
+                                self.components.iter().map(|c| (c.id, c)).collect();
+                            for conn in &self.connections {
+                                let (src_comp_opt, tgt_comp_opt) = (
+                                    comp_by_id.get(&conn.src_comp_id),
+                                    comp_by_id.get(&conn.tgt_comp_id),
+                                );
+                                if let (Some(&src), Some(&tgt)) = (src_comp_opt, tgt_comp_opt) {
+                                    let (_, outputs) = self.get_component_ports_count(src.comp_type);
+                                    let (inputs, _) = self.get_component_ports_count(tgt.comp_type);
+                                    let src_pos = src.output_port_pos(conn.src_port, outputs);
+                                    let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
+
+                                    if self.hit_test_manhattan_wire(
+                                        src_pos,
+                                        tgt_pos,
+                                        mouse_pos_world,
+                                        10.0 / self.zoom,
+                                    ) {
+                                        clicked_wire = Some(*conn);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if let Some(wire) = clicked_wire {
+                                if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) {
+                                    self.selected_connections.insert(wire);
+                                } else {
+                                    self.selected_comp_ids.clear();
+                                    self.selected_connections.clear();
+                                    self.selected_connections.insert(wire);
+                                }
+                                clicked_something = true;
+                            } else {
                                 self.selected_comp_ids.clear();
+                                self.selected_connections.clear();
                                 self.selection_box_start = Some(mouse_pos_world);
                             }
+                        }
                         }
                     }
                 }
@@ -377,13 +418,69 @@ impl Editor {
 
                     if box_w > 5.0 || box_h > 5.0 {
                         self.selected_comp_ids.clear();
+                        self.selected_connections.clear();
                         self.selected_comp_id = None;
+                        let box_rect = Rect::new(x_min, y_min, box_w, box_h);
+
                         for comp in &self.components {
-                            let comp_rect =
-                                Rect::new(comp.pos.x, comp.pos.y, comp.width, comp.height);
-                            let box_rect = Rect::new(x_min, y_min, box_w, box_h);
+                            let comp_rect = Rect::new(comp.pos.x, comp.pos.y, comp.width, comp.height);
                             if comp_rect.overlaps(&box_rect) {
                                 self.selected_comp_ids.insert(comp.id);
+                            }
+                        }
+
+                        let zoom = self.zoom;
+                        let wire_bounds = |src_pos: Vec2, tgt_pos: Vec2| -> Rect {
+                            // Mirror the Manhattan routing used by rendering/hit-testing.
+                            let mut points: Vec<Vec2> = vec![src_pos, tgt_pos];
+
+                            if tgt_pos.x >= src_pos.x + 20.0 * zoom {
+                                let mid_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0;
+                                points.push(Vec2::new(mid_x, src_pos.y));
+                                points.push(Vec2::new(mid_x, tgt_pos.y));
+                            } else {
+                                let stub_src = src_pos.x + 20.0 * zoom;
+                                let stub_tgt = tgt_pos.x - 20.0 * zoom;
+
+                                let mut mid_y = src_pos.y + (tgt_pos.y - src_pos.y) / 2.0;
+                                if (tgt_pos.y - src_pos.y).abs() < 10.0 * zoom {
+                                    mid_y += 35.0 * zoom;
+                                }
+
+                                points.push(Vec2::new(stub_src, src_pos.y));
+                                points.push(Vec2::new(stub_src, mid_y));
+                                points.push(Vec2::new(stub_tgt, mid_y));
+                                points.push(Vec2::new(stub_tgt, tgt_pos.y));
+                            }
+
+                            let (mut min_x, mut max_x) = (f32::INFINITY, f32::NEG_INFINITY);
+                            let (mut min_y, mut max_y) = (f32::INFINITY, f32::NEG_INFINITY);
+                            for p in points {
+                                min_x = min_x.min(p.x);
+                                max_x = max_x.max(p.x);
+                                min_y = min_y.min(p.y);
+                                max_y = max_y.max(p.y);
+                            }
+                            Rect::new(min_x, min_y, max_x - min_x, max_y - min_y)
+                        };
+
+                        let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
+                            self.components.iter().map(|c| (c.id, c)).collect();
+                        for conn in &self.connections {
+                            let (src_comp_opt, tgt_comp_opt) = (
+                                comp_by_id.get(&conn.src_comp_id),
+                                comp_by_id.get(&conn.tgt_comp_id),
+                            );
+                            if let (Some(&src), Some(&tgt)) = (src_comp_opt, tgt_comp_opt) {
+                                let (_, outputs) = self.get_component_ports_count(src.comp_type);
+                                let (inputs, _) = self.get_component_ports_count(tgt.comp_type);
+                                let src_pos = src.output_port_pos(conn.src_port, outputs);
+                                let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
+
+                                let wire_rect = wire_bounds(src_pos, tgt_pos);
+                                if wire_rect.overlaps(&box_rect) {
+                                    self.selected_connections.insert(*conn);
+                                }
                             }
                         }
                         if self.selected_comp_ids.len() == 1 {
@@ -392,6 +489,7 @@ impl Editor {
                     } else {
                         // Clicked empty space: clear selection
                         self.selected_comp_ids.clear();
+                        self.selected_connections.clear();
                         self.selected_comp_id = None;
                     }
                     self.selection_box_start = None;
@@ -439,14 +537,16 @@ impl Editor {
                     self.annotations.remove(idx);
                 }
                 self.selected_annotation_idx = None;
-            } else if !self.selected_comp_ids.is_empty() {
+            } else if !self.selected_comp_ids.is_empty() || !self.selected_connections.is_empty() {
                 self.components
                     .retain(|c| !self.selected_comp_ids.contains(&c.id));
                 self.connections.retain(|c| {
                     !self.selected_comp_ids.contains(&c.src_comp_id)
                         && !self.selected_comp_ids.contains(&c.tgt_comp_id)
+                        && !self.selected_connections.contains(c)
                 });
                 self.selected_comp_ids.clear();
+                self.selected_connections.clear();
                 self.selected_comp_id = None;
                 self.compile();
             } else if let Some(id) = self.selected_comp_id {

@@ -51,6 +51,7 @@ pub struct Editor {
     pub drag_offset: Vec2,
     pub drag_dist_pixels: f32,
     pub selected_comp_ids: std::collections::HashSet<usize>,
+    pub selected_connections: std::collections::HashSet<VisualConnection>,
     pub selection_box_start: Option<Vec2>,
     pub drag_start_positions: std::collections::HashMap<usize, Vec2>,
 
@@ -144,6 +145,7 @@ impl Editor {
             drag_offset: Vec2::ZERO,
             drag_dist_pixels: 0.0,
             selected_comp_ids: std::collections::HashSet::new(),
+            selected_connections: std::collections::HashSet::new(),
             selection_box_start: None,
             drag_start_positions: std::collections::HashMap::new(),
             library: Vec::new(),

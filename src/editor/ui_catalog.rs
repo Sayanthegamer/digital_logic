@@ -50,6 +50,12 @@ impl Editor {
                             self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::Clock));
                         }
                         if ui.selectable_label(
+                            self.selected_tool == Some(super::types::ActiveTool::PlaceComponent(ComponentType::SevenSegment)),
+                            "🖩 7-Seg",
+                        ).clicked() {
+                            self.selected_tool = Some(super::types::ActiveTool::PlaceComponent(ComponentType::SevenSegment));
+                        }
+                        if ui.selectable_label(
                             self.selected_tool == Some(super::types::ActiveTool::PlaceAnnotation),
                             "📝 Text",
                         ).clicked() {
