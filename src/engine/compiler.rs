@@ -191,7 +191,7 @@ impl Simulator {
                             }
                             ComponentType::Nand | ComponentType::Clock => {
                                 let (_, ref outputs) = component_ports[component_idx];
-                                match outputs.get(0) {
+                                match outputs.first() {
                                     Some(OutputSource::DrivenByGate(g_idx)) => {
                                         break OutputSource::DrivenByGate(*g_idx);
                                     }

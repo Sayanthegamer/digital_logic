@@ -1,3 +1,4 @@
+use crate::editor::theme;
 use crate::engine::{Component, ComponentType, SourcePort, TargetPort, TraceNode};
 use macroquad::prelude::*;
 
@@ -74,19 +75,19 @@ impl Editor {
             let world_pos = get_chip_input_pos(i);
             let screen_pos = self.to_screen_space(world_pos);
             let state =
-                self.get_node_state_at_path(&TraceNode::ChipInput(i), &self.inspection_path);
+                self.get_node_state_at_path(&TraceNode::ChipInput(i), &self.canvas.inspection_path);
             let port_color = if state {
-                Color::new(0.00, 0.70, 1.00, 1.0)
+                theme::ACCENT_PRIMARY.mq()
             } else {
-                Color::new(0.24, 0.27, 0.30, 1.0)
+                theme::ACCENT_INACTIVE.mq()
             };
 
-            draw_circle(screen_pos.x, screen_pos.y, 6.0 * self.zoom, port_color);
+            draw_circle(screen_pos.x, screen_pos.y, 6.0 * self.canvas.zoom, port_color);
             draw_circle(
                 screen_pos.x,
                 screen_pos.y,
-                3.0 * self.zoom,
-                Color::new(0.09, 0.10, 0.12, 1.0),
+                3.0 * self.canvas.zoom,
+                theme::BG_CANVAS.mq(),
             );
             let label_text = blueprint
                 .input_names
@@ -95,10 +96,10 @@ impl Editor {
                 .unwrap_or_else(|| format!("IN {}", i));
             draw_text(
                 &label_text,
-                screen_pos.x - 45.0 * self.zoom,
-                screen_pos.y + 4.0 * self.zoom,
-                (12.0 * self.zoom).max(6.0),
-                Color::new(0.6, 0.65, 0.7, 1.0),
+                screen_pos.x - 45.0 * self.canvas.zoom,
+                screen_pos.y + 4.0 * self.canvas.zoom,
+                (12.0 * self.canvas.zoom).max(6.0),
+                theme::TEXT_SECONDARY.mq(),
             );
         }
 
@@ -106,19 +107,19 @@ impl Editor {
             let world_pos = get_chip_output_pos(j);
             let screen_pos = self.to_screen_space(world_pos);
             let state =
-                self.get_node_state_at_path(&TraceNode::ChipOutput(j), &self.inspection_path);
+                self.get_node_state_at_path(&TraceNode::ChipOutput(j), &self.canvas.inspection_path);
             let port_color = if state {
-                Color::new(0.00, 0.70, 1.00, 1.0)
+                theme::ACCENT_PRIMARY.mq()
             } else {
-                Color::new(0.24, 0.27, 0.30, 1.0)
+                theme::ACCENT_INACTIVE.mq()
             };
 
-            draw_circle(screen_pos.x, screen_pos.y, 6.0 * self.zoom, port_color);
+            draw_circle(screen_pos.x, screen_pos.y, 6.0 * self.canvas.zoom, port_color);
             draw_circle(
                 screen_pos.x,
                 screen_pos.y,
-                3.0 * self.zoom,
-                Color::new(0.09, 0.10, 0.12, 1.0),
+                3.0 * self.canvas.zoom,
+                theme::BG_CANVAS.mq(),
             );
             let label_text = blueprint
                 .output_names
@@ -127,10 +128,10 @@ impl Editor {
                 .unwrap_or_else(|| format!("OUT {}", j));
             draw_text(
                 &label_text,
-                screen_pos.x + 15.0 * self.zoom,
-                screen_pos.y + 4.0 * self.zoom,
-                (12.0 * self.zoom).max(6.0),
-                Color::new(0.6, 0.65, 0.7, 1.0),
+                screen_pos.x + 15.0 * self.canvas.zoom,
+                screen_pos.y + 4.0 * self.canvas.zoom,
+                (12.0 * self.canvas.zoom).max(6.0),
+                theme::TEXT_SECONDARY.mq(),
             );
         }
 
@@ -171,7 +172,7 @@ impl Editor {
                 },
             };
 
-            let state = self.get_node_state_at_path(&src_node, &self.inspection_path);
+            let state = self.get_node_state_at_path(&src_node, &self.canvas.inspection_path);
             self.draw_manhattan_wire(src_pos, tgt_pos, state, false);
         }
 
@@ -188,11 +189,11 @@ impl Editor {
 
             let comp_pos = Vec2::new(comp.pos.0, comp.pos.1);
             let screen_pos = self.to_screen_space(comp_pos);
-            let screen_width = width * self.zoom;
-            let screen_height = height * self.zoom;
+            let screen_width = width * self.canvas.zoom;
+            let screen_height = height * self.canvas.zoom;
 
-            let bg_color = Color::new(0.12, 0.13, 0.15, 0.95);
-            let border_color = Color::new(0.20, 0.23, 0.26, 1.0);
+            let bg_color = theme::BG_PANEL.mq_with_alpha(0.95);
+            let border_color = theme::BORDER.mq();
 
             draw_rectangle(
                 screen_pos.x,
@@ -206,14 +207,14 @@ impl Editor {
                 screen_pos.y,
                 screen_width,
                 screen_height,
-                1.5 * self.zoom,
+                1.5 * self.canvas.zoom,
                 border_color,
             );
 
             // Draw Top Accent Stripe
             let accent_color = match comp.component_type {
-                ComponentType::Nand => Color::new(1.0, 0.55, 0.15, 1.0),
-                ComponentType::Clock => Color::new(0.00, 0.70, 1.00, 1.0),
+                ComponentType::Nand => theme::COMP_NAND.mq(),
+                ComponentType::Clock => theme::ACCENT_PRIMARY.mq(),
                 ComponentType::Input | ComponentType::Output => {
                     // Check output port 0 to see if it is active in the flat simulation state path
                     let state = self.get_node_state_at_path(
@@ -221,18 +222,18 @@ impl Editor {
                             component_idx: comp_idx,
                             port_idx: 0,
                         },
-                        &self.inspection_path,
+                        &self.canvas.inspection_path,
                     );
                     if state {
-                        Color::new(0.15, 0.85, 0.40, 1.0)
+                        theme::ACCENT_ACTIVE.mq()
                     } else {
-                        Color::new(0.35, 0.38, 0.40, 1.0)
+                        theme::ACCENT_GENERIC.mq()
                     }
                 }
-                ComponentType::SubChip(_) => Color::new(0.40, 0.45, 0.85, 1.0),
-                ComponentType::SevenSegment => Color::new(0.9, 0.2, 0.2, 1.0),
+                ComponentType::SubChip(_) => theme::COMP_SUBCHIP.mq(),
+                ComponentType::SevenSegment => theme::COMP_SEVENSEG.mq(),
             };
-            let stripe_height = 4.0 * self.zoom;
+            let stripe_height = 4.0 * self.canvas.zoom;
             draw_rectangle(
                 screen_pos.x,
                 screen_pos.y,
@@ -243,8 +244,8 @@ impl Editor {
 
             // Draw label
             let label = self.get_component_label(comp.component_type);
-            let font_size = (13.0 * self.zoom).max(6.0);
-            let text_size = measure_text(&label, Some(&self.font), font_size as u16, 1.0);
+            let font_size = (13.0 * self.canvas.zoom).max(6.0);
+            let text_size = measure_text(&label, self.font.as_ref(), font_size as u16, 1.0);
             let text_x = screen_pos.x + (screen_width - text_size.width) / 2.0;
             let text_y = screen_pos.y + (screen_height + text_size.height) / 2.0;
             draw_text_ex(
@@ -252,9 +253,9 @@ impl Editor {
                 text_x,
                 text_y,
                 TextParams {
-                    font: Some(&self.font),
+                    font: self.font.as_ref(),
                     font_size: font_size as u16,
-                    color: Color::new(0.85, 0.88, 0.90, 1.0),
+                    color: theme::TEXT_PRIMARY.mq(),
                     ..Default::default()
                 },
             );
@@ -268,19 +269,19 @@ impl Editor {
                         component_idx: comp_idx,
                         port_idx: i,
                     },
-                    &self.inspection_path,
+                    &self.canvas.inspection_path,
                 );
                 let port_color = if state {
-                    Color::new(0.00, 0.70, 1.00, 1.0)
+                    theme::ACCENT_PRIMARY.mq()
                 } else {
-                    Color::new(0.24, 0.27, 0.30, 1.0)
+                    theme::ACCENT_INACTIVE.mq()
                 };
-                draw_circle(port_pos.x, port_pos.y, 4.0 * self.zoom, port_color);
+                draw_circle(port_pos.x, port_pos.y, 4.0 * self.canvas.zoom, port_color);
                 draw_circle(
                     port_pos.x,
                     port_pos.y,
-                    2.0 * self.zoom,
-                    Color::new(0.12, 0.13, 0.15, 1.0),
+                    2.0 * self.canvas.zoom,
+                    theme::BG_PANEL.mq(),
                 );
             }
 
@@ -294,33 +295,33 @@ impl Editor {
                         component_idx: comp_idx,
                         port_idx: o,
                     },
-                    &self.inspection_path,
+                    &self.canvas.inspection_path,
                 );
                 let port_color = if state {
-                    Color::new(0.00, 0.70, 1.00, 1.0)
+                    theme::ACCENT_PRIMARY.mq()
                 } else {
-                    Color::new(0.24, 0.27, 0.30, 1.0)
+                    theme::ACCENT_INACTIVE.mq()
                 };
 
-                draw_circle(port_pos.x, port_pos.y, 4.0 * self.zoom, port_color);
+                draw_circle(port_pos.x, port_pos.y, 4.0 * self.canvas.zoom, port_color);
                 draw_circle(
                     port_pos.x,
                     port_pos.y,
-                    2.0 * self.zoom,
-                    Color::new(0.12, 0.13, 0.15, 1.0),
+                    2.0 * self.canvas.zoom,
+                    theme::BG_PANEL.mq(),
                 );
             }
         }
 
         // Draw info overlay
         let title = format!("LOOK INSIDE: {}", blueprint.name);
-        draw_text(&title, 15.0, 20.0, 16.0, Color::new(0.3, 0.75, 1.0, 0.95));
+        draw_text(&title, 15.0, 20.0, 16.0, theme::ACCENT_PRIMARY.mq_with_alpha(0.95));
         draw_text(
             "Inspection Mode (Read-Only) | Drag mouse wheel/right-click to pan | Scroll to zoom",
             15.0,
             40.0,
             12.0,
-            Color::new(0.5, 0.55, 0.6, 0.8),
+            theme::TEXT_SECONDARY.mq_with_alpha(0.8),
         );
     }
 }

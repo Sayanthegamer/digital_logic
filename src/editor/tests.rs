@@ -6,7 +6,7 @@ use macroquad::prelude::*;
 #[test]
 fn test_custom_port_naming_collision() {
     let mut editor = Editor::new();
-    editor.library.clear();
+    editor.engine.library.clear();
 
     editor.components.push(VisualComponent {
         id: 1,

@@ -10,6 +10,8 @@ use macroquad::prelude::*;
 
 pub async fn run() {
     let mut editor = Editor::new();
+    editor::gui::setup_egui();
+    egui_macroquad::draw(); // Flush the setup frame before the main loop starts
 
     loop {
         // Process egui UI logic first (updates egui_wants_pointer for the current frame)

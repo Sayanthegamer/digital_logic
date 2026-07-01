@@ -16,7 +16,7 @@ impl Editor {
             ComponentType::Clock => (0, 1),
             ComponentType::SevenSegment => (7, 0),
             ComponentType::SubChip(idx) => {
-                if let Some(bp) = self.library.get(idx) {
+                if let Some(bp) = self.engine.library.get(idx) {
                     (bp.inputs, bp.outputs)
                 } else {
                     (0, 0)
@@ -33,7 +33,7 @@ impl Editor {
             ComponentType::Clock => "CLK".to_string(),
             ComponentType::SevenSegment => "7SEG".to_string(),
             ComponentType::SubChip(idx) => {
-                if let Some(bp) = self.library.get(idx) {
+                if let Some(bp) = self.engine.library.get(idx) {
                     bp.name.clone()
                 } else {
                     "UNKNOWN".to_string()
@@ -108,7 +108,7 @@ impl Editor {
                     let path = vec![comp.id];
                     if let Ok(sub_interface) = sim.instantiate_chip_with_mapping(
                         sub_idx,
-                        &self.library,
+                        &self.engine.library,
                         &path,
                         &mut instance_to_sim_map,
                         &mut instance_outputs,
@@ -266,16 +266,16 @@ impl Editor {
         // Settle initial states
         let max_steps = (sim.gates.len() * 10).max(1000);
         match sim.propagate_events(max_steps) {
-            Ok(_) => self.propagation_error = None,
-            Err(e) => self.propagation_error = Some(e),
+            Ok(_) => self.engine.propagation_error = None,
+            Err(e) => self.engine.propagation_error = Some(e),
         }
 
-        self.simulator = sim;
-        self.visual_to_sim_map = visual_to_sim_map;
-        self.port_to_sim_gate_map = port_to_sim_gate_map;
-        self.instance_to_sim_map = instance_to_sim_map;
-        self.instance_outputs = instance_outputs;
-        self.active_clocks = active_clocks;
+        self.engine.simulator = sim;
+        self.engine.visual_to_sim_map = visual_to_sim_map;
+        self.engine.port_to_sim_gate_map = port_to_sim_gate_map;
+        self.engine.instance_to_sim_map = instance_to_sim_map;
+        self.engine.instance_outputs = instance_outputs;
+        self.engine.active_clocks = active_clocks;
     }
 
     /// Translates the current canvas components and connections into a reusable ChipBlueprint
@@ -403,7 +403,7 @@ impl Editor {
         }
 
         Some(ChipBlueprint {
-            name: self.chip_name_input.clone(),
+            name: self.ui.chip_name_input.clone(),
             inputs: visual_inputs.len(),
             outputs: visual_outputs.len(),
             input_names,
