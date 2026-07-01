@@ -140,15 +140,14 @@ impl Editor {
                 self.push_history_snapshot();
             }
             
-            if do_inspection {
-                if let Some(sel_id) = self.canvas.selected_comp_id {
+            if do_inspection
+                && let Some(sel_id) = self.canvas.selected_comp_id {
                     self.canvas.inspection_path.push(sel_id);
                     self.canvas.selected_comp_id = None;
                 }
-            }
             
-            if new_label.is_some() || new_period.is_some() {
-                if let Some(sel_id) = self.canvas.selected_comp_id {
+            if (new_label.is_some() || new_period.is_some())
+                && let Some(sel_id) = self.canvas.selected_comp_id {
                     for c in &mut self.components {
                         if c.id == sel_id {
                             if let Some(ref l) = new_label {
@@ -163,7 +162,6 @@ impl Editor {
                         }
                     }
                 }
-            }
 
             let mut delete_annotation_idx = None;
             if let Some(idx) = self.canvas.selected_annotation_idx

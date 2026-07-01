@@ -165,16 +165,23 @@ impl Editor {
                         }
 
                         ui.horizontal(|ui| {
-                            // Scroll Left Button
-                            if ui.button("◀").on_hover_text("Scroll Left").clicked() {
-                                self.ui.controls_scroll_request = Some(100.0);
-                            }
-
                             egui::ScrollArea::horizontal().show(ui, |ui| {
                                 if let Some(delta) = scroll_by {
                                     ui.scroll_with_delta(egui::vec2(delta, 0.0));
                                 }
                                 ui.horizontal(|ui| {
+                                    if ui.button("❌ Clear Tool").clicked() {
+                                        self.canvas.selected_tool = None;
+                                    }
+                                    ui.separator();
+
+                                    if ui.button("↩ Undo").on_hover_text("Undo (Ctrl+Z)").clicked() {
+                                        self.undo();
+                                    }
+                                    if ui.button("↪ Redo").on_hover_text("Redo (Ctrl+Y)").clicked() {
+                                        self.redo();
+                                    }
+                                    ui.separator();
                                     if !self.canvas.inspection_path.is_empty() {
                                         if ui.button("← Exit Inspection").clicked() {
                                             self.canvas.inspection_path.pop();
@@ -191,6 +198,85 @@ impl Editor {
                                     }
 
                                     ui.separator();
+
+                                    // RECENTER BUTTON CALCULATION
+                                    if !self.components.is_empty() {
+                                        let (screen_w, screen_h) = (
+                                            macroquad::prelude::screen_width(),
+                                            macroquad::prelude::screen_height(),
+                                        );
+
+                                        // Use the real canvas viewport (remaining rect after egui panels).
+                                        let (vx, vy, vw, vh) = self
+                                            .ui
+                                            .canvas_viewport
+                                            .unwrap_or((0.0, 0.0, screen_w, screen_h));
+                                        let view_w = vw.max(50.0);
+                                        let view_h = vh.max(50.0);
+                                        let view_min_x = vx;
+                                        let view_min_y = vy;
+                                        let view_max_x = vx + view_w;
+                                        let view_max_y = vy + view_h;
+
+                                        let mut any_outside_viewport = false;
+                                        for comp in &self.components {
+                                            let p1 = (comp.pos * self.canvas.zoom) + self.canvas.pan;
+                                            let p2 = p1
+                                                + macroquad::prelude::Vec2::new(comp.width, comp.height)
+                                                    * self.canvas.zoom;
+
+                                            // Show recenter if any element is even partially out of view.
+                                            if p1.x < view_min_x
+                                                || p2.x > view_max_x
+                                                || p1.y < view_min_y
+                                                || p2.y > view_max_y
+                                            {
+                                                any_outside_viewport = true;
+                                                break;
+                                            }
+                                        }
+
+                                        if any_outside_viewport {
+                                            if ui
+                                                .button("🎯 Recenter")
+                                                .on_hover_text("Focus camera on elements")
+                                                .clicked()
+                                            {
+                                                let mut min_x = f32::MAX;
+                                                let mut min_y = f32::MAX;
+                                                let mut max_x = f32::MIN;
+                                                let mut max_y = f32::MIN;
+
+                                                for comp in &self.components {
+                                                    min_x = min_x.min(comp.pos.x);
+                                                    min_y = min_y.min(comp.pos.y);
+                                                    max_x = max_x.max(comp.pos.x + comp.width);
+                                                    max_y = max_y.max(comp.pos.y + comp.height);
+                                                }
+
+                                                let padding = 100.0;
+                                                let w = (max_x - min_x).max(100.0);
+                                                let h = (max_y - min_y).max(100.0);
+
+                                                // Target zoom to fit all components into the actual viewport.
+                                                let zoom_x = view_w / (w + padding * 2.0);
+                                                let zoom_y = view_h / (h + padding * 2.0);
+                                                self.canvas.zoom = zoom_x.min(zoom_y).clamp(0.1, 5.0);
+
+                                                // Target pan to center content in the viewport.
+                                                let center_x = min_x + w / 2.0;
+                                                let center_y = min_y + h / 2.0;
+                                                self.canvas.pan = macroquad::prelude::Vec2::new(
+                                                    view_min_x + view_w / 2.0,
+                                                    view_min_y + view_h / 2.0,
+                                                ) - macroquad::prelude::Vec2::new(center_x, center_y)
+                                                    * self.canvas.zoom;
+                                            }
+                                            ui.separator();
+                                        }
+                                    }
+
+
                                     ui.label("Speed:");
                                     ui.add(egui::Slider::new(&mut self.engine.ticks_per_frame, 1..=500).show_value(false));
 
@@ -208,10 +294,7 @@ impl Editor {
                                 });
                             });
 
-                            // Scroll Right Button
-                            if ui.button("▶").on_hover_text("Scroll Right").clicked() {
-                                self.ui.controls_scroll_request = Some(-100.0);
-                            }
+
                         });
                     });
 
@@ -236,6 +319,13 @@ impl Editor {
                             self.draw_properties_ui(ui);
                         });
                     });
+
+                // Cache the actual canvas viewport (remaining area) in screen pixels.
+                let r = ctx.available_rect();
+                let ppp = ctx.pixels_per_point();
+                self.ui
+                    .canvas_viewport
+                    .replace((r.min.x * ppp, r.min.y * ppp, r.width() * ppp, r.height() * ppp));
             }
 
             // Settings Dialog Window
