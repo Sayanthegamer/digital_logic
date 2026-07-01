@@ -208,8 +208,13 @@ impl Editor {
                 // Click on a port or component
                 let mut clicked_something = false;
 
+                let bypass_wiring = is_key_down(KeyCode::LeftShift) 
+                    || is_key_down(KeyCode::RightShift) 
+                    || is_key_down(KeyCode::LeftControl) 
+                    || is_key_down(KeyCode::RightControl);
+
                 // Check ports first (wiring starts here)
-                if let Some((comp_id, port_idx, is_input)) = self.canvas.hovered_port
+                if !bypass_wiring && let Some((comp_id, port_idx, is_input)) = self.canvas.hovered_port
                     && !is_input {
                         self.canvas.active_wire_drag = Some((comp_id, port_idx));
                         clicked_something = true;
