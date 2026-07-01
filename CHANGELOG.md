@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0-alpha.1] - 2026-07-01
+
+### Added
+- **UI Component Catalog Search:** Added a search bar to dynamically filter components in the catalog.
+- **Stretchable Bus Junction:** Bus Junction components can now be stretched horizontally or vertically.
+
+### Fixed
+- **Canvas & Viewport:** Centering logic refactored to use measured canvas viewport rectangle.
+- **Undo/Redo & Snapping:** Integrated stretchable junctions properly with grid snapping and history tracking.
+- **Compilation & Build:** Resolved a double mutable borrow (E0499) in input handling and fixed binary/library output filename collisions in Cargo.toml.
+
 ## [0.2.0-alpha.4] - 2026-06-30
 
 ### Added
