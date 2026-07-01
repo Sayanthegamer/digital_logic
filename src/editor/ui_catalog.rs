@@ -117,7 +117,8 @@ impl Editor {
                                     ui.painter().rect_filled(response.rect, 2.0, egui::Color32::from_black_alpha(150));
                                 }
                                 
-                                if response.hovered() {
+                                // Check if pointer is over this rect, even during a drag
+                                if ui.rect_contains_pointer(response.rect) {
                                     self.ui.drag_hovered_idx = Some(idx);
                                 }
                                 
