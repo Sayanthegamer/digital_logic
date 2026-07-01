@@ -80,7 +80,7 @@ The goal, stated plainly: **run a real 8-bit (eventually 16-bit) CPU, built enti
 The project is split cleanly into two halves that don't know much about each other: a **Core Engine** that only cares about boolean algebra and memory layout, and an **Editor** that only cares about pixels, mouse clicks, and calling into the engine.
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'lineColor': '#c9d1d9', 'textColor': '#e6edf3', 'edgeLabelBackground': '#0d1117' }}}%%
+%%{init: {'theme': 'base', 'themeVariables': { 'lineColor': '#c9d1d9', 'textColor': '#e6edf3', 'edgeLabelBackground': '#0d1117', 'edgeLabelColor': '#e6edf3' }}}%%
 flowchart TB
     classDef frontendNode fill:#4a4a4a,stroke:#f9f9f9,stroke-width:1.5px,color:#ffffff;
     classDef backendNode fill:#2a5078,stroke:#eef2f5,stroke-width:1.5px,color:#ffffff;
@@ -138,7 +138,7 @@ flowchart TB
 This is the part that makes deep nesting free. When a chip contains sub-chips, the compiler doesn't keep that hierarchy around at runtime — it recursively resolves every wire back to its ultimate primitive driver *at compile time*, so the simulator only ever sees flat NAND gates.
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'lineColor': '#c9d1d9', 'textColor': '#e6edf3', 'edgeLabelBackground': '#0d1117' }}}%%
+%%{init: {'theme': 'base', 'themeVariables': { 'lineColor': '#c9d1d9', 'textColor': '#e6edf3', 'edgeLabelBackground': '#0d1117', 'edgeLabelColor': '#e6edf3' }}}%%
 flowchart LR
     classDef nestedNode fill:#2a5078,stroke:#eef2f5,stroke-width:1.5px,color:#ffffff;
     classDef flatNode fill:#1a365d,stroke:#d4e1f9,stroke-width:1.5px,color:#ffffff;
