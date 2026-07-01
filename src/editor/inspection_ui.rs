@@ -172,7 +172,7 @@ impl Editor {
             };
 
             let state = self.get_node_state_at_path(&src_node, &self.inspection_path);
-            self.draw_manhattan_wire(src_pos, tgt_pos, state);
+            self.draw_manhattan_wire(src_pos, tgt_pos, state, false);
         }
 
         // Draw internal components
@@ -230,6 +230,7 @@ impl Editor {
                     }
                 }
                 ComponentType::SubChip(_) => Color::new(0.40, 0.45, 0.85, 1.0),
+                ComponentType::SevenSegment => Color::new(0.9, 0.2, 0.2, 1.0),
             };
             let stripe_height = 4.0 * self.zoom;
             draw_rectangle(

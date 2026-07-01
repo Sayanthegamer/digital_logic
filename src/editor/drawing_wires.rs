@@ -32,7 +32,7 @@ impl Editor {
         }
     }
 
-    pub(crate) fn draw_manhattan_wire(&self, src_pos: Vec2, tgt_pos: Vec2, wire_state: bool) {
+    pub(crate) fn draw_manhattan_wire(&self, src_pos: Vec2, tgt_pos: Vec2, wire_state: bool, is_selected: bool) {
         let color = if wire_state {
             Color::new(0.00, 0.70, 1.00, 1.0) // electric cyan
         } else {
@@ -41,9 +41,13 @@ impl Editor {
         let thickness = if wire_state { 2.2 } else { 1.3 } * self.zoom;
 
         // Active glow bloom effect under active wires
-        if wire_state {
-            let glow_color = Color::new(0.00, 0.70, 1.00, 0.15);
-            let glow_thickness = thickness + 4.0 * self.zoom;
+        if wire_state || is_selected {
+            let glow_color = if is_selected {
+                Color::new(0.00, 0.70, 1.00, 0.4) // Strong cyan glow for selection
+            } else {
+                Color::new(0.00, 0.70, 1.00, 0.15)
+            };
+            let glow_thickness = thickness + (if is_selected { 6.0 } else { 4.0 }) * self.zoom;
             Self::draw_manhattan_wire_segments(
                 src_pos,
                 tgt_pos,
@@ -72,5 +76,55 @@ impl Editor {
             2.0 * self.zoom,
             Color::new(0.09, 0.10, 0.12, 1.0),
         );
+    }
+
+    pub(crate) fn hit_test_manhattan_wire(
+        &self,
+        src_pos: Vec2,
+        tgt_pos: Vec2,
+        point: Vec2,
+        threshold: f32,
+    ) -> bool {
+        let zoom = self.zoom;
+        let mut segments = Vec::new();
+
+        if tgt_pos.x >= src_pos.x + 20.0 * zoom {
+            let mid_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0;
+            segments.push((Vec2::new(src_pos.x, src_pos.y), Vec2::new(mid_x, src_pos.y)));
+            segments.push((Vec2::new(mid_x, src_pos.y), Vec2::new(mid_x, tgt_pos.y)));
+            segments.push((Vec2::new(mid_x, tgt_pos.y), Vec2::new(tgt_pos.x, tgt_pos.y)));
+        } else {
+            let stub_src = src_pos.x + 20.0 * zoom;
+            let stub_tgt = tgt_pos.x - 20.0 * zoom;
+
+            let mut mid_y = src_pos.y + (tgt_pos.y - src_pos.y) / 2.0;
+            if (tgt_pos.y - src_pos.y).abs() < 10.0 * zoom {
+                mid_y += 35.0 * zoom;
+            }
+
+            segments.push((Vec2::new(src_pos.x, src_pos.y), Vec2::new(stub_src, src_pos.y)));
+            segments.push((Vec2::new(stub_src, src_pos.y), Vec2::new(stub_src, mid_y)));
+            segments.push((Vec2::new(stub_src, mid_y), Vec2::new(stub_tgt, mid_y)));
+            segments.push((Vec2::new(stub_tgt, mid_y), Vec2::new(stub_tgt, tgt_pos.y)));
+            segments.push((Vec2::new(stub_tgt, tgt_pos.y), Vec2::new(tgt_pos.x, tgt_pos.y)));
+        }
+
+        for (a, b) in segments {
+            let line_vec = b - a;
+            let p_vec = point - a;
+
+            let line_len_sq = line_vec.length_squared();
+            let t = if line_len_sq == 0.0 {
+                0.0
+            } else {
+                (p_vec.dot(line_vec) / line_len_sq).clamp(0.0, 1.0)
+            };
+
+            let projection = a + line_vec * t;
+            if point.distance(projection) <= threshold {
+                return true;
+            }
+        }
+        false
     }
 }
