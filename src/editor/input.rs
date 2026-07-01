@@ -437,26 +437,33 @@ impl Editor {
                         if let Some(c) = self.components.iter_mut().find(|x| x.id == id) {
                             if c.comp_type == crate::engine::ComponentType::Junction && shift_pressed {
                                 let start_size = self.canvas.drag_start_sizes.get(&id).copied().unwrap_or(Vec2::new(12.0, 12.0));
+                                let center = start_pos + start_size / 2.0;
+                                let is_right = self.canvas.drag_offset.x > center.x;
+                                let is_bottom = self.canvas.drag_offset.y > center.y;
 
                                 // Stretching logic instead of moving
                                 // We stretch horizontally or vertically depending on dominant translation
                                 if translation.x.abs() > translation.y.abs() {
-                                    if snapped_translation.x < 0.0 {
-                                        c.pos.x = start_pos.x + snapped_translation.x;
-                                        c.width = (start_size.x - snapped_translation.x).max(12.0);
-                                    } else {
+                                    if is_right {
                                         c.pos.x = start_pos.x;
                                         c.width = (start_size.x + snapped_translation.x).max(12.0);
+                                    } else {
+                                        let new_width = (start_size.x - snapped_translation.x).max(12.0);
+                                        let actual_delta = start_size.x - new_width;
+                                        c.pos.x = start_pos.x + actual_delta;
+                                        c.width = new_width;
                                     }
                                     c.height = start_size.y;
                                     c.pos.y = start_pos.y;
                                 } else {
-                                    if snapped_translation.y < 0.0 {
-                                        c.pos.y = start_pos.y + snapped_translation.y;
-                                        c.height = (start_size.y - snapped_translation.y).max(12.0);
-                                    } else {
+                                    if is_bottom {
                                         c.pos.y = start_pos.y;
                                         c.height = (start_size.y + snapped_translation.y).max(12.0);
+                                    } else {
+                                        let new_height = (start_size.y - snapped_translation.y).max(12.0);
+                                        let actual_delta = start_size.y - new_height;
+                                        c.pos.y = start_pos.y + actual_delta;
+                                        c.height = new_height;
                                     }
                                     c.width = start_size.x;
                                     c.pos.x = start_pos.x;
