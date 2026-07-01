@@ -7,7 +7,9 @@
     <application
         android:allowBackup="true"
         android:label="Digital Logic Sim"
-        android:hasCode="true">
+        android:hasCode="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher">
         <activity
             android:name="rust.logic_simulator.MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|keyboard"
