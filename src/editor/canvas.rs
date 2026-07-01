@@ -1,10 +1,10 @@
+use crate::editor::state::{CanvasSnapshot, EditingTarget};
 use crate::engine::{
     ChipBlueprint, CompiledClock, Component, ComponentType, Connection, GateType, OutputSource,
     Simulator, SourcePort, TargetPort,
 };
-use std::collections::{HashMap, HashSet};
 use macroquad::prelude::Vec2;
-use crate::editor::state::{CanvasSnapshot, EditingTarget};
+use std::collections::{HashMap, HashSet};
 
 use super::Editor;
 use super::types::*;
@@ -49,6 +49,15 @@ impl Editor {
     }
 
     pub fn compile(&mut self) {
+        // Fix up sub-chip dimensions so existing projects get the new dynamic widths
+        for i in 0..self.components.len() {
+            if matches!(self.components[i].comp_type, ComponentType::SubChip(_)) {
+                let (w, h) = self.get_component_dimensions(self.components[i].comp_type);
+                self.components[i].width = w;
+                self.components[i].height = h;
+            }
+        }
+
         let mut sim = Simulator::new();
         let mut visual_to_sim_map = HashMap::new();
         let mut component_ports = HashMap::new(); // visual_id -> (inputs_aliases, outputs_drivers)
@@ -108,7 +117,10 @@ impl Editor {
                     );
                 }
                 ComponentType::Junction => {
-                    component_ports.insert(comp.id, (vec![vec![]], vec![OutputSource::PassedThrough(0)]));
+                    component_ports.insert(
+                        comp.id,
+                        (vec![vec![]], vec![OutputSource::PassedThrough(0)]),
+                    );
                 }
                 ComponentType::SevenSegment => {
                     // It has 7 inputs and no outputs
@@ -160,22 +172,23 @@ impl Editor {
                 match current {
                     CanvasNode::CompOutput { comp_id, port_idx } => {
                         if let Some((_, outputs)) = component_ports.get(&comp_id)
-                            && port_idx < outputs.len() {
-                                match outputs[port_idx] {
-                                    OutputSource::DrivenByGate(g_idx) => {
-                                        if !drivers.contains(&g_idx) {
-                                            drivers.push(g_idx);
-                                        }
-                                    }
-                                    OutputSource::Floating => {}
-                                    OutputSource::PassedThrough(in_idx) => {
-                                        queue.push(CanvasNode::CompInput {
-                                            comp_id,
-                                            port_idx: in_idx,
-                                        });
+                            && port_idx < outputs.len()
+                        {
+                            match outputs[port_idx] {
+                                OutputSource::DrivenByGate(g_idx) => {
+                                    if !drivers.contains(&g_idx) {
+                                        drivers.push(g_idx);
                                     }
                                 }
+                                OutputSource::Floating => {}
+                                OutputSource::PassedThrough(in_idx) => {
+                                    queue.push(CanvasNode::CompInput {
+                                        comp_id,
+                                        port_idx: in_idx,
+                                    });
+                                }
                             }
+                        }
                     }
                     CanvasNode::CompInput { comp_id, port_idx } => {
                         // find all wires targeting this input
@@ -202,10 +215,10 @@ impl Editor {
                 OutputSource::DrivenByGate(drivers[0])
             } else {
                 let mut current_idx = drivers[0];
-                for i in 1..drivers.len() {
+                for &driver in drivers.iter().skip(1) {
                     let resolver = sim.add_gate(GateType::BusResolver);
                     sim.connect(current_idx, resolver, 0);
-                    sim.connect(drivers[i], resolver, 1);
+                    sim.connect(driver, resolver, 1);
                     current_idx = resolver;
                 }
                 OutputSource::DrivenByGate(current_idx)
@@ -410,7 +423,27 @@ impl Editor {
         let max_ports = inputs.max(outputs);
         let mut height = 40.0 + (max_ports as f32 * 16.0);
         let mut width = match comp_type {
-            ComponentType::SubChip(_) => 100.0,
+            ComponentType::SubChip(idx) => {
+                if let Some(bp) = self.engine.library.get(idx) {
+                    let max_in = bp.input_names.iter().map(|n| n.len()).max().unwrap_or(0);
+                    let max_out = bp.output_names.iter().map(|n| n.len()).max().unwrap_or(0);
+                    let title_len = bp.name.len();
+
+                    // Left port text takes ~8px per char + 10px padding
+                    let left_w = (max_in as f32 * 8.0) + 10.0;
+                    // Right port text takes ~8px per char + 10px padding
+                    let right_w = (max_out as f32 * 8.0) + 10.0;
+                    // Title takes ~10px per char
+                    let title_w = (title_len as f32) * 10.0;
+
+                    // Total width needs to comfortably fit all three side-by-side with extra padding
+                    let total_w = left_w + title_w + right_w + 30.0;
+
+                    total_w.max(120.0)
+                } else {
+                    100.0
+                }
+            }
             _ => 70.0,
         };
         if comp_type == ComponentType::Junction {
@@ -435,8 +468,10 @@ impl Editor {
             connections: self.connections.clone(),
             annotations: self.annotations.clone(),
             next_component_id: self.next_component_id,
+            pan: self.canvas.pan,
+            zoom: self.canvas.zoom,
         });
-        
+
         self.components.clear();
         self.connections.clear();
         self.annotations.clear();
@@ -446,15 +481,35 @@ impl Editor {
         self.canvas.inspection_path.clear();
         self.canvas.editing_target = EditingTarget::LibraryChip(bp_idx);
 
+        let mut min_x = f32::MAX;
+        let mut max_x = f32::MIN;
+        let mut min_y = f32::MAX;
+        let mut max_y = f32::MIN;
+
+        for comp in &bp.components {
+            let (w, h) = self.get_component_dimensions(comp.component_type);
+            min_x = min_x.min(comp.pos.0);
+            max_x = max_x.max(comp.pos.0 + w);
+            min_y = min_y.min(comp.pos.1);
+            max_y = max_y.max(comp.pos.1 + h);
+        }
+
+        if min_x > max_x {
+            min_x = 200.0;
+            max_x = 600.0;
+            min_y = 100.0;
+            max_y = 100.0;
+        }
+
         let mut bp_comp_idx_to_visual_id = HashMap::new();
-        
+
         for (i, comp) in bp.components.iter().enumerate() {
             let vis_id = self.next_component_id;
             self.next_component_id += 1;
-            
+
             let label = self.get_component_label(comp.component_type);
             let (width, height) = self.get_component_dimensions(comp.component_type);
-            
+
             self.components.push(VisualComponent {
                 id: vis_id,
                 comp_type: comp.component_type,
@@ -468,14 +523,23 @@ impl Editor {
         }
 
         let mut bp_in_to_visual_id = HashMap::new();
+        let center_y = (min_y + max_y) / 2.0;
+        let spacing_y = 60.0;
+        let inputs_height = (bp.inputs.max(1) - 1) as f32 * spacing_y;
+        let input_y_start = center_y - (inputs_height / 2.0);
+
         for i in 0..bp.inputs {
             let vis_id = self.next_component_id;
             self.next_component_id += 1;
-            let label = bp.input_names.get(i).cloned().unwrap_or_else(|| "IN".to_string());
+            let label = bp
+                .input_names
+                .get(i)
+                .cloned()
+                .unwrap_or_else(|| "IN".to_string());
             self.components.push(VisualComponent {
                 id: vis_id,
                 comp_type: ComponentType::Input,
-                pos: Vec2::new(50.0, 50.0 + i as f32 * 60.0),
+                pos: Vec2::new(min_x - 150.0, input_y_start + i as f32 * spacing_y),
                 width: 70.0,
                 height: 40.0,
                 label,
@@ -485,14 +549,21 @@ impl Editor {
         }
 
         let mut bp_out_to_visual_id = HashMap::new();
+        let outputs_height = (bp.outputs.max(1) - 1) as f32 * spacing_y;
+        let output_y_start = center_y - (outputs_height / 2.0);
+
         for i in 0..bp.outputs {
             let vis_id = self.next_component_id;
             self.next_component_id += 1;
-            let label = bp.output_names.get(i).cloned().unwrap_or_else(|| "OUT".to_string());
+            let label = bp
+                .output_names
+                .get(i)
+                .cloned()
+                .unwrap_or_else(|| "OUT".to_string());
             self.components.push(VisualComponent {
                 id: vis_id,
                 comp_type: ComponentType::Output,
-                pos: Vec2::new(800.0, 50.0 + i as f32 * 60.0),
+                pos: Vec2::new(max_x + 150.0, output_y_start + i as f32 * spacing_y),
                 width: 70.0,
                 height: 40.0,
                 label,
@@ -504,20 +575,32 @@ impl Editor {
         for conn in bp.connections {
             let src_comp_id = match conn.source {
                 SourcePort::ChipInput(idx) => *bp_in_to_visual_id.get(&idx).unwrap(),
-                SourcePort::ComponentOutput { component_idx, port_idx: _ } => *bp_comp_idx_to_visual_id.get(&component_idx).unwrap(),
+                SourcePort::ComponentOutput {
+                    component_idx,
+                    port_idx: _,
+                } => *bp_comp_idx_to_visual_id.get(&component_idx).unwrap(),
             };
             let src_port = match conn.source {
                 SourcePort::ChipInput(_) => 0,
-                SourcePort::ComponentOutput { component_idx: _, port_idx } => port_idx,
+                SourcePort::ComponentOutput {
+                    component_idx: _,
+                    port_idx,
+                } => port_idx,
             };
 
             let tgt_comp_id = match conn.target {
                 TargetPort::ChipOutput(idx) => *bp_out_to_visual_id.get(&idx).unwrap(),
-                TargetPort::ComponentInput { component_idx, port_idx: _ } => *bp_comp_idx_to_visual_id.get(&component_idx).unwrap(),
+                TargetPort::ComponentInput {
+                    component_idx,
+                    port_idx: _,
+                } => *bp_comp_idx_to_visual_id.get(&component_idx).unwrap(),
             };
             let tgt_port = match conn.target {
                 TargetPort::ChipOutput(_) => 0,
-                TargetPort::ComponentInput { component_idx: _, port_idx } => port_idx,
+                TargetPort::ComponentInput {
+                    component_idx: _,
+                    port_idx,
+                } => port_idx,
             };
 
             self.connections.push(VisualConnection {
@@ -527,9 +610,97 @@ impl Editor {
                 tgt_port,
             });
         }
-        
+
         self.canvas.pan = Vec2::new(0.0, 0.0);
         self.compile();
+        self.center_camera_on_components();
+    }
+
+    pub fn center_camera_on_components(&mut self) {
+        if self.components.is_empty() {
+            self.canvas.pan = Vec2::ZERO;
+            self.canvas.zoom = 1.0;
+            return;
+        }
+
+        let mut min_x = f32::MAX;
+        let mut max_x = f32::MIN;
+        let mut min_y = f32::MAX;
+        let mut max_y = f32::MIN;
+
+        for comp in &self.components {
+            min_x = min_x.min(comp.pos.x);
+            max_x = max_x.max(comp.pos.x + comp.width);
+            min_y = min_y.min(comp.pos.y);
+            max_y = max_y.max(comp.pos.y + comp.height);
+        }
+
+        self.apply_camera_bounds(min_x, max_x, min_y, max_y);
+    }
+
+    pub fn center_camera_on_inspection_view(&mut self) {
+        if let Some((bp, internal_components)) = self.get_inspected_blueprint_and_components() {
+            let mut min_x = f32::MAX;
+            let mut max_x = f32::MIN;
+            let mut min_y = f32::MAX;
+            let mut max_y = f32::MIN;
+
+            for comp in &internal_components {
+                let (w, h) = self.get_component_dimensions(comp.component_type);
+                min_x = min_x.min(comp.pos.0);
+                max_x = max_x.max(comp.pos.0 + w);
+                min_y = min_y.min(comp.pos.1);
+                max_y = max_y.max(comp.pos.1 + h);
+            }
+            if min_x > max_x {
+                min_x = 200.0;
+                max_x = 600.0;
+                min_y = 100.0;
+                max_y = 100.0;
+            }
+
+            let input_x = min_x - 150.0;
+            let output_x = max_x + 150.0;
+            let spacing_y = 60.0;
+            let center_y = (min_y + max_y) / 2.0;
+
+            let inputs_height = (bp.inputs.max(1) - 1) as f32 * spacing_y;
+            let outputs_height = (bp.outputs.max(1) - 1) as f32 * spacing_y;
+
+            let input_y_start = center_y - (inputs_height / 2.0);
+            let output_y_start = center_y - (outputs_height / 2.0);
+
+            let true_min_y = min_y.min(input_y_start).min(output_y_start);
+            let true_max_y = max_y
+                .max(input_y_start + inputs_height)
+                .max(output_y_start + outputs_height);
+
+            self.apply_camera_bounds(input_x, output_x, true_min_y, true_max_y);
+        }
+    }
+
+    fn apply_camera_bounds(&mut self, min_x: f32, max_x: f32, min_y: f32, max_y: f32) {
+        let width = max_x - min_x;
+        let height = max_y - min_y;
+
+        let padded_width = width + 400.0;
+        let padded_height = height + 400.0;
+
+        let screen_w = macroquad::window::screen_width();
+        let screen_h = macroquad::window::screen_height();
+
+        let zoom_x = screen_w / padded_width;
+        let zoom_y = screen_h / padded_height;
+        let target_zoom = zoom_x.min(zoom_y).clamp(0.1, 2.0);
+
+        self.canvas.zoom = target_zoom;
+        let scx = screen_w / 2.0;
+        let scy = screen_h / 2.0;
+
+        let cx = (min_x + max_x) / 2.0;
+        let cy = (min_y + max_y) / 2.0;
+
+        self.canvas.pan = Vec2::new(scx - cx * target_zoom, scy - cy * target_zoom);
     }
 
     pub fn save_and_repack_blueprint(&mut self) {
@@ -537,18 +708,20 @@ impl Editor {
             if let Some(new_bp) = self.package_current_canvas() {
                 let mut updated_bp = new_bp;
                 if let Some(old_bp) = self.engine.library.get(bp_idx) {
-                    updated_bp.name = old_bp.name.clone(); 
+                    updated_bp.name = old_bp.name.clone();
                 }
                 self.engine.library[bp_idx] = updated_bp;
             }
-            
+
             if let Some(stashed) = self.canvas.stashed_main_canvas.take() {
                 self.components = stashed.components;
                 self.connections = stashed.connections;
                 self.annotations = stashed.annotations;
                 self.next_component_id = stashed.next_component_id;
+                self.canvas.pan = stashed.pan;
+                self.canvas.zoom = stashed.zoom;
             }
-            
+
             self.canvas.editing_target = EditingTarget::MainCanvas;
             self.compile();
         }

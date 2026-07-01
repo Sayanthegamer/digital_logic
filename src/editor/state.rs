@@ -1,9 +1,9 @@
+use crate::editor::types::{ActiveTool, VisualConnection};
+use crate::engine::{ChipBlueprint, CompiledClock, OutputSource, Simulator};
 use macroquad::prelude::Vec2;
 use std::collections::{HashMap, HashSet};
-use crate::engine::{Simulator, ChipBlueprint, OutputSource, CompiledClock};
-use crate::editor::types::{ActiveTool, VisualConnection};
 
-use crate::editor::types::{VisualComponent, TextAnnotation};
+use crate::editor::types::{TextAnnotation, VisualComponent};
 
 #[derive(Clone)]
 pub struct CanvasSnapshot {
@@ -11,6 +11,8 @@ pub struct CanvasSnapshot {
     pub connections: Vec<VisualConnection>,
     pub annotations: Vec<TextAnnotation>,
     pub next_component_id: usize,
+    pub pan: Vec2,
+    pub zoom: f32,
 }
 
 pub struct HistoryManager {
@@ -61,7 +63,16 @@ impl Default for EngineState {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum AppMode {
+    MainMenu,
+    Editor,
+    ManageChips,
+    Credits,
+}
+
 pub struct UiState {
+    pub mode: AppMode,
     pub show_settings: bool,
     pub is_fullscreen: bool,
     pub resolution_idx: usize,
@@ -83,7 +94,7 @@ pub struct UiState {
     /// Screen-space canvas viewport rect (x, y, w, h) after egui panels are laid out.
     /// Used for camera fit/recenter calculations.
     pub canvas_viewport: Option<(f32, f32, f32, f32)>,
-    
+
     // Custom chips DND state
     pub dragging_catalog_idx: Option<usize>,
     pub drag_hovered_idx: Option<usize>,
@@ -92,6 +103,7 @@ pub struct UiState {
 impl Default for UiState {
     fn default() -> Self {
         Self {
+            mode: AppMode::MainMenu,
             show_settings: false,
             is_fullscreen: false,
             resolution_idx: 2, // 1280x720 by default
@@ -140,21 +152,22 @@ pub struct CanvasState {
     pub drag_start_sizes: HashMap<usize, Vec2>,
     /// True once we've pushed an undo snapshot for the current drag gesture.
     pub drag_snapshot_pushed: bool,
-    
+
     // Annotations interaction
     pub selected_annotation_idx: Option<usize>,
     pub dragging_annotation_idx: Option<usize>,
     pub last_click_time: f64,
     pub last_clicked_annotation_idx: Option<usize>,
     pub focus_annotation_text: bool,
-    
+
     // Touch
     pub last_touch_dist: Option<f32>,
     pub last_touch_center: Option<Vec2>,
-    
+
     // Inspection
     pub inspection_path: Vec<usize>,
-    
+    pub inspection_camera_stack: Vec<(Vec2, f32)>,
+
     // Sub-chip editing state
     pub editing_target: EditingTarget,
     pub stashed_main_canvas: Option<CanvasSnapshot>,
@@ -187,6 +200,7 @@ impl Default for CanvasState {
             last_touch_dist: None,
             last_touch_center: None,
             inspection_path: Vec::new(),
+            inspection_camera_stack: Vec::new(),
             editing_target: EditingTarget::MainCanvas,
             stashed_main_canvas: None,
         }

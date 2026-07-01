@@ -1,5 +1,5 @@
-use macroquad::prelude::*;
 use crate::editor::theme;
+use macroquad::prelude::*;
 
 use super::Editor;
 
@@ -33,12 +33,18 @@ impl Editor {
         }
     }
 
-    pub(crate) fn draw_manhattan_wire(&self, src_pos: Vec2, tgt_pos: Vec2, wire_state: u8, is_selected: bool) {
+    pub(crate) fn draw_manhattan_wire(
+        &self,
+        src_pos: Vec2,
+        tgt_pos: Vec2,
+        wire_state: u8,
+        is_selected: bool,
+    ) {
         let (color, thickness, is_active) = match wire_state {
             0b00 => (theme::ACCENT_GENERIC.mq(), 1.3 * self.canvas.zoom, false),
             0b01 => (theme::ACCENT_INACTIVE.mq(), 1.6 * self.canvas.zoom, false),
             0b10 => (theme::ACCENT_PRIMARY.mq(), 2.2 * self.canvas.zoom, true),
-            0b11 | _ => (theme::COMP_NAND.mq(), 2.8 * self.canvas.zoom, true),
+            _ => (theme::COMP_NAND.mq(), 2.8 * self.canvas.zoom, true),
         };
 
         // Active glow bloom effect under active wires
@@ -49,7 +55,8 @@ impl Editor {
                 color // Glow matches the wire color
             };
             let glow_color = Color::new(glow_color.r, glow_color.g, glow_color.b, 0.2);
-            let glow_thickness = thickness + (if is_selected { 6.0 } else { 4.0 }) * self.canvas.zoom;
+            let glow_thickness =
+                thickness + (if is_selected { 6.0 } else { 4.0 }) * self.canvas.zoom;
             Self::draw_manhattan_wire_segments(
                 src_pos,
                 tgt_pos,
@@ -104,11 +111,17 @@ impl Editor {
                 mid_y += 35.0 * zoom;
             }
 
-            segments.push((Vec2::new(src_pos.x, src_pos.y), Vec2::new(stub_src, src_pos.y)));
+            segments.push((
+                Vec2::new(src_pos.x, src_pos.y),
+                Vec2::new(stub_src, src_pos.y),
+            ));
             segments.push((Vec2::new(stub_src, src_pos.y), Vec2::new(stub_src, mid_y)));
             segments.push((Vec2::new(stub_src, mid_y), Vec2::new(stub_tgt, mid_y)));
             segments.push((Vec2::new(stub_tgt, mid_y), Vec2::new(stub_tgt, tgt_pos.y)));
-            segments.push((Vec2::new(stub_tgt, tgt_pos.y), Vec2::new(tgt_pos.x, tgt_pos.y)));
+            segments.push((
+                Vec2::new(stub_tgt, tgt_pos.y),
+                Vec2::new(tgt_pos.x, tgt_pos.y),
+            ));
         }
 
         for (a, b) in segments {

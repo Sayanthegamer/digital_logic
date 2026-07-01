@@ -29,7 +29,7 @@ impl Editor {
         }
     }
 
-    fn load_from_path<P: AsRef<std::path::Path>>(&mut self, path: P) {
+    fn load_from_path<P: AsRef<std::path::Path>>(&mut self, path: P) -> bool {
         if let Ok(mut file) = std::fs::File::open(path) {
             let mut contents = String::new();
             use std::io::Read;
@@ -45,15 +45,17 @@ impl Editor {
                 self.canvas.selected_annotation_idx = None;
                 self.canvas.inspection_path.clear();
                 self.compile();
+                return true;
             }
         }
+        false
     }
 
     pub fn save_project(&self) {
         #[cfg(not(target_os = "android"))]
         {
             if let Some(path) = rfd::FileDialog::new()
-                .add_filter("Logic Simulator Projects", &["json"])
+                .add_filter("Logic Simulator Projects", &["logic", "json"])
                 .set_directory(".")
                 .save_file()
             {
@@ -64,28 +66,29 @@ impl Editor {
         #[cfg(target_os = "android")]
         {
             // On Android, save to a fixed local file since RFD is not supported
-            let path = std::path::PathBuf::from("project_save.json");
+            let path = std::path::PathBuf::from("project_save.logic");
             self.save_to_path(path);
         }
     }
 
-    pub fn load_project(&mut self) {
+    pub fn load_project(&mut self) -> bool {
         #[cfg(not(target_os = "android"))]
         {
             if let Some(path) = rfd::FileDialog::new()
-                .add_filter("Logic Simulator Projects", &["json"])
+                .add_filter("Logic Simulator Projects", &["logic", "json"])
                 .set_directory(".")
                 .pick_file()
             {
-                self.load_from_path(path);
+                return self.load_from_path(path);
             }
+            false
         }
 
         #[cfg(target_os = "android")]
         {
             // On Android, load from the fixed local file since RFD is not supported
-            let path = std::path::PathBuf::from("project_save.json");
-            self.load_from_path(path);
+            let path = std::path::PathBuf::from("project_save.logic");
+            self.load_from_path(path)
         }
     }
 }

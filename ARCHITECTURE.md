@@ -26,8 +26,9 @@ The frontend combines two rendering paradigms:
 2. **egui**: Used for the immediate-mode graphical user interface (menus, inspection panels, sidebars). It is integrated via `egui-macroquad` to render on top of the Macroquad canvas.
 
 ### Separation of Concerns
-The Editor UI has been modularized to ensure high maintainability:
-- **`gui.rs` & `ui_*.rs`**: Handles layout orchestration, toolbars, and properties panels (egui).
+The Editor UI has been modularized to ensure high maintainability and structured application state:
+- **`state.rs`**: Defines `AppMode` enum that routes execution between the Main Menu, Editor, and other configuration overlays.
+- **`gui.rs` & `ui_*.rs`**: Handles layout orchestration, toolbars, properties panels, and standalone menus like Settings or Credits (egui).
 - **`drawing.rs` & `drawing_*.rs`**: Handles primitive math, shape rendering, and routing of manhattan wires (Macroquad).
 - **`inspection_logic.rs` & `inspection_ui.rs`**: Handles tracing states deep inside sub-chips and visualizing them in a read-only overlay.
 

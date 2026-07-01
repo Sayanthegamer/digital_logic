@@ -20,7 +20,15 @@ pub(crate) fn draw_rounded_rect(x: f32, y: f32, w: f32, h: f32, r: f32, color: C
     draw_circle(x + w - r, y + h - r, r, color);
 }
 
-pub(crate) fn draw_rounded_rect_lines(x: f32, y: f32, w: f32, h: f32, r: f32, thickness: f32, color: Color) {
+pub(crate) fn draw_rounded_rect_lines(
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    r: f32,
+    thickness: f32,
+    color: Color,
+) {
     let r = r.min(w / 2.0).min(h / 2.0);
     if r <= 0.0 {
         draw_rectangle_lines(x, y, w, h, thickness, color);

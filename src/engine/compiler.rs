@@ -40,10 +40,7 @@ impl Simulator {
                     ));
                 }
                 ComponentType::Junction => {
-                    component_ports.push((
-                        vec![vec![]],
-                        vec![OutputSource::PassedThrough(0)],
-                    ));
+                    component_ports.push((vec![vec![]], vec![OutputSource::PassedThrough(0)]));
                 }
                 ComponentType::Clock => {
                     let clock_idx = self.add_gate(GateType::Input);
@@ -69,10 +66,7 @@ impl Simulator {
                         let sim_idx = self.add_gate(GateType::Output);
                         inputs.push(vec![(sim_idx, 0)]);
                     }
-                    component_ports.push((
-                        inputs,
-                        vec![],
-                    ));
+                    component_ports.push((inputs, vec![]));
                 }
                 ComponentType::SubChip(sub_idx) => {
                     // Recursively compile sub-chip with sub-path
@@ -145,7 +139,8 @@ impl Simulator {
                 } => {
                     let component = &blueprint.components[*component_idx];
                     match &component.component_type {
-                        ComponentType::SevenSegment | ComponentType::Nand
+                        ComponentType::SevenSegment
+                        | ComponentType::Nand
                         | ComponentType::TriStateBuffer
                         | ComponentType::Input
                         | ComponentType::Output
@@ -204,7 +199,9 @@ impl Simulator {
                                 // attempts to trace a ComponentOutput, treat it as floating.
                                 break OutputSource::Floating;
                             }
-                            ComponentType::Nand | ComponentType::Clock | ComponentType::TriStateBuffer => {
+                            ComponentType::Nand
+                            | ComponentType::Clock
+                            | ComponentType::TriStateBuffer => {
                                 let (_, ref outputs) = component_ports[component_idx];
                                 match outputs.first() {
                                     Some(OutputSource::DrivenByGate(g_idx)) => {

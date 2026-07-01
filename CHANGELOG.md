@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0-alpha.1] - 2026-07-01
+
+### Added
+- **Look Inside Camera Preservation:** Implemented a new camera stack system. When zooming into nested sub-chips via "Look Inside", your previous pan and zoom states are saved. Exiting the inspection view now perfectly restores your original view.
+- **Dynamic Text Fitting:** Chip bodies now calculate their minimum width dynamically based on their pin names and titles, entirely eliminating text overlap and collision bugs for custom chips.
+- **Undo/Redo Camera Snapshots:** The `CanvasSnapshot` system now saves and restores the camera's pan and zoom offsets, ensuring `Ctrl+Z` undoes camera framing as well.
+
+## [2.0.0-alpha.1] - 2026-07-01
+
+### Added
+- **Main Menu UI Overhaul:** Introduced a structured AppMode routing system, converting the simulator from a single-screen canvas to a full application.
+- **Application Modes:** Added dedicated screens for New Project, Open Project, Settings, Credits, and Manage Chips.
+- **Library Management:** Users can now safely delete saved sub-chips from the "Manage Chips" menu, which properly clears corresponding placed components on the canvas.
+- **Settings Overlay:** Modified the graphics settings panel to be accessible directly from the Main Menu.
+
 ## [1.2.0-alpha.1] - 2026-07-01
 
 ### Added
