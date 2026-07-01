@@ -131,6 +131,7 @@ pub struct CanvasState {
     pub selected_connections: HashSet<VisualConnection>,
     pub selection_box_start: Option<Vec2>,
     pub drag_start_positions: HashMap<usize, Vec2>,
+    pub drag_start_sizes: HashMap<usize, Vec2>,
     /// True once we've pushed an undo snapshot for the current drag gesture.
     pub drag_snapshot_pushed: bool,
     
@@ -170,6 +171,7 @@ impl Default for CanvasState {
             selected_connections: HashSet::new(),
             selection_box_start: None,
             drag_start_positions: HashMap::new(),
+            drag_start_sizes: HashMap::new(),
             drag_snapshot_pushed: false,
             selected_annotation_idx: None,
             dragging_annotation_idx: None,
