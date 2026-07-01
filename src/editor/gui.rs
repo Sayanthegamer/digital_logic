@@ -201,22 +201,47 @@ impl Editor {
 
                                     // RECENTER BUTTON CALCULATION
                                     if !self.components.is_empty() {
-                                        let (screen_w, screen_h) = (macroquad::prelude::screen_width(), macroquad::prelude::screen_height());
-                                        let mut any_offscreen = false;
+                                        let (screen_w, screen_h) = (
+                                            macroquad::prelude::screen_width(),
+                                            macroquad::prelude::screen_height(),
+                                        );
 
+                                        // Use the real canvas viewport (remaining rect after egui panels).
+                                        let (vx, vy, vw, vh) = self
+                                            .ui
+                                            .canvas_viewport
+                                            .unwrap_or((0.0, 0.0, screen_w, screen_h));
+                                        let view_w = vw.max(50.0);
+                                        let view_h = vh.max(50.0);
+                                        let view_min_x = vx;
+                                        let view_min_y = vy;
+                                        let view_max_x = vx + view_w;
+                                        let view_max_y = vy + view_h;
+
+                                        let mut any_outside_viewport = false;
                                         for comp in &self.components {
                                             let p1 = (comp.pos * self.canvas.zoom) + self.canvas.pan;
-                                            let p2 = p1 + macroquad::prelude::Vec2::new(comp.width, comp.height) * self.canvas.zoom;
+                                            let p2 = p1
+                                                + macroquad::prelude::Vec2::new(comp.width, comp.height)
+                                                    * self.canvas.zoom;
 
-                                            // Simplistic check: is component completely offscreen?
-                                            if p2.x < 0.0 || p1.x > screen_w || p2.y < 0.0 || p1.y > screen_h {
-                                                any_offscreen = true;
+                                            // Show recenter if any element is even partially out of view.
+                                            if p1.x < view_min_x
+                                                || p2.x > view_max_x
+                                                || p1.y < view_min_y
+                                                || p2.y > view_max_y
+                                            {
+                                                any_outside_viewport = true;
                                                 break;
                                             }
                                         }
 
-                                        if any_offscreen {
-                                            if ui.button("🎯 Recenter").on_hover_text("Focus camera on elements").clicked() {
+                                        if any_outside_viewport {
+                                            if ui
+                                                .button("🎯 Recenter")
+                                                .on_hover_text("Focus camera on elements")
+                                                .clicked()
+                                            {
                                                 let mut min_x = f32::MAX;
                                                 let mut min_y = f32::MAX;
                                                 let mut max_x = f32::MIN;
@@ -233,17 +258,19 @@ impl Editor {
                                                 let w = (max_x - min_x).max(100.0);
                                                 let h = (max_y - min_y).max(100.0);
 
-                                                // Target zoom to fit all components
-                                                let view_w = screen_w - 420.0; // Estimate subtracting side panels
-                                                let view_h = screen_h - 100.0;
+                                                // Target zoom to fit all components into the actual viewport.
                                                 let zoom_x = view_w / (w + padding * 2.0);
                                                 let zoom_y = view_h / (h + padding * 2.0);
                                                 self.canvas.zoom = zoom_x.min(zoom_y).clamp(0.1, 5.0);
 
-                                                // Target pan
+                                                // Target pan to center content in the viewport.
                                                 let center_x = min_x + w / 2.0;
                                                 let center_y = min_y + h / 2.0;
-                                                self.canvas.pan = macroquad::prelude::Vec2::new(view_w / 2.0 + 180.0, view_h / 2.0 + 50.0) - macroquad::prelude::Vec2::new(center_x, center_y) * self.canvas.zoom;
+                                                self.canvas.pan = macroquad::prelude::Vec2::new(
+                                                    view_min_x + view_w / 2.0,
+                                                    view_min_y + view_h / 2.0,
+                                                ) - macroquad::prelude::Vec2::new(center_x, center_y)
+                                                    * self.canvas.zoom;
                                             }
                                             ui.separator();
                                         }
@@ -292,6 +319,13 @@ impl Editor {
                             self.draw_properties_ui(ui);
                         });
                     });
+
+                // Cache the actual canvas viewport (remaining area) in screen pixels.
+                let r = ctx.available_rect();
+                let ppp = ctx.pixels_per_point();
+                self.ui
+                    .canvas_viewport
+                    .replace((r.min.x * ppp, r.min.y * ppp, r.width() * ppp, r.height() * ppp));
             }
 
             // Settings Dialog Window

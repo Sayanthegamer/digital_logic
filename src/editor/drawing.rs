@@ -192,19 +192,51 @@ impl Editor {
             let border_color = theme::BORDER.mq();
 
             if comp.comp_type == ComponentType::Junction {
+                // Render Junctions using their actual width/height so stretch visuals match hit area.
                 let center_x = screen_pos.x + comp_width / 2.0;
                 let center_y = screen_pos.y + comp_height / 2.0;
-                let radius = 6.0 * self.canvas.zoom;
-                
-                // Outer circle
-                draw_circle(center_x, center_y, radius, theme::BORDER.mq());
-                // Inner filled circle
-                draw_circle(center_x, center_y, radius * 0.7, theme::TEXT_PRIMARY.mq());
-                
-                if self.canvas.selected_comp_id == Some(comp.id) || self.canvas.selected_comp_ids.contains(&comp.id) {
-                    draw_circle_lines(center_x, center_y, radius + 3.0 * self.canvas.zoom, 1.5 * self.canvas.zoom, theme::ACCENT_PRIMARY.mq());
+
+                let corner_radius = 6.0 * self.canvas.zoom;
+                let thickness = 1.5 * self.canvas.zoom;
+
+                // Bar body
+                draw_rounded_rect(
+                    screen_pos.x,
+                    screen_pos.y,
+                    comp_width,
+                    comp_height,
+                    corner_radius,
+                    theme::TEXT_PRIMARY.mq_with_alpha(0.25),
+                );
+                draw_rounded_rect_lines(
+                    screen_pos.x,
+                    screen_pos.y,
+                    comp_width,
+                    comp_height,
+                    corner_radius,
+                    thickness,
+                    theme::BORDER.mq(),
+                );
+
+                // Center dot for clarity
+                let radius = 4.5 * self.canvas.zoom;
+                draw_circle(center_x, center_y, radius, theme::TEXT_PRIMARY.mq());
+
+                if self.canvas.selected_comp_id == Some(comp.id)
+                    || self.canvas.selected_comp_ids.contains(&comp.id)
+                {
+                    let offset = 3.0 * self.canvas.zoom;
+                    draw_rounded_rect_lines(
+                        screen_pos.x - offset,
+                        screen_pos.y - offset,
+                        comp_width + offset * 2.0,
+                        comp_height + offset * 2.0,
+                        corner_radius + offset,
+                        thickness,
+                        theme::ACCENT_PRIMARY.mq_with_alpha(0.8),
+                    );
                 }
-                
+
                 continue;
             }
 
