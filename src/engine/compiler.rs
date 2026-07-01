@@ -184,11 +184,16 @@ impl Simulator {
                     } => {
                         let component = &blueprint.components[component_idx];
                         match &component.component_type {
-                            ComponentType::SevenSegment | ComponentType::Nand | ComponentType::Clock => {
+                            ComponentType::SevenSegment => {
+                                // Seven-segment display has inputs only (no outputs). If a malformed blueprint
+                                // attempts to trace a ComponentOutput, treat it as floating.
+                                break OutputSource::Floating;
+                            }
+                            ComponentType::Nand | ComponentType::Clock => {
                                 let (_, ref outputs) = component_ports[component_idx];
-                                match outputs[0] {
-                                    OutputSource::DrivenByGate(g_idx) => {
-                                        break OutputSource::DrivenByGate(g_idx);
+                                match outputs.get(0) {
+                                    Some(OutputSource::DrivenByGate(g_idx)) => {
+                                        break OutputSource::DrivenByGate(*g_idx);
                                     }
                                     _ => break OutputSource::Floating,
                                 }
