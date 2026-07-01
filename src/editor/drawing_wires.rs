@@ -1,4 +1,5 @@
 use macroquad::prelude::*;
+use crate::editor::theme;
 
 use super::Editor;
 
@@ -34,47 +35,47 @@ impl Editor {
 
     pub(crate) fn draw_manhattan_wire(&self, src_pos: Vec2, tgt_pos: Vec2, wire_state: bool, is_selected: bool) {
         let color = if wire_state {
-            Color::new(0.00, 0.70, 1.00, 1.0) // electric cyan
+            theme::ACCENT_PRIMARY.mq() // electric cyan
         } else {
-            Color::new(0.24, 0.27, 0.30, 1.0) // muted slate gray
+            theme::ACCENT_INACTIVE.mq() // muted slate gray
         };
-        let thickness = if wire_state { 2.2 } else { 1.3 } * self.zoom;
+        let thickness = if wire_state { 2.2 } else { 1.3 } * self.canvas.zoom;
 
         // Active glow bloom effect under active wires
         if wire_state || is_selected {
             let glow_color = if is_selected {
-                Color::new(0.00, 0.70, 1.00, 0.4) // Strong cyan glow for selection
+                theme::ACCENT_PRIMARY.mq_with_alpha(0.4) // Strong cyan glow for selection
             } else {
-                Color::new(0.00, 0.70, 1.00, 0.15)
+                theme::ACCENT_PRIMARY.mq_with_alpha(0.15)
             };
-            let glow_thickness = thickness + (if is_selected { 6.0 } else { 4.0 }) * self.zoom;
+            let glow_thickness = thickness + (if is_selected { 6.0 } else { 4.0 }) * self.canvas.zoom;
             Self::draw_manhattan_wire_segments(
                 src_pos,
                 tgt_pos,
                 glow_thickness,
                 glow_color,
-                self.zoom,
+                self.canvas.zoom,
             );
         }
 
-        Self::draw_manhattan_wire_segments(src_pos, tgt_pos, thickness, color, self.zoom);
+        Self::draw_manhattan_wire_segments(src_pos, tgt_pos, thickness, color, self.canvas.zoom);
 
         // Draw concentric terminal circle/indicator at target
-        let port_radius = 4.0 * self.zoom;
+        let port_radius = 4.0 * self.canvas.zoom;
         if wire_state {
             draw_circle(
                 tgt_pos.x,
                 tgt_pos.y,
-                port_radius + 2.0 * self.zoom,
-                Color::new(0.00, 0.70, 1.00, 0.2),
+                port_radius + 2.0 * self.canvas.zoom,
+                theme::ACCENT_PRIMARY.mq_with_alpha(0.2),
             );
         }
         draw_circle(tgt_pos.x, tgt_pos.y, port_radius, color);
         draw_circle(
             tgt_pos.x,
             tgt_pos.y,
-            2.0 * self.zoom,
-            Color::new(0.09, 0.10, 0.12, 1.0),
+            2.0 * self.canvas.zoom,
+            theme::BG_CANVAS.mq(),
         );
     }
 
@@ -85,7 +86,7 @@ impl Editor {
         point: Vec2,
         threshold: f32,
     ) -> bool {
-        let zoom = self.zoom;
+        let zoom = self.canvas.zoom;
         let mut segments = Vec::new();
 
         if tgt_pos.x >= src_pos.x + 20.0 * zoom {

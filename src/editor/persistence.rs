@@ -15,7 +15,7 @@ pub struct ProjectFile {
 impl Editor {
     fn save_to_path<P: AsRef<std::path::Path>>(&self, path: P) {
         let project = ProjectFile {
-            library: self.library.clone(),
+            library: self.engine.library.clone(),
             components: self.components.clone(),
             connections: self.connections.clone(),
             next_component_id: self.next_component_id,
@@ -36,14 +36,14 @@ impl Editor {
             if file.read_to_string(&mut contents).is_ok()
                 && let Ok(project) = serde_json::from_str::<ProjectFile>(&contents)
             {
-                self.library = project.library;
+                self.engine.library = project.library;
                 self.components = project.components;
                 self.connections = project.connections;
                 self.next_component_id = project.next_component_id;
                 self.annotations = project.annotations;
-                self.selected_comp_id = None;
-                self.selected_annotation_idx = None;
-                self.inspection_path.clear();
+                self.canvas.selected_comp_id = None;
+                self.canvas.selected_annotation_idx = None;
+                self.canvas.inspection_path.clear();
                 self.compile();
             }
         }

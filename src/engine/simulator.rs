@@ -98,9 +98,11 @@ impl Simulator {
 
         if self.states[gate_idx] != value {
             self.states[gate_idx] = value;
-            let deps = self.dependents[gate_idx].clone();
-            for dep_idx in deps {
-                self.enqueue(dep_idx);
+            for &dep_idx in &self.dependents[gate_idx] {
+                if !self.in_queue[dep_idx] {
+                    self.in_queue[dep_idx] = true;
+                    self.event_queue.push_back(dep_idx);
+                }
             }
         }
     }
@@ -166,9 +168,11 @@ impl Simulator {
             if self.states[idx] != new_state {
                 self.states[idx] = new_state;
 
-                let deps = self.dependents[idx].clone();
-                for dep_idx in deps {
-                    self.enqueue(dep_idx);
+                for &dep_idx in &self.dependents[idx] {
+                    if !self.in_queue[dep_idx] {
+                        self.in_queue[dep_idx] = true;
+                        self.event_queue.push_back(dep_idx);
+                    }
                 }
             }
 

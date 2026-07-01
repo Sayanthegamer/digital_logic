@@ -8,12 +8,12 @@ impl Editor {
     pub fn get_inspected_blueprint_and_components(
         &self,
     ) -> Option<(&ChipBlueprint, Vec<Component>)> {
-        if self.inspection_path.is_empty() {
+        if self.canvas.inspection_path.is_empty() {
             return None;
         }
 
-        let bp_idx = self.get_blueprint_idx_for_path(&self.inspection_path)?;
-        let blueprint = &self.library[bp_idx];
+        let bp_idx = self.get_blueprint_idx_for_path(&self.canvas.inspection_path)?;
+        let blueprint = &self.engine.library[bp_idx];
         Some((blueprint, blueprint.components.clone()))
     }
 
@@ -29,7 +29,7 @@ impl Editor {
         };
 
         for &comp_idx in path.iter().skip(1) {
-            let blueprint = &self.library[curr_bp_idx];
+            let blueprint = &self.engine.library[curr_bp_idx];
             if comp_idx < blueprint.components.len() {
                 let next_comp = &blueprint.components[comp_idx];
                 curr_bp_idx = match next_comp.component_type {
@@ -53,9 +53,9 @@ impl Editor {
                         .filter(|c| c.comp_type == ComponentType::Input)
                         .collect();
                     if let Some(comp) = inputs.get(*idx)
-                        && let Some(&g_idx) = self.visual_to_sim_map.get(&comp.id)
+                        && let Some(&g_idx) = self.engine.visual_to_sim_map.get(&comp.id)
                     {
-                        return self.simulator.get_state(g_idx);
+                        return self.engine.simulator.get_state(g_idx);
                     }
                 }
                 TraceNode::CompOutput {
@@ -63,9 +63,9 @@ impl Editor {
                     port_idx,
                 } => {
                     if let Some(&g_idx) =
-                        self.port_to_sim_gate_map.get(&(*component_idx, *port_idx))
+                        self.engine.port_to_sim_gate_map.get(&(*component_idx, *port_idx))
                     {
-                        return self.simulator.get_state(g_idx);
+                        return self.engine.simulator.get_state(g_idx);
                     }
                 }
                 TraceNode::CompInput {
@@ -93,11 +93,11 @@ impl Editor {
         let comp_id_in_parent = path[path.len() - 1];
 
         if let Some(bp_idx) = self.get_blueprint_idx_for_path(path) {
-            let blueprint = &self.library[bp_idx];
+            let blueprint = &self.engine.library[bp_idx];
             let driver = self.trace_local_driver(node, blueprint, path);
 
             match driver {
-                OutputSource::DrivenByGate(g_idx) => self.simulator.get_state(g_idx),
+                OutputSource::DrivenByGate(g_idx) => self.engine.simulator.get_state(g_idx),
                 OutputSource::PassedThrough(in_idx) => {
                     let parent_node = TraceNode::CompInput {
                         component_idx: comp_id_in_parent,
@@ -126,18 +126,18 @@ impl Editor {
                 let component = &blueprint.components[*component_idx];
                 match component.component_type {
                     ComponentType::Nand | ComponentType::Clock => {
-                        if let Some(&g_idx) = self
-                            .instance_to_sim_map
+                        if let Some(&gate_idx) = self
+                            .engine.instance_to_sim_map
                             .get(&(path.to_vec(), *component_idx))
                         {
-                            OutputSource::DrivenByGate(g_idx)
+                            OutputSource::DrivenByGate(gate_idx)
                         } else {
                             OutputSource::Floating
                         }
                     }
                     ComponentType::SubChip(_) => {
                         if let Some(outputs) =
-                            self.instance_outputs.get(&(path.to_vec(), *component_idx))
+                            self.engine.instance_outputs.get(&(path.to_vec(), *component_idx))
                         {
                             if *port_idx < outputs.len() {
                                 outputs[*port_idx]
