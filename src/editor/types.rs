@@ -36,6 +36,16 @@ pub struct VisualComponent {
 
 impl VisualComponent {
     pub fn input_port_pos(&self, port_idx: usize, num_inputs: usize) -> Vec2 {
+        if self.comp_type == ComponentType::Junction {
+            // Treat a Junction as a thin bar (either horizontal or vertical).
+            let horizontal = self.width >= self.height;
+            if horizontal {
+                // input = left end
+                return Vec2::new(self.pos.x, self.pos.y + self.height / 2.0);
+            }
+            // input = top end
+            return Vec2::new(self.pos.x + self.width / 2.0, self.pos.y);
+        }
         if num_inputs == 0 {
             return self.pos;
         }
@@ -45,6 +55,16 @@ impl VisualComponent {
     }
 
     pub fn output_port_pos(&self, port_idx: usize, num_outputs: usize) -> Vec2 {
+        if self.comp_type == ComponentType::Junction {
+            // Treat a Junction as a thin bar (either horizontal or vertical).
+            let horizontal = self.width >= self.height;
+            if horizontal {
+                // output = right end
+                return Vec2::new(self.pos.x + self.width, self.pos.y + self.height / 2.0);
+            }
+            // output = bottom end
+            return Vec2::new(self.pos.x + self.width / 2.0, self.pos.y + self.height);
+        }
         if num_outputs == 0 {
             return self.pos + Vec2::new(self.width, 0.0);
         }
