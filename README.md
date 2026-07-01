@@ -68,7 +68,8 @@ The goal, stated plainly: **run a real 8-bit (eventually 16-bit) CPU, built enti
 | 🔍 **Look-Inside Inspection** | Step *into* any chip — even ones nested many layers deep — and watch the live 4-state (Floating / Low / High / Contention) signal on every internal wire, read-only. |
 | ⏱️ **Multi-Domain Clocks** | Every clock component has its own independent period. Run a fast CPU clock alongside a slow peripheral clock, both ticking correctly in the same simulation. |
 | 🧵 **4-State Logic** | Wires aren't just true/false — they track Floating, Low, High, and Contention states, so you can actually debug bus conflicts and unconnected pins. |
-| 🚌 **Bus Junctions & Tri-State Buffers** | Build real shared-bus architectures (think CPU data buses) with junctions that resolve multiple drivers and tri-state buffers that can float. |
+| 🚌 **Bus Junctions & Tri-State Buffers** | Build real shared-bus architectures (think CPU data buses) with stretchable junctions that resolve multiple drivers and tri-state buffers that can float. |
+| 🔎 **Component Search** | Dynamically filter the parts catalog to find exactly the primitive or custom chip you need without scrolling. |
 | ↩️ **Undo / Redo** | Full history stack for canvas edits — place, wire, delete, drag — all reversible. |
 | 💾 **Save / Load Projects** | Serializes your entire chip library, canvas, wiring, and annotations to a portable `.json` project file. |
 | ✍️ **Text Annotations** | Drop sticky notes on the canvas to document what a section of your circuit actually does (you'll thank yourself later). |
