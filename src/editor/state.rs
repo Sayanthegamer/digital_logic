@@ -103,6 +103,12 @@ impl Default for UiState {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum EditingTarget {
+    MainCanvas,
+    LibraryChip(usize),
+}
+
 pub struct CanvasState {
     pub pan: Vec2,
     pub zoom: f32,
@@ -132,6 +138,10 @@ pub struct CanvasState {
     
     // Inspection
     pub inspection_path: Vec<usize>,
+    
+    // Sub-chip editing state
+    pub editing_target: EditingTarget,
+    pub stashed_main_canvas: Option<CanvasSnapshot>,
 }
 
 impl Default for CanvasState {
@@ -159,6 +169,8 @@ impl Default for CanvasState {
             last_touch_dist: None,
             last_touch_center: None,
             inspection_path: Vec::new(),
+            editing_target: EditingTarget::MainCanvas,
+            stashed_main_canvas: None,
         }
     }
 }

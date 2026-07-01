@@ -117,13 +117,16 @@ impl Editor {
                             });
                     }
 
-                    if let ComponentType::SubChip(_) = comp.comp_type {
+                    if let ComponentType::SubChip(bp_idx) = comp.comp_type {
                         ui.add_space(5.0);
                         egui::CollapsingHeader::new("Actions")
                             .default_open(true)
                             .show(ui, |ui| {
                                 if ui.button(format!("{} Look Inside", theme::ICON_FOLDER)).clicked() {
                                     do_inspection = true;
+                                }
+                                if ui.button(format!("{} Edit Blueprint", theme::ICON_EDIT)).clicked() {
+                                    self.unpack_blueprint_to_canvas(bp_idx);
                                 }
                             });
                     }

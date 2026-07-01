@@ -3,6 +3,8 @@ use crate::engine::{
     Simulator, SourcePort, TargetPort,
 };
 use std::collections::{HashMap, HashSet};
+use macroquad::prelude::Vec2;
+use crate::editor::state::{CanvasSnapshot, EditingTarget};
 
 use super::Editor;
 use super::types::*;
@@ -402,5 +404,154 @@ impl Editor {
             components,
             connections,
         })
+    }
+
+    pub fn get_component_dimensions(&self, comp_type: ComponentType) -> (f32, f32) {
+        let (inputs, outputs) = self.get_component_ports_count(comp_type);
+        let max_ports = inputs.max(outputs);
+        let mut height = 40.0 + (max_ports as f32 * 16.0);
+        let mut width = match comp_type {
+            ComponentType::SubChip(_) => 100.0,
+            _ => 70.0,
+        };
+        if comp_type == ComponentType::Junction {
+            width = 12.0;
+            height = 12.0;
+        }
+        (width, height)
+    }
+
+    pub fn unpack_blueprint_to_canvas(&mut self, bp_idx: usize) {
+        if self.canvas.editing_target != EditingTarget::MainCanvas {
+            return;
+        }
+        let bp = if let Some(bp) = self.engine.library.get(bp_idx) {
+            bp.clone()
+        } else {
+            return;
+        };
+
+        self.canvas.stashed_main_canvas = Some(CanvasSnapshot {
+            components: self.components.clone(),
+            connections: self.connections.clone(),
+            annotations: self.annotations.clone(),
+            next_component_id: self.next_component_id,
+        });
+        
+        self.components.clear();
+        self.connections.clear();
+        self.annotations.clear();
+        self.next_component_id = 1;
+        self.canvas.selected_comp_id = None;
+        self.canvas.selected_comp_ids.clear();
+        self.canvas.inspection_path.clear();
+        self.canvas.editing_target = EditingTarget::LibraryChip(bp_idx);
+
+        let mut bp_comp_idx_to_visual_id = HashMap::new();
+        
+        for (i, comp) in bp.components.iter().enumerate() {
+            let vis_id = self.next_component_id;
+            self.next_component_id += 1;
+            
+            let label = self.get_component_label(comp.component_type);
+            let (width, height) = self.get_component_dimensions(comp.component_type);
+            
+            self.components.push(VisualComponent {
+                id: vis_id,
+                comp_type: comp.component_type,
+                pos: Vec2::new(comp.pos.0, comp.pos.1),
+                width,
+                height,
+                label,
+                clock_period: comp.clock_period,
+            });
+            bp_comp_idx_to_visual_id.insert(i, vis_id);
+        }
+
+        let mut bp_in_to_visual_id = HashMap::new();
+        for i in 0..bp.inputs {
+            let vis_id = self.next_component_id;
+            self.next_component_id += 1;
+            let label = bp.input_names.get(i).cloned().unwrap_or_else(|| "IN".to_string());
+            self.components.push(VisualComponent {
+                id: vis_id,
+                comp_type: ComponentType::Input,
+                pos: Vec2::new(50.0, 50.0 + i as f32 * 60.0),
+                width: 70.0,
+                height: 40.0,
+                label,
+                clock_period: None,
+            });
+            bp_in_to_visual_id.insert(i, vis_id);
+        }
+
+        let mut bp_out_to_visual_id = HashMap::new();
+        for i in 0..bp.outputs {
+            let vis_id = self.next_component_id;
+            self.next_component_id += 1;
+            let label = bp.output_names.get(i).cloned().unwrap_or_else(|| "OUT".to_string());
+            self.components.push(VisualComponent {
+                id: vis_id,
+                comp_type: ComponentType::Output,
+                pos: Vec2::new(800.0, 50.0 + i as f32 * 60.0),
+                width: 70.0,
+                height: 40.0,
+                label,
+                clock_period: None,
+            });
+            bp_out_to_visual_id.insert(i, vis_id);
+        }
+
+        for conn in bp.connections {
+            let src_comp_id = match conn.source {
+                SourcePort::ChipInput(idx) => *bp_in_to_visual_id.get(&idx).unwrap(),
+                SourcePort::ComponentOutput { component_idx, port_idx: _ } => *bp_comp_idx_to_visual_id.get(&component_idx).unwrap(),
+            };
+            let src_port = match conn.source {
+                SourcePort::ChipInput(_) => 0,
+                SourcePort::ComponentOutput { component_idx: _, port_idx } => port_idx,
+            };
+
+            let tgt_comp_id = match conn.target {
+                TargetPort::ChipOutput(idx) => *bp_out_to_visual_id.get(&idx).unwrap(),
+                TargetPort::ComponentInput { component_idx, port_idx: _ } => *bp_comp_idx_to_visual_id.get(&component_idx).unwrap(),
+            };
+            let tgt_port = match conn.target {
+                TargetPort::ChipOutput(_) => 0,
+                TargetPort::ComponentInput { component_idx: _, port_idx } => port_idx,
+            };
+
+            self.connections.push(VisualConnection {
+                src_comp_id,
+                src_port,
+                tgt_comp_id,
+                tgt_port,
+            });
+        }
+        
+        self.canvas.pan = Vec2::new(0.0, 0.0);
+        self.compile();
+    }
+
+    pub fn save_and_repack_blueprint(&mut self) {
+        if let EditingTarget::LibraryChip(bp_idx) = self.canvas.editing_target {
+            if let Some(new_bp) = self.package_current_canvas() {
+                let mut updated_bp = new_bp;
+                if let Some(old_bp) = self.engine.library.get(bp_idx) {
+                    updated_bp.name = old_bp.name.clone(); 
+                }
+                self.engine.library[bp_idx] = updated_bp;
+            }
+            
+            if let Some(stashed) = self.canvas.stashed_main_canvas.take() {
+                self.components = stashed.components;
+                self.connections = stashed.connections;
+                self.annotations = stashed.annotations;
+                self.next_component_id = stashed.next_component_id;
+            }
+            
+            self.canvas.editing_target = EditingTarget::MainCanvas;
+            self.compile();
+        }
     }
 }
