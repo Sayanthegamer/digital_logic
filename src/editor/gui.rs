@@ -21,7 +21,6 @@ impl Editor {
 
         egui_macroquad::ui(|ctx| {
             ctx.set_pixels_per_point(self.ui.ui_scale);
-            egui_wants_pointer = ctx.wants_pointer_input() || ctx.wants_keyboard_input() || ctx.is_pointer_over_area();
             
             // Dark elegant theme styling overrides with large touch-friendly targets
             let mut style = (*ctx.style()).clone();
@@ -400,6 +399,7 @@ impl Editor {
                     });
                 self.ui.show_settings = show_settings;
             }
+            egui_wants_pointer = ctx.wants_pointer_input() || ctx.wants_keyboard_input() || ctx.is_pointer_over_area();
         });
         self.ui.egui_wants_pointer = egui_wants_pointer;
     }
