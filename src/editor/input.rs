@@ -256,16 +256,25 @@ impl Editor {
                             if self.selected_tool.is_none() {
                             // Check if a wire was clicked
                             let mut clicked_wire = None;
+                            let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
+                                self.components.iter().map(|c| (c.id, c)).collect();
                             for conn in &self.connections {
-                                let src_comp_opt = self.components.iter().find(|c| c.id == conn.src_comp_id);
-                                let tgt_comp_opt = self.components.iter().find(|c| c.id == conn.tgt_comp_id);
-                                if let (Some(src), Some(tgt)) = (src_comp_opt, tgt_comp_opt) {
+                                let (src_comp_opt, tgt_comp_opt) = (
+                                    comp_by_id.get(&conn.src_comp_id),
+                                    comp_by_id.get(&conn.tgt_comp_id),
+                                );
+                                if let (Some(&src), Some(&tgt)) = (src_comp_opt, tgt_comp_opt) {
                                     let (_, outputs) = self.get_component_ports_count(src.comp_type);
                                     let (inputs, _) = self.get_component_ports_count(tgt.comp_type);
                                     let src_pos = src.output_port_pos(conn.src_port, outputs);
                                     let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
 
-                                    if self.hit_test_manhattan_wire(src_pos, tgt_pos, mouse_pos_world, 10.0 / self.zoom) {
+                                    if self.hit_test_manhattan_wire(
+                                        src_pos,
+                                        tgt_pos,
+                                        mouse_pos_world,
+                                        10.0 / self.zoom,
+                                    ) {
                                         clicked_wire = Some(*conn);
                                         break;
                                     }
@@ -420,22 +429,55 @@ impl Editor {
                             }
                         }
 
+                        let zoom = self.zoom;
+                        let wire_bounds = |src_pos: Vec2, tgt_pos: Vec2| -> Rect {
+                            // Mirror the Manhattan routing used by rendering/hit-testing.
+                            let mut points: Vec<Vec2> = vec![src_pos, tgt_pos];
+
+                            if tgt_pos.x >= src_pos.x + 20.0 * zoom {
+                                let mid_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0;
+                                points.push(Vec2::new(mid_x, src_pos.y));
+                                points.push(Vec2::new(mid_x, tgt_pos.y));
+                            } else {
+                                let stub_src = src_pos.x + 20.0 * zoom;
+                                let stub_tgt = tgt_pos.x - 20.0 * zoom;
+
+                                let mut mid_y = src_pos.y + (tgt_pos.y - src_pos.y) / 2.0;
+                                if (tgt_pos.y - src_pos.y).abs() < 10.0 * zoom {
+                                    mid_y += 35.0 * zoom;
+                                }
+
+                                points.push(Vec2::new(stub_src, src_pos.y));
+                                points.push(Vec2::new(stub_src, mid_y));
+                                points.push(Vec2::new(stub_tgt, mid_y));
+                                points.push(Vec2::new(stub_tgt, tgt_pos.y));
+                            }
+
+                            let (mut min_x, mut max_x) = (f32::INFINITY, f32::NEG_INFINITY);
+                            let (mut min_y, mut max_y) = (f32::INFINITY, f32::NEG_INFINITY);
+                            for p in points {
+                                min_x = min_x.min(p.x);
+                                max_x = max_x.max(p.x);
+                                min_y = min_y.min(p.y);
+                                max_y = max_y.max(p.y);
+                            }
+                            Rect::new(min_x, min_y, max_x - min_x, max_y - min_y)
+                        };
+
+                        let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
+                            self.components.iter().map(|c| (c.id, c)).collect();
                         for conn in &self.connections {
-                            let src_comp_opt = self.components.iter().find(|c| c.id == conn.src_comp_id);
-                            let tgt_comp_opt = self.components.iter().find(|c| c.id == conn.tgt_comp_id);
-                            if let (Some(src), Some(tgt)) = (src_comp_opt, tgt_comp_opt) {
+                            let (src_comp_opt, tgt_comp_opt) = (
+                                comp_by_id.get(&conn.src_comp_id),
+                                comp_by_id.get(&conn.tgt_comp_id),
+                            );
+                            if let (Some(&src), Some(&tgt)) = (src_comp_opt, tgt_comp_opt) {
                                 let (_, outputs) = self.get_component_ports_count(src.comp_type);
                                 let (inputs, _) = self.get_component_ports_count(tgt.comp_type);
                                 let src_pos = src.output_port_pos(conn.src_port, outputs);
                                 let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
 
-                                // Basic bounding box check for the wire
-                                let wire_x_min = src_pos.x.min(tgt_pos.x);
-                                let wire_x_max = src_pos.x.max(tgt_pos.x);
-                                let wire_y_min = src_pos.y.min(tgt_pos.y);
-                                let wire_y_max = src_pos.y.max(tgt_pos.y);
-                                let wire_rect = Rect::new(wire_x_min, wire_y_min, wire_x_max - wire_x_min, wire_y_max - wire_y_min);
-
+                                let wire_rect = wire_bounds(src_pos, tgt_pos);
                                 if wire_rect.overlaps(&box_rect) {
                                     self.selected_connections.insert(*conn);
                                 }
