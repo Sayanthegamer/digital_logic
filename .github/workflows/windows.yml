@@ -35,17 +35,17 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: logic-simulator-alpha-exe
-        path: target/release/logic_simulator.exe
+        path: target/release/logic_simulator_bin.exe
 
     - name: Generate Build Attestation
       uses: actions/attest-build-provenance@v2
       with:
-        subject-path: 'target/release/logic_simulator.exe'
+        subject-path: 'target/release/logic_simulator_bin.exe'
 
     - name: VirusTotal Scan
       uses: crazy-max/ghaction-virustotal@v5
       with:
         vt_api_key: ${{ secrets.VT_API_KEY }}
         files: |
-          target/release/logic_simulator.exe
+          target/release/logic_simulator_bin.exe
 

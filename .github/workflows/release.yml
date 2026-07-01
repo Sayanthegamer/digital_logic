@@ -33,20 +33,20 @@ jobs:
     - name: Generate Build Attestation
       uses: actions/attest-build-provenance@v2
       with:
-        subject-path: 'target/release/logic_simulator.exe'
+        subject-path: 'target/release/logic_simulator_bin.exe'
 
     - name: VirusTotal Scan
       uses: crazy-max/ghaction-virustotal@v5
       with:
         vt_api_key: ${{ secrets.VT_API_KEY }}
         files: |
-          target/release/logic_simulator.exe
+          target/release/logic_simulator_bin.exe
 
     - name: Upload Windows Asset
       uses: actions/upload-artifact@v4
       with:
         name: windows-release-bin
-        path: target/release/logic_simulator.exe
+        path: target/release/logic_simulator_bin.exe
 
   build-android:
     runs-on: ubuntu-latest
@@ -152,7 +152,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          ./release-assets/logic_simulator.exe
+          ./release-assets/logic_simulator_bin.exe
           ./release-assets/logic_simulator.apk
         draft: false
         prerelease: false
