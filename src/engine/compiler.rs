@@ -75,7 +75,7 @@ impl Simulator {
                         inputs.push(vec![(sim_idx, 0)]);
                     }
                     component_ports.push((inputs, vec![]));
-                }'}]}{
+                }
                 ComponentType::SubChip(sub_idx) => {
                     // Recursively compile sub-chip with sub-path
                     let mut sub_path = path.to_vec();
