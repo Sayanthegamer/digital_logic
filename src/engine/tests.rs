@@ -674,6 +674,7 @@ fn test_multi_domain_clocks() {
     let mut active_clocks = Vec::new();
     let mut inst_map = std::collections::HashMap::new();
     let mut inst_outs = std::collections::HashMap::new();
+    let mut blueprint_stack = Vec::new();
     let interface = sim
         .instantiate_chip_with_mapping(
             0,
@@ -682,6 +683,7 @@ fn test_multi_domain_clocks() {
             &mut inst_map,
             &mut inst_outs,
             &mut active_clocks,
+            &mut blueprint_stack,
         )
         .expect("Failed to instantiate ClockChip");
 
@@ -758,6 +760,7 @@ fn test_invalid_nested_component_compile_error() {
     let mut active_clocks = Vec::new();
     let mut inst_map = std::collections::HashMap::new();
     let mut inst_outs = std::collections::HashMap::new();
+    let mut blueprint_stack = Vec::new();
     
     // Compiling BadInputChip should fail with the exact error message
     let res_in = sim.instantiate_chip_with_mapping(
@@ -767,14 +770,16 @@ fn test_invalid_nested_component_compile_error() {
         &mut inst_map,
         &mut inst_outs,
         &mut active_clocks,
+        &mut blueprint_stack,
     );
     assert!(res_in.is_err());
     assert_eq!(
         res_in.unwrap_err(),
         "Blueprint components cannot contain top-level Input or Output internally"
     );
-
+ 
     // Compiling BadOutputChip should also fail with the exact error message
+    let mut blueprint_stack_2 = Vec::new();
     let res_out = sim.instantiate_chip_with_mapping(
         1,
         &library,
@@ -782,10 +787,36 @@ fn test_invalid_nested_component_compile_error() {
         &mut inst_map,
         &mut inst_outs,
         &mut active_clocks,
+        &mut blueprint_stack_2,
     );
     assert!(res_out.is_err());
     assert_eq!(
         res_out.unwrap_err(),
         "Blueprint components cannot contain top-level Input or Output internally"
+    );
+}
+
+#[test]
+fn test_recursive_chip_compilation_cycle() {
+    let mut sim = Simulator::new();
+    let library = vec![ChipBlueprint {
+        name: "CyclicChip".to_string(),
+        inputs: 1,
+        outputs: 1,
+        input_names: vec!["in".to_string()],
+        output_names: vec!["out".to_string()],
+        components: vec![Component {
+            component_type: ComponentType::SubChip(0),
+            pos: (0.0, 0.0),
+            clock_period: None,
+        }],
+        connections: vec![],
+    }];
+
+    let res = sim.instantiate_chip(0, &library);
+    assert!(res.is_err());
+    assert_eq!(
+        res.unwrap_err(),
+        "Recursion cycle detected in custom chip blueprints"
     );
 }

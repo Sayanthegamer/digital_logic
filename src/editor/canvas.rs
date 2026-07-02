@@ -175,6 +175,7 @@ impl Editor {
                 }
                 ComponentType::SubChip(sub_idx) => {
                     let path = vec![comp.id];
+                    let mut blueprint_stack = Vec::new();
                     if let Ok(sub_interface) = sim.instantiate_chip_with_mapping(
                         sub_idx,
                         &self.engine.library,
@@ -182,6 +183,7 @@ impl Editor {
                         instance_to_sim_map,
                         instance_outputs,
                         active_clocks,
+                        &mut blueprint_stack,
                     ) {
                         instance_outputs.insert((vec![], comp.id), sub_interface.outputs.clone());
                         component_ports

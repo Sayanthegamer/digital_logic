@@ -11,10 +11,12 @@ impl Simulator {
         instance_map: &mut std::collections::HashMap<(Vec<usize>, usize), usize>,
         instance_outputs: &mut std::collections::HashMap<(Vec<usize>, usize), Vec<OutputSource>>,
         active_clocks: &mut Vec<CompiledClock>,
+        blueprint_stack: &mut Vec<usize>,
     ) -> Result<InstantiatedInterface, String> {
-        if path.len() > 64 {
-            return Err("Max nested chip depth exceeded (possible recursion cycle)".to_string());
+        if blueprint_stack.contains(&blueprint_idx) {
+            return Err("Recursion cycle detected in custom chip blueprints".to_string());
         }
+        blueprint_stack.push(blueprint_idx);
 
         let blueprint = library
             .get(blueprint_idx)
@@ -83,6 +85,7 @@ impl Simulator {
                         instance_map,
                         instance_outputs,
                         active_clocks,
+                        blueprint_stack,
                     )?;
                     instance_outputs
                         .insert((path.to_vec(), comp_idx), sub_interface.outputs.clone());
@@ -318,6 +321,7 @@ impl Simulator {
             outputs.push(driver);
         }
 
+        blueprint_stack.pop();
         Ok(InstantiatedInterface { inputs, outputs })
     }
 
@@ -331,6 +335,7 @@ impl Simulator {
         let mut dummy_map = std::collections::HashMap::new();
         let mut dummy_outputs = std::collections::HashMap::new();
         let mut dummy_clocks = Vec::new();
+        let mut dummy_stack = Vec::new();
         self.instantiate_chip_with_mapping(
             blueprint_idx,
             library,
@@ -338,6 +343,7 @@ impl Simulator {
             &mut dummy_map,
             &mut dummy_outputs,
             &mut dummy_clocks,
+            &mut dummy_stack,
         )
     }
 }
