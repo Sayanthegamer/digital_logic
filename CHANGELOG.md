@@ -12,10 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Port Count Estimation Tests:** Implemented unit tests checking input/output port counts for standard components and custom subchips.
 - **Compilation Error Handling Tests:** Added testing for invalid nested Input/Output components during blueprint compilation.
 - **Project Persistence Tests:** Added integration tests verifying standard save and load flows via a temporary file path.
+- **Blueprint Recursion Cycle Test:** Added a test verifying cycle detection during custom chip compilation.
 
 ### Fixed
 - **Insecure storage on Android:** Replaced fixed project save location with standard internal sandbox folder query via JNI `getFilesDir`.
 - **Malicious File Size cap:** Introduced a 50MB maximum load cap to protect memory exhaustion.
+- **Blueprint Instantiation Cycles:** Implemented a compiler stack-based cycle detector to prevent stack overflow crashes on cyclic subchips.
+- **Bounds-Safe Library Lookups:** Avoided index out-of-bounds panics by using `.get()` / `.get_mut()` instead of direct index operators on the blueprint library.
+- **Junction Stretch Coordinate Overflow:** Clamped stretchable Junction sizes to `2000.0` pixels to avoid coordinates overflowing to infinity.
+- **UI Scale Sanitization:** Added range clamping (`0.5..=3.0`) for target interface scaling settings to prevent divide-by-zero crashes.
 
 ### Optimized
 - **TraceNode & CanvasNode Allocations:** Avoided redundant allocations by deriving `Copy` on these data nodes and removing `.clone()` calls.
