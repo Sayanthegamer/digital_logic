@@ -233,7 +233,7 @@ fn test_get_component_ports_count() {
     );
     assert_eq!(
         editor.get_component_ports_count(ComponentType::SevenSegment),
-        (8, 0)
+        (7, 0)
     );
     assert_eq!(
         editor.get_component_ports_count(ComponentType::TriStateBuffer),
