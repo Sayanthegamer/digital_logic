@@ -69,12 +69,13 @@ impl Simulator {
                 }
                 ComponentType::SevenSegment => {
                     let mut inputs = Vec::new();
-                    for _ in 0..7 {
+                    // Port ordering: A, B, C, D, E, F, G, minus
+                    for _ in 0..8 {
                         let sim_idx = self.add_gate(GateType::Output);
                         inputs.push(vec![(sim_idx, 0)]);
                     }
                     component_ports.push((inputs, vec![]));
-                }
+                }'}]}{
                 ComponentType::SubChip(sub_idx) => {
                     // Recursively compile sub-chip with sub-path
                     let mut sub_path = path.to_vec();
