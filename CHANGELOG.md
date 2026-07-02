@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0-alpha.2] - 2026-07-02
+
+### Added
+- **Coordinate Transformation Tests:** Added new unit tests verifying the correctness of screen-to-world and world-to-screen coordinate mapping.
+- **Port Count Estimation Tests:** Implemented unit tests checking input/output port counts for standard components and custom subchips.
+- **Compilation Error Handling Tests:** Added testing for invalid nested Input/Output components during blueprint compilation.
+- **Project Persistence Tests:** Added integration tests verifying standard save and load flows via a temporary file path.
+
+### Fixed
+- **Insecure storage on Android:** Replaced fixed project save location with standard internal sandbox folder query via JNI `getFilesDir`.
+- **Malicious File Size cap:** Introduced a 50MB maximum load cap to protect memory exhaustion.
+
+### Optimized
+- **TraceNode & CanvasNode Allocations:** Avoided redundant allocations by deriving `Copy` on these data nodes and removing `.clone()` calls.
+- **HashMap Entry Collision Allocation:** Prevented key clones inside mapping resolution by using `get_mut` checks.
+- **Monolithic UI and Input controller:** Extracted drawing layouts and update handling routines into distinct sub-helpers.
+
 ## [2.1.0-alpha.1] - 2026-07-01
 
 ### Added

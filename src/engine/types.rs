@@ -81,7 +81,7 @@ pub struct InstantiatedInterface {
     pub outputs: Vec<OutputSource>,    // Outer chip output index -> its driver
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TraceNode {
     ChipInput(usize),
     ChipOutput(usize),

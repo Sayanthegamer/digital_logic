@@ -6,6 +6,12 @@ use crate::engine::{
 use macroquad::prelude::Vec2;
 use std::collections::{HashMap, HashSet};
 
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+enum CanvasNode {
+    CompInput { comp_id: usize, port_idx: usize },
+    CompOutput { comp_id: usize, port_idx: usize },
+}
+
 use super::Editor;
 use super::types::*;
 
@@ -62,6 +68,47 @@ impl Editor {
         let mut active_clocks = Vec::new();
 
         // 1. Allocate all visual components in the simulator
+        self.allocate_visual_components(
+            &mut sim,
+            &mut visual_to_sim_map,
+            &mut component_ports,
+            &mut instance_to_sim_map,
+            &mut instance_outputs,
+            &mut active_clocks,
+        );
+
+        // 2. Wire up all component inputs on the canvas in the simulator
+        let mut net_cache = HashMap::new();
+        self.wire_up_component_inputs(&mut sim, &component_ports, &mut net_cache);
+
+        // 3. Resolve the visual output port states map
+        let port_to_sim_gate_map =
+            self.resolve_port_to_sim_gate_map(&mut sim, &component_ports, &mut net_cache);
+
+        // Settle initial states
+        let max_steps = (sim.gates.len() * 10).max(1000);
+        match sim.propagate_events(max_steps) {
+            Ok(_) => self.engine.propagation_error = None,
+            Err(e) => self.engine.propagation_error = Some(e),
+        }
+
+        self.engine.simulator = sim;
+        self.engine.visual_to_sim_map = visual_to_sim_map;
+        self.engine.port_to_sim_gate_map = port_to_sim_gate_map;
+        self.engine.instance_to_sim_map = instance_to_sim_map;
+        self.engine.instance_outputs = instance_outputs;
+        self.engine.active_clocks = active_clocks;
+    }
+
+    fn allocate_visual_components(
+        &self,
+        sim: &mut Simulator,
+        visual_to_sim_map: &mut HashMap<usize, usize>,
+        component_ports: &mut HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
+        instance_to_sim_map: &mut HashMap<(Vec<usize>, usize), usize>,
+        instance_outputs: &mut HashMap<(Vec<usize>, usize), Vec<OutputSource>>,
+        active_clocks: &mut Vec<CompiledClock>,
+    ) {
         for comp in &self.components {
             match comp.comp_type {
                 ComponentType::Nand => {
@@ -70,7 +117,7 @@ impl Editor {
                     component_ports.insert(
                         comp.id,
                         (
-                            vec![vec![(sim_idx, 0)], vec![(sim_idx, 1)]],
+                            vec![vec![(sim_idx, 0u8)], vec![(sim_idx, 1u8)]],
                             vec![OutputSource::DrivenByGate(sim_idx)],
                         ),
                     );
@@ -84,7 +131,7 @@ impl Editor {
                 ComponentType::Output => {
                     let sim_idx = sim.add_gate(GateType::Output);
                     visual_to_sim_map.insert(comp.id, sim_idx);
-                    component_ports.insert(comp.id, (vec![vec![(sim_idx, 0)]], vec![]));
+                    component_ports.insert(comp.id, (vec![vec![(sim_idx, 0u8)]], vec![]));
                 }
                 ComponentType::Clock => {
                     let sim_idx = sim.add_gate(GateType::Input);
@@ -107,7 +154,7 @@ impl Editor {
                     component_ports.insert(
                         comp.id,
                         (
-                            vec![vec![(sim_idx, 0)], vec![(sim_idx, 1)]],
+                            vec![vec![(sim_idx, 0u8)], vec![(sim_idx, 1u8)]],
                             vec![OutputSource::DrivenByGate(sim_idx)],
                         ),
                     );
@@ -119,12 +166,10 @@ impl Editor {
                     );
                 }
                 ComponentType::SevenSegment => {
-                    // It has 7 inputs and no outputs
                     let mut inputs = Vec::new();
                     for _ in 0..7 {
-                        // Dummy gates acting as input anchors for the 7seg display
                         let sim_idx = sim.add_gate(GateType::Output);
-                        inputs.push(vec![(sim_idx, 0)]);
+                        inputs.push(vec![(sim_idx, 0u8)]);
                     }
                     component_ports.insert(comp.id, (inputs, vec![]));
                 }
@@ -134,9 +179,9 @@ impl Editor {
                         sub_idx,
                         &self.engine.library,
                         &path,
-                        &mut instance_to_sim_map,
-                        &mut instance_outputs,
-                        &mut active_clocks,
+                        instance_to_sim_map,
+                        instance_outputs,
+                        active_clocks,
                     ) {
                         instance_outputs.insert((vec![], comp.id), sub_interface.outputs.clone());
                         component_ports
@@ -145,86 +190,14 @@ impl Editor {
                 }
             }
         }
+    }
 
-        // Define Trace Node inside compilation
-        #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-        enum CanvasNode {
-            CompInput { comp_id: usize, port_idx: usize },
-            CompOutput { comp_id: usize, port_idx: usize },
-        }
-
-        let mut net_cache: HashMap<Vec<usize>, OutputSource> = HashMap::new();
-
-        let mut trace_root = |start_node: CanvasNode, sim: &mut Simulator| -> OutputSource {
-            let mut visited = HashSet::new();
-            let mut queue = vec![start_node];
-            let mut drivers = Vec::new();
-
-            while let Some(current) = queue.pop() {
-                if !visited.insert(current.clone()) {
-                    continue;
-                }
-
-                match current {
-                    CanvasNode::CompOutput { comp_id, port_idx } => {
-                        if let Some((_, outputs)) = component_ports.get(&comp_id)
-                            && port_idx < outputs.len()
-                        {
-                            match outputs[port_idx] {
-                                OutputSource::DrivenByGate(g_idx) => {
-                                    if !drivers.contains(&g_idx) {
-                                        drivers.push(g_idx);
-                                    }
-                                }
-                                OutputSource::Floating => {}
-                                OutputSource::PassedThrough(in_idx) => {
-                                    queue.push(CanvasNode::CompInput {
-                                        comp_id,
-                                        port_idx: in_idx,
-                                    });
-                                }
-                            }
-                        }
-                    }
-                    CanvasNode::CompInput { comp_id, port_idx } => {
-                        // find all wires targeting this input
-                        for conn in &self.connections {
-                            if conn.tgt_comp_id == comp_id && conn.tgt_port == port_idx {
-                                queue.push(CanvasNode::CompOutput {
-                                    comp_id: conn.src_comp_id,
-                                    port_idx: conn.src_port,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-
-            drivers.sort();
-            if let Some(cached) = net_cache.get(&drivers) {
-                return *cached;
-            }
-
-            let result = if drivers.is_empty() {
-                OutputSource::Floating
-            } else if drivers.len() == 1 {
-                OutputSource::DrivenByGate(drivers[0])
-            } else {
-                let mut current_idx = drivers[0];
-                for &driver in drivers.iter().skip(1) {
-                    let resolver = sim.add_gate(GateType::BusResolver);
-                    sim.connect(current_idx, resolver, 0);
-                    sim.connect(driver, resolver, 1);
-                    current_idx = resolver;
-                }
-                OutputSource::DrivenByGate(current_idx)
-            };
-
-            net_cache.insert(drivers, result);
-            result
-        };
-
-        // 2. Wire up all component inputs on the canvas in the simulator
+    fn wire_up_component_inputs(
+        &self,
+        sim: &mut Simulator,
+        component_ports: &HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
+        net_cache: &mut HashMap<Vec<usize>, OutputSource>,
+    ) {
         for comp in &self.components {
             let (inputs_count, _) = self.get_component_ports_count(comp.comp_type);
 
@@ -233,7 +206,7 @@ impl Editor {
                     comp_id: comp.id,
                     port_idx,
                 };
-                let driver = trace_root(start_node, &mut sim);
+                let driver = self.trace_canvas_node(start_node, sim, component_ports, net_cache);
 
                 if let OutputSource::DrivenByGate(src_g_idx) = driver
                     && let Some((inputs, _)) = component_ports.get(&comp.id)
@@ -246,8 +219,14 @@ impl Editor {
                 }
             }
         }
+    }
 
-        // 3. Resolve the visual output port states map
+    fn resolve_port_to_sim_gate_map(
+        &self,
+        sim: &mut Simulator,
+        component_ports: &HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
+        net_cache: &mut HashMap<Vec<usize>, OutputSource>,
+    ) -> HashMap<(usize, usize), usize> {
         let mut port_to_sim_gate_map = HashMap::new();
         for comp in &self.components {
             let (_, outputs_count) = self.get_component_ports_count(comp.comp_type);
@@ -257,26 +236,87 @@ impl Editor {
                     comp_id: comp.id,
                     port_idx,
                 };
-                let driver = trace_root(start_node, &mut sim);
+                let driver = self.trace_canvas_node(start_node, sim, component_ports, net_cache);
                 if let OutputSource::DrivenByGate(g_idx) = driver {
                     port_to_sim_gate_map.insert((comp.id, port_idx), g_idx);
                 }
             }
         }
+        port_to_sim_gate_map
+    }
 
-        // Settle initial states
-        let max_steps = (sim.gates.len() * 10).max(1000);
-        match sim.propagate_events(max_steps) {
-            Ok(_) => self.engine.propagation_error = None,
-            Err(e) => self.engine.propagation_error = Some(e),
+    fn trace_canvas_node(
+        &self,
+        start_node: CanvasNode,
+        sim: &mut Simulator,
+        component_ports: &HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
+        net_cache: &mut HashMap<Vec<usize>, OutputSource>,
+    ) -> OutputSource {
+        let mut visited = HashSet::new();
+        let mut queue = vec![start_node];
+        let mut drivers = Vec::new();
+
+        while let Some(current) = queue.pop() {
+            if !visited.insert(current) {
+                continue;
+            }
+
+            match current {
+                CanvasNode::CompOutput { comp_id, port_idx } => {
+                    if let Some((_, outputs)) = component_ports.get(&comp_id)
+                        && port_idx < outputs.len()
+                    {
+                        match outputs[port_idx] {
+                            OutputSource::DrivenByGate(g_idx) => {
+                                if !drivers.contains(&g_idx) {
+                                    drivers.push(g_idx);
+                                }
+                            }
+                            OutputSource::Floating => {}
+                            OutputSource::PassedThrough(in_idx) => {
+                                queue.push(CanvasNode::CompInput {
+                                    comp_id,
+                                    port_idx: in_idx,
+                                });
+                            }
+                        }
+                    }
+                }
+                CanvasNode::CompInput { comp_id, port_idx } => {
+                    for conn in &self.connections {
+                        if conn.tgt_comp_id == comp_id && conn.tgt_port == port_idx {
+                            queue.push(CanvasNode::CompOutput {
+                                comp_id: conn.src_comp_id,
+                                port_idx: conn.src_port,
+                            });
+                        }
+                    }
+                }
+            }
         }
 
-        self.engine.simulator = sim;
-        self.engine.visual_to_sim_map = visual_to_sim_map;
-        self.engine.port_to_sim_gate_map = port_to_sim_gate_map;
-        self.engine.instance_to_sim_map = instance_to_sim_map;
-        self.engine.instance_outputs = instance_outputs;
-        self.engine.active_clocks = active_clocks;
+        drivers.sort();
+        if let Some(cached) = net_cache.get(&drivers) {
+            return *cached;
+        }
+
+        let result = if drivers.is_empty() {
+            OutputSource::Floating
+        } else if drivers.len() == 1 {
+            OutputSource::DrivenByGate(drivers[0])
+        } else {
+            let mut current_idx = drivers[0];
+            for &driver in drivers.iter().skip(1) {
+                let resolver = sim.add_gate(GateType::BusResolver);
+                sim.connect(current_idx, resolver, 0);
+                sim.connect(driver, resolver, 1);
+                current_idx = resolver;
+            }
+            OutputSource::DrivenByGate(current_idx)
+        };
+
+        net_cache.insert(drivers, result);
+        result
     }
 
     /// Translates the current canvas components and connections into a reusable ChipBlueprint
@@ -288,7 +328,7 @@ impl Editor {
             .filter(|c| c.comp_type == ComponentType::Input)
             .cloned()
             .collect();
-        visual_inputs.sort_by(|a, b| a.pos.y.partial_cmp(&b.pos.y).unwrap_or(std::cmp::Ordering::Equal));
+        visual_inputs.sort_by(|a, b| a.pos.y.total_cmp(&b.pos.y));
 
         let mut visual_outputs: Vec<VisualComponent> = self
             .components
@@ -296,7 +336,7 @@ impl Editor {
             .filter(|c| c.comp_type == ComponentType::Output)
             .cloned()
             .collect();
-        visual_outputs.sort_by(|a, b| a.pos.y.partial_cmp(&b.pos.y).unwrap_or(std::cmp::Ordering::Equal));
+        visual_outputs.sort_by(|a, b| a.pos.y.total_cmp(&b.pos.y));
 
         // Resolve port name collisions and sanitize blank labels
         let mut input_names = Vec::new();
@@ -308,12 +348,16 @@ impl Editor {
                 comp.label.clone()
             };
 
-            let count = input_counts.entry(base_label.clone()).or_insert(0);
-            *count += 1;
-            let final_label = if *count > 1 {
-                format!("{}_{}", base_label, *count - 1)
-            } else {
-                base_label
+            let final_label = match input_counts.get_mut(&base_label) {
+                Some(count) => {
+                    *count += 1;
+                    format!("{}_{}", base_label, *count - 1)
+                }
+                None => {
+                    let label = base_label.clone();
+                    input_counts.insert(base_label, 1);
+                    label
+                }
             };
             input_names.push(final_label);
         }
@@ -327,12 +371,16 @@ impl Editor {
                 comp.label.clone()
             };
 
-            let count = output_counts.entry(base_label.clone()).or_insert(0);
-            *count += 1;
-            let final_label = if *count > 1 {
-                format!("{}_{}", base_label, *count - 1)
-            } else {
-                base_label
+            let final_label = match output_counts.get_mut(&base_label) {
+                Some(count) => {
+                    *count += 1;
+                    format!("{}_{}", base_label, *count - 1)
+                }
+                None => {
+                    let label = base_label.clone();
+                    output_counts.insert(base_label, 1);
+                    label
+                }
             };
             output_names.push(final_label);
         }
