@@ -3,6 +3,7 @@ use super::types::*;
 
 impl Simulator {
     /// Instantiates a custom chip from the blueprint library and records mapping of instances to compiled gate indices.
+    #[allow(clippy::too_many_arguments)]
     pub fn instantiate_chip_with_mapping(
         &mut self,
         blueprint_idx: usize,
