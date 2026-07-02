@@ -28,6 +28,7 @@ impl Editor {
         let is_mobile = macroquad::window::screen_width() < 720.0;
 
         egui_macroquad::ui(|ctx| {
+            self.ui.ui_scale = self.ui.ui_scale.clamp(0.5, 3.0);
             ctx.set_pixels_per_point(self.ui.ui_scale);
 
             // Dark elegant theme styling overrides with large touch-friendly targets
