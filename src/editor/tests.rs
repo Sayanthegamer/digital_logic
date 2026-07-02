@@ -1,5 +1,5 @@
 use crate::editor::Editor;
-use crate::editor::types::{VisualComponent, VisualConnection, TextAnnotation};
+use crate::editor::types::{TextAnnotation, VisualComponent, VisualConnection};
 use crate::engine::ComponentType;
 use macroquad::prelude::*;
 
@@ -187,11 +187,11 @@ fn test_output_port_pos_junction_vertical() {
 #[test]
 fn test_coordinate_transformation() {
     let mut editor = Editor::new();
-    
+
     // Test default zoom=1.0, pan=(0,0)
     editor.canvas.pan = Vec2::new(0.0, 0.0);
     editor.canvas.zoom = 1.0;
-    
+
     let world_p1 = Vec2::new(15.0, 25.0);
     assert_eq!(editor.to_screen_space(world_p1), world_p1);
     assert_eq!(editor.to_world_space(world_p1), world_p1);
@@ -213,18 +213,42 @@ fn test_coordinate_transformation() {
 fn test_get_component_ports_count() {
     let mut editor = Editor::new();
     editor.engine.library.clear();
-    
+
     // Primitives
-    assert_eq!(editor.get_component_ports_count(ComponentType::Nand), (2, 1));
-    assert_eq!(editor.get_component_ports_count(ComponentType::Input), (0, 1));
-    assert_eq!(editor.get_component_ports_count(ComponentType::Output), (1, 0));
-    assert_eq!(editor.get_component_ports_count(ComponentType::Clock), (0, 1));
-    assert_eq!(editor.get_component_ports_count(ComponentType::SevenSegment), (7, 0));
-    assert_eq!(editor.get_component_ports_count(ComponentType::TriStateBuffer), (2, 1));
-    assert_eq!(editor.get_component_ports_count(ComponentType::Junction), (1, 1));
+    assert_eq!(
+        editor.get_component_ports_count(ComponentType::Nand),
+        (2, 1)
+    );
+    assert_eq!(
+        editor.get_component_ports_count(ComponentType::Input),
+        (0, 1)
+    );
+    assert_eq!(
+        editor.get_component_ports_count(ComponentType::Output),
+        (1, 0)
+    );
+    assert_eq!(
+        editor.get_component_ports_count(ComponentType::Clock),
+        (0, 1)
+    );
+    assert_eq!(
+        editor.get_component_ports_count(ComponentType::SevenSegment),
+        (8, 0)
+    );
+    assert_eq!(
+        editor.get_component_ports_count(ComponentType::TriStateBuffer),
+        (2, 1)
+    );
+    assert_eq!(
+        editor.get_component_ports_count(ComponentType::Junction),
+        (1, 1)
+    );
 
     // SubChip missing in library
-    assert_eq!(editor.get_component_ports_count(ComponentType::SubChip(0)), (0, 0));
+    assert_eq!(
+        editor.get_component_ports_count(ComponentType::SubChip(0)),
+        (0, 0)
+    );
 
     // SubChip present in library
     editor.engine.library.push(crate::engine::ChipBlueprint {
@@ -236,10 +260,16 @@ fn test_get_component_ports_count() {
         components: vec![],
         connections: vec![],
     });
-    
-    assert_eq!(editor.get_component_ports_count(ComponentType::SubChip(0)), (4, 3));
+
+    assert_eq!(
+        editor.get_component_ports_count(ComponentType::SubChip(0)),
+        (4, 3)
+    );
     // Invalid index
-    assert_eq!(editor.get_component_ports_count(ComponentType::SubChip(99)), (0, 0));
+    assert_eq!(
+        editor.get_component_ports_count(ComponentType::SubChip(99)),
+        (0, 0)
+    );
 }
 
 #[test]
@@ -305,14 +335,14 @@ fn test_save_load_project() {
     assert_eq!(loaded_editor.components[0].id, 1);
     assert_eq!(loaded_editor.components[0].label, "NAND_G");
     assert_eq!(loaded_editor.components[0].pos, Vec2::new(10.0, 20.0));
-    
+
     assert_eq!(loaded_editor.connections.len(), 1);
     assert_eq!(loaded_editor.connections[0].src_comp_id, 1);
     assert_eq!(loaded_editor.connections[0].tgt_comp_id, 2);
-    
+
     assert_eq!(loaded_editor.annotations.len(), 1);
     assert_eq!(loaded_editor.annotations[0].text, "Testing save load");
-    
+
     assert_eq!(loaded_editor.engine.library.len(), 1);
     assert_eq!(loaded_editor.engine.library[0].name, "CustomChip");
 

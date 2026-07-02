@@ -375,7 +375,7 @@ impl Editor {
             let (inputs_count, outputs_count) = self.get_component_ports_count(comp.comp_type);
             let port_radius = 4.0 * self.canvas.zoom;
 
-            let mut seg_states = [false; 7];
+            let mut seg_states = [false; 8];
 
             // Input ports on left
             #[allow(clippy::needless_range_loop)]
@@ -401,7 +401,7 @@ impl Editor {
                     }
                 }
 
-                if comp.comp_type == ComponentType::SevenSegment && i < 7 {
+                if comp.comp_type == ComponentType::SevenSegment && i < 8 {
                     seg_states[i] = input_active;
                 }
 

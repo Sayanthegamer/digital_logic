@@ -35,7 +35,10 @@ impl Editor {
         if let Ok(file) = std::fs::File::open(path) {
             let mut contents = String::new();
             use std::io::Read;
-            if file.take(MAX_FILE_SIZE).read_to_string(&mut contents).is_ok()
+            if file
+                .take(MAX_FILE_SIZE)
+                .read_to_string(&mut contents)
+                .is_ok()
                 && let Ok(project) = serde_json::from_str::<ProjectFile>(&contents)
             {
                 self.engine.library = project.library;
@@ -104,8 +107,12 @@ fn get_android_files_dir() -> std::path::PathBuf {
         let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }?;
         let mut env = vm.attach_current_thread()?;
         let context_obj = unsafe { JObject::from_raw(ctx.context() as jni::sys::jobject) };
-        let file_obj = env.call_method(context_obj, "getFilesDir", "()Ljava/io/File;", &[])?.l()?;
-        let path_jstring = env.call_method(file_obj, "getAbsolutePath", "()Ljava/lang/String;", &[])?.l()?;
+        let file_obj = env
+            .call_method(context_obj, "getFilesDir", "()Ljava/io/File;", &[])?
+            .l()?;
+        let path_jstring = env
+            .call_method(file_obj, "getAbsolutePath", "()Ljava/lang/String;", &[])?
+            .l()?;
         let path: String = env.get_string((&path_jstring).into())?.into();
         Ok(path)
     };

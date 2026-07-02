@@ -11,7 +11,7 @@ impl Editor {
         ui.add_space(5.0);
 
         ui.horizontal(|ui| {
-            ui.label("🔍");
+            ui.label(crate::editor::theme::ICON_SEARCH);
             ui.text_edit_singleline(&mut self.ui.catalog_search_text);
         });
         ui.add_space(5.0);
