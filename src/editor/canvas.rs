@@ -288,7 +288,7 @@ impl Editor {
             .filter(|c| c.comp_type == ComponentType::Input)
             .cloned()
             .collect();
-        visual_inputs.sort_by(|a, b| a.pos.y.partial_cmp(&b.pos.y).unwrap());
+        visual_inputs.sort_by(|a, b| a.pos.y.partial_cmp(&b.pos.y).unwrap_or(std::cmp::Ordering::Equal));
 
         let mut visual_outputs: Vec<VisualComponent> = self
             .components
@@ -296,7 +296,7 @@ impl Editor {
             .filter(|c| c.comp_type == ComponentType::Output)
             .cloned()
             .collect();
-        visual_outputs.sort_by(|a, b| a.pos.y.partial_cmp(&b.pos.y).unwrap());
+        visual_outputs.sort_by(|a, b| a.pos.y.partial_cmp(&b.pos.y).unwrap_or(std::cmp::Ordering::Equal));
 
         // Resolve port name collisions and sanitize blank labels
         let mut input_names = Vec::new();
