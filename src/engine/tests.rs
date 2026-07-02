@@ -898,3 +898,41 @@ fn test_nested_subchip_inspection_logic() {
     assert_eq!(interface.inputs.len(), 1);
     assert_eq!(interface.outputs.len(), 1);
 }
+
+#[test]
+fn test_seven_segment_8th_input_port_compiles() {
+    let mut sim = Simulator::new();
+
+    // Blueprint: 8 chip inputs wired to SevenSegment component inputs 0..7.
+    // This exercises the 8th input port (port_idx = 7) and should not panic.
+    let library = vec![ChipBlueprint {
+        name: "SevenSegWrapper".to_string(),
+        inputs: 8,
+        outputs: 0,
+        input_names: (0..8).map(|i| format!("IN{}", i)).collect(),
+        output_names: vec![],
+        components: vec![Component {
+            component_type: ComponentType::SevenSegment,
+            pos: (0.0, 0.0),
+            clock_period: None,
+        }],
+        connections: (0..8)
+            .map(|i| Connection {
+                source: SourcePort::ChipInput(i),
+                target: TargetPort::ComponentInput {
+                    component_idx: 0,
+                    port_idx: i,
+                },
+            })
+            .collect(),
+    }];
+
+    let interface = sim
+        .instantiate_chip(0, &library)
+        .expect("Failed to compile SevenSegment wrapper blueprint");
+
+    assert_eq!(interface.inputs.len(), 8);
+    // Ensure the 8th input (port 7) has a concrete target (the internal sink gate).
+    assert_eq!(interface.inputs[7].len(), 1);
+}
+
