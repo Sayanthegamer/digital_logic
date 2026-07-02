@@ -751,10 +751,10 @@ impl Editor {
         if let EditingTarget::LibraryChip(bp_idx) = self.canvas.editing_target {
             if let Some(new_bp) = self.package_current_canvas() {
                 let mut updated_bp = new_bp;
-                if let Some(old_bp) = self.engine.library.get(bp_idx) {
-                    updated_bp.name = old_bp.name.clone();
+                if let Some(entry) = self.engine.library.get_mut(bp_idx) {
+                    updated_bp.name = entry.name.clone();
+                    *entry = updated_bp;
                 }
-                self.engine.library[bp_idx] = updated_bp;
             }
 
             if let Some(stashed) = self.canvas.stashed_main_canvas.take() {
