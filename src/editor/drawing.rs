@@ -587,6 +587,19 @@ impl Editor {
                 );
                 // Segment G (middle)
                 draw_line(cx - w, cy, cx + w, cy, thick, seg_color(seg_states[6]));
+
+                // Segment "minus" (port 7)
+                // Port ordering: A, B, C, D, E, F, G, minus
+                let minus_w = w * 0.6;
+                let minus_y = cy + h; // between middle and bottom
+                draw_line(
+                    cx - minus_w,
+                    minus_y,
+                    cx + minus_w,
+                    minus_y,
+                    thick,
+                    seg_color(seg_states[7]),
+                );
             }
         }
 
