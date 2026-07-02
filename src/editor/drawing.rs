@@ -375,7 +375,7 @@ impl Editor {
             let (inputs_count, outputs_count) = self.get_component_ports_count(comp.comp_type);
             let port_radius = 4.0 * self.canvas.zoom;
 
-            let mut seg_states = [false; 7];
+            let mut seg_states = [false; 8];
 
             // Input ports on left
             #[allow(clippy::needless_range_loop)]
@@ -401,7 +401,7 @@ impl Editor {
                     }
                 }
 
-                if comp.comp_type == ComponentType::SevenSegment && i < 7 {
+                if comp.comp_type == ComponentType::SevenSegment && i < 8 {
                     seg_states[i] = input_active;
                 }
 
@@ -587,6 +587,19 @@ impl Editor {
                 );
                 // Segment G (middle)
                 draw_line(cx - w, cy, cx + w, cy, thick, seg_color(seg_states[6]));
+
+                // Segment "minus" (port 7)
+                // Port ordering: A, B, C, D, E, F, G, minus
+                let minus_w = w * 0.6;
+                let minus_y = cy + h; // between middle and bottom
+                draw_line(
+                    cx - minus_w,
+                    minus_y,
+                    cx + minus_w,
+                    minus_y,
+                    thick,
+                    seg_color(seg_states[7]),
+                );
             }
         }
 

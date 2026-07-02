@@ -22,7 +22,7 @@ impl Editor {
             ComponentType::Input => (0, 1),
             ComponentType::Output => (1, 0),
             ComponentType::Clock => (0, 1),
-            ComponentType::SevenSegment => (7, 0),
+            ComponentType::SevenSegment => (8, 0),
             ComponentType::TriStateBuffer => (2, 1),
             ComponentType::Junction => (1, 1),
             ComponentType::SubChip(idx) => self
