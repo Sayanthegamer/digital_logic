@@ -185,7 +185,6 @@ impl Editor {
                         active_clocks,
                         &mut blueprint_stack,
                     ) {
-                        instance_outputs.insert((vec![], comp.id), sub_interface.outputs.clone());
                         component_ports
                             .insert(comp.id, (sub_interface.inputs, sub_interface.outputs));
                     }

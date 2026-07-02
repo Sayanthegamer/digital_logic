@@ -44,7 +44,13 @@ impl Editor {
             if !self.canvas.selected_comp_ids.is_empty()
                 || !self.canvas.selected_connections.is_empty()
             {
-                if ui.button("🗑 Delete Selected").clicked() {
+                if ui
+                    .button(format!(
+                        "{} Delete Selected",
+                        crate::editor::theme::ICON_DELETE
+                    ))
+                    .clicked()
+                {
                     self.push_history_snapshot();
                     self.components
                         .retain(|c| !self.canvas.selected_comp_ids.contains(&c.id));
@@ -204,7 +210,10 @@ impl Editor {
                         }
                     });
                 ui.add_space(5.0);
-                if ui.button("🗑 Delete Note").clicked() {
+                if ui
+                    .button(format!("{} Delete Note", crate::editor::theme::ICON_DELETE))
+                    .clicked()
+                {
                     self.push_history_snapshot();
                     delete_annotation_idx = Some(idx);
                 }
@@ -247,13 +256,25 @@ impl Editor {
                 egui::CollapsingHeader::new("Actions")
                     .default_open(true)
                     .show(ui, |ui| {
-                        if ui.button("🗑 Clear Canvas").clicked() {
+                        if ui
+                            .button(format!(
+                                "{} Clear Canvas",
+                                crate::editor::theme::ICON_DELETE
+                            ))
+                            .clicked()
+                        {
                             self.push_history_snapshot();
                             self.components.clear();
                             self.connections.clear();
                             self.compile();
                         }
-                        if ui.button("🔄 Recompile Graph").clicked() {
+                        if ui
+                            .button(format!(
+                                "{} Recompile Graph",
+                                crate::editor::theme::ICON_REFRESH
+                            ))
+                            .clicked()
+                        {
                             self.compile();
                         }
                     });

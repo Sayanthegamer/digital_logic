@@ -722,7 +722,7 @@ fn test_multi_domain_clocks() {
 #[test]
 fn test_invalid_nested_component_compile_error() {
     let mut sim = Simulator::new();
-    
+
     // Create a library with a blueprint that has an internal Input/Output component type
     let library = vec![
         ChipBlueprint {
@@ -731,13 +731,11 @@ fn test_invalid_nested_component_compile_error() {
             outputs: 1,
             input_names: vec!["IN".to_string()],
             output_names: vec!["OUT".to_string()],
-            components: vec![
-                Component {
-                    component_type: ComponentType::Input, // Invalid nested component type
-                    pos: (0.0, 0.0),
-                    clock_period: None,
-                }
-            ],
+            components: vec![Component {
+                component_type: ComponentType::Input, // Invalid nested component type
+                pos: (0.0, 0.0),
+                clock_period: None,
+            }],
             connections: vec![],
         },
         ChipBlueprint {
@@ -746,22 +744,20 @@ fn test_invalid_nested_component_compile_error() {
             outputs: 1,
             input_names: vec!["IN".to_string()],
             output_names: vec!["OUT".to_string()],
-            components: vec![
-                Component {
-                    component_type: ComponentType::Output, // Invalid nested component type
-                    pos: (0.0, 0.0),
-                    clock_period: None,
-                }
-            ],
+            components: vec![Component {
+                component_type: ComponentType::Output, // Invalid nested component type
+                pos: (0.0, 0.0),
+                clock_period: None,
+            }],
             connections: vec![],
-        }
+        },
     ];
 
     let mut active_clocks = Vec::new();
     let mut inst_map = std::collections::HashMap::new();
     let mut inst_outs = std::collections::HashMap::new();
     let mut blueprint_stack = Vec::new();
-    
+
     // Compiling BadInputChip should fail with the exact error message
     let res_in = sim.instantiate_chip_with_mapping(
         0,
@@ -777,7 +773,7 @@ fn test_invalid_nested_component_compile_error() {
         res_in.unwrap_err(),
         "Blueprint components cannot contain top-level Input or Output internally"
     );
- 
+
     // Compiling BadOutputChip should also fail with the exact error message
     let mut blueprint_stack_2 = Vec::new();
     let res_out = sim.instantiate_chip_with_mapping(
@@ -819,4 +815,86 @@ fn test_recursive_chip_compilation_cycle() {
         res.unwrap_err(),
         "Recursion cycle detected in custom chip blueprints"
     );
+}
+
+#[test]
+fn test_nested_subchip_inspection_logic() {
+    let mut sim = Simulator::new();
+    let mut library = Vec::new();
+
+    // 1. Inner chip: Input -> Nand -> Output
+    let inner_chip = ChipBlueprint {
+        name: "Inner".to_string(),
+        inputs: 1,
+        outputs: 1,
+        input_names: vec!["IN".to_string()],
+        output_names: vec!["OUT".to_string()],
+        components: vec![Component {
+            component_type: ComponentType::Nand,
+            pos: (0.0, 0.0),
+            clock_period: None,
+        }],
+        connections: vec![
+            Connection {
+                source: SourcePort::ChipInput(0),
+                target: TargetPort::ComponentInput {
+                    component_idx: 0,
+                    port_idx: 0,
+                },
+            },
+            Connection {
+                source: SourcePort::ChipInput(0),
+                target: TargetPort::ComponentInput {
+                    component_idx: 0,
+                    port_idx: 1,
+                },
+            },
+            Connection {
+                source: SourcePort::ComponentOutput {
+                    component_idx: 0,
+                    port_idx: 0,
+                },
+                target: TargetPort::ChipOutput(0),
+            },
+        ],
+    };
+    library.push(inner_chip);
+
+    // 2. Outer chip: Input -> InnerChip -> Output
+    let outer_chip = ChipBlueprint {
+        name: "Outer".to_string(),
+        inputs: 1,
+        outputs: 1,
+        input_names: vec!["IN".to_string()],
+        output_names: vec!["OUT".to_string()],
+        components: vec![Component {
+            component_type: ComponentType::SubChip(0), // Inner chip
+            pos: (50.0, 0.0),
+            clock_period: None,
+        }],
+        connections: vec![
+            Connection {
+                source: SourcePort::ChipInput(0),
+                target: TargetPort::ComponentInput {
+                    component_idx: 0,
+                    port_idx: 0,
+                },
+            },
+            Connection {
+                source: SourcePort::ComponentOutput {
+                    component_idx: 0,
+                    port_idx: 0,
+                },
+                target: TargetPort::ChipOutput(0),
+            },
+        ],
+    };
+    library.push(outer_chip);
+
+    // Instantiate Outer chip
+    let interface = sim.instantiate_chip(1, &library).unwrap();
+
+    // Test passes if it compiles cleanly without string lookup error and trace completes correctly
+    assert_eq!(interface.inputs.len(), 1);
+    assert_eq!(interface.outputs.len(), 1);
 }

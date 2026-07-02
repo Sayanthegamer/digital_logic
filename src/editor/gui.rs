@@ -153,7 +153,12 @@ impl Editor {
                         self.engine.is_playing = !self.engine.is_playing;
                     }
                     if ui.button(theme::ICON_STOP).clicked() {
-                        let _ = self.engine.simulator.propagate_events(50);
+                        // Use a size-based cap to avoid false "oscillation" errors on large but stable circuits.
+                        let max_steps = (self.engine.simulator.gates.len() * 10).max(1000);
+                        match self.engine.simulator.propagate_events(max_steps) {
+                            Ok(_) => self.engine.propagation_error = None,
+                            Err(e) => self.engine.propagation_error = Some(e),
+                        }
                     }
                 });
             });
@@ -188,23 +193,14 @@ impl Editor {
                                 // Simulator Stats & Options
                                 ui.heading("Options");
                                 ui.horizontal(|ui| {
-                                    if ui
-                                        .button(format!("{} Save", theme::ICON_SAVE))
-                                        .clicked()
-                                    {
+                                    if ui.button(format!("{} Save", theme::ICON_SAVE)).clicked() {
                                         self.save_project();
                                     }
-                                    if ui
-                                        .button(format!("{} Load", theme::ICON_FOLDER))
-                                        .clicked()
-                                    {
+                                    if ui.button(format!("{} Load", theme::ICON_FOLDER)).clicked() {
                                         self.load_project();
                                     }
                                     if ui
-                                        .button(format!(
-                                            "{} Settings",
-                                            theme::ICON_SETTINGS
-                                        ))
+                                        .button(format!("{} Settings", theme::ICON_SETTINGS))
                                         .clicked()
                                     {
                                         self.ui.show_settings = !self.ui.show_settings;
@@ -235,7 +231,13 @@ impl Editor {
                                 self.draw_properties_ui(ui);
 
                                 ui.add_space(10.0);
-                                if ui.button("❌ Close Menu").clicked() {
+                                if ui
+                                    .button(format!(
+                                        "{} Close Menu",
+                                        crate::editor::theme::ICON_CLOSE
+                                    ))
+                                    .clicked()
+                                {
                                     self.ui.show_menu_mobile = false;
                                 }
                             });
@@ -263,20 +265,23 @@ impl Editor {
                             ui.scroll_with_delta(egui::vec2(delta, 0.0));
                         }
                         ui.horizontal(|ui| {
-                            if ui.button("❌ Clear Tool").clicked() {
+                            if ui
+                                .button(format!("{} Clear Tool", crate::editor::theme::ICON_CLEAR))
+                                .clicked()
+                            {
                                 self.canvas.selected_tool = None;
                             }
                             ui.separator();
 
                             if ui
-                                .button("↩ Undo")
+                                .button(format!("{} Undo", crate::editor::theme::ICON_UNDO))
                                 .on_hover_text("Undo (Ctrl+Z)")
                                 .clicked()
                             {
                                 self.undo();
                             }
                             if ui
-                                .button("↪ Redo")
+                                .button(format!("{} Redo", crate::editor::theme::ICON_REDO))
                                 .on_hover_text("Redo (Ctrl+Y)")
                                 .clicked()
                             {
@@ -307,9 +312,13 @@ impl Editor {
                             {
                                 self.engine.is_playing = !self.engine.is_playing;
                             }
-                            if ui.button(format!("{} Step", theme::ICON_STOP)).clicked()
-                            {
-                                let _ = self.engine.simulator.propagate_events(50);
+                            if ui.button(format!("{} Step", theme::ICON_STOP)).clicked() {
+                                // Use a size-based cap to avoid false "oscillation" errors on large but stable circuits.
+                                let max_steps = (self.engine.simulator.gates.len() * 10).max(1000);
+                                match self.engine.simulator.propagate_events(max_steps) {
+                                    Ok(_) => self.engine.propagation_error = None,
+                                    Err(e) => self.engine.propagation_error = Some(e),
+                                }
                             }
 
                             ui.separator();
@@ -335,13 +344,10 @@ impl Editor {
 
                                 let mut any_outside_viewport = false;
                                 for comp in &self.components {
-                                    let p1 =
-                                        (comp.pos * self.canvas.zoom) + self.canvas.pan;
+                                    let p1 = (comp.pos * self.canvas.zoom) + self.canvas.pan;
                                     let p2 = p1
-                                        + macroquad::prelude::Vec2::new(
-                                            comp.width,
-                                            comp.height,
-                                        ) * self.canvas.zoom;
+                                        + macroquad::prelude::Vec2::new(comp.width, comp.height)
+                                            * self.canvas.zoom;
 
                                     // Show recenter if any element is even partially out of view.
                                     if p1.x < view_min_x
@@ -356,7 +362,10 @@ impl Editor {
 
                                 if any_outside_viewport {
                                     if ui
-                                        .button("🎯 Recenter")
+                                        .button(format!(
+                                            "{} Recenter",
+                                            crate::editor::theme::ICON_RECENTER
+                                        ))
                                         .on_hover_text("Focus camera on elements")
                                         .clicked()
                                     {
@@ -379,8 +388,7 @@ impl Editor {
                                         // Target zoom to fit all components into the actual viewport.
                                         let zoom_x = view_w / (w + padding * 2.0);
                                         let zoom_y = view_h / (h + padding * 2.0);
-                                        self.canvas.zoom =
-                                            zoom_x.min(zoom_y).clamp(0.1, 5.0);
+                                        self.canvas.zoom = zoom_x.min(zoom_y).clamp(0.1, 5.0);
 
                                         // Target pan to center content in the viewport.
                                         let center_x = min_x + w / 2.0;
@@ -388,10 +396,9 @@ impl Editor {
                                         self.canvas.pan = macroquad::prelude::Vec2::new(
                                             view_min_x + view_w / 2.0,
                                             view_min_y + view_h / 2.0,
-                                        )
-                                            - macroquad::prelude::Vec2::new(
-                                                center_x, center_y,
-                                            ) * self.canvas.zoom;
+                                        ) - macroquad::prelude::Vec2::new(
+                                            center_x, center_y,
+                                        ) * self.canvas.zoom;
                                     }
                                     ui.separator();
                                 }
@@ -399,11 +406,8 @@ impl Editor {
 
                             ui.label("Speed:");
                             ui.add(
-                                egui::Slider::new(
-                                    &mut self.engine.ticks_per_frame,
-                                    1..=500,
-                                )
-                                .show_value(false),
+                                egui::Slider::new(&mut self.engine.ticks_per_frame, 1..=500)
+                                    .show_value(false),
                             );
 
                             ui.separator();
@@ -429,8 +433,7 @@ impl Editor {
                                 self.ui.show_settings = !self.ui.show_settings;
                                 if self.ui.show_settings {
                                     self.ui.temp_is_fullscreen = self.ui.is_fullscreen;
-                                    self.ui.temp_resolution_idx =
-                                        self.ui.resolution_idx;
+                                    self.ui.temp_resolution_idx = self.ui.resolution_idx;
                                     self.ui.temp_ui_scale = self.ui.ui_scale;
                                 }
                             }
