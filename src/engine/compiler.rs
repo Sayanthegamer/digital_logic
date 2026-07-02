@@ -12,6 +12,10 @@ impl Simulator {
         instance_outputs: &mut std::collections::HashMap<(Vec<usize>, usize), Vec<OutputSource>>,
         active_clocks: &mut Vec<CompiledClock>,
     ) -> Result<InstantiatedInterface, String> {
+        if path.len() > 64 {
+            return Err("Max nested chip depth exceeded (possible recursion cycle)".to_string());
+        }
+
         let blueprint = library
             .get(blueprint_idx)
             .ok_or_else(|| format!("Blueprint not found at index {}", blueprint_idx))?;

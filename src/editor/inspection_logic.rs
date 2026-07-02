@@ -13,7 +13,7 @@ impl Editor {
         }
 
         let bp_idx = self.get_blueprint_idx_for_path(&self.canvas.inspection_path)?;
-        let blueprint = &self.engine.library[bp_idx];
+        let blueprint = self.engine.library.get(bp_idx)?;
         Some((blueprint, blueprint.components.clone()))
     }
 
@@ -29,7 +29,7 @@ impl Editor {
         };
 
         for &comp_idx in path.iter().skip(1) {
-            let blueprint = &self.engine.library[curr_bp_idx];
+            let blueprint = self.engine.library.get(curr_bp_idx)?;
             if comp_idx < blueprint.components.len() {
                 let next_comp = &blueprint.components[comp_idx];
                 curr_bp_idx = match next_comp.component_type {
@@ -94,8 +94,9 @@ impl Editor {
         let parent_path = &path[..path.len() - 1];
         let comp_id_in_parent = path[path.len() - 1];
 
-        if let Some(bp_idx) = self.get_blueprint_idx_for_path(path) {
-            let blueprint = &self.engine.library[bp_idx];
+        if let Some(bp_idx) = self.get_blueprint_idx_for_path(path)
+            && let Some(blueprint) = self.engine.library.get(bp_idx)
+        {
             let driver = self.trace_local_driver(node, blueprint, path);
 
             match driver {
@@ -165,8 +166,9 @@ impl Editor {
         let parent_path = &path[..path.len() - 1];
         let comp_id_in_parent = path[path.len() - 1];
 
-        if let Some(bp_idx) = self.get_blueprint_idx_for_path(path) {
-            let blueprint = &self.engine.library[bp_idx];
+        if let Some(bp_idx) = self.get_blueprint_idx_for_path(path)
+            && let Some(blueprint) = self.engine.library.get(bp_idx)
+        {
             let driver = self.trace_local_driver(node, blueprint, path);
 
             match driver {
