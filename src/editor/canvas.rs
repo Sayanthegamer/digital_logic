@@ -19,13 +19,11 @@ impl Editor {
             ComponentType::SevenSegment => (7, 0),
             ComponentType::TriStateBuffer => (2, 1),
             ComponentType::Junction => (1, 1),
-            ComponentType::SubChip(idx) => {
-                if let Some(bp) = self.engine.library.get(idx) {
-                    (bp.inputs, bp.outputs)
-                } else {
-                    (0, 0)
-                }
-            }
+            ComponentType::SubChip(idx) => self
+                .engine
+                .library
+                .get(idx)
+                .map_or((0, 0), |bp| (bp.inputs, bp.outputs)),
         }
     }
 
@@ -38,13 +36,11 @@ impl Editor {
             ComponentType::SevenSegment => "7SEG".to_string(),
             ComponentType::TriStateBuffer => "TRI".to_string(),
             ComponentType::Junction => "".to_string(),
-            ComponentType::SubChip(idx) => {
-                if let Some(bp) = self.engine.library.get(idx) {
-                    bp.name.clone()
-                } else {
-                    "UNKNOWN".to_string()
-                }
-            }
+            ComponentType::SubChip(idx) => self
+                .engine
+                .library
+                .get(idx)
+                .map_or("UNKNOWN".to_string(), |bp| bp.name.clone()),
         }
     }
 
