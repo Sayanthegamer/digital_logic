@@ -25,7 +25,38 @@ impl Editor {
 
         let egui_wants_pointer = self.ui.egui_wants_pointer;
 
-        // --- Touch Input Abstraction (Mobile) ---
+        // 1. Touch Input Abstraction (Mobile)
+        self.handle_touch_input(egui_wants_pointer);
+
+        // 2. Keyboard & Tool Shortcuts
+        self.handle_keyboard_shortcuts(egui_wants_pointer);
+
+        // 3. Magnetic Port Hover Detection
+        self.update_hovered_port(mouse_pos_screen, mouse_pos_world, egui_wants_pointer);
+
+        // 4. Zoom with mouse wheel
+        self.handle_mouse_zoom(mouse_pos_screen, egui_wants_pointer);
+
+        // 5. Pan with right drag
+        self.handle_right_drag_pan(mouse_delta, egui_wants_pointer);
+
+        // 6. Interactions: Left click / drag
+        self.handle_canvas_interactions(
+            mouse_pos_world,
+            mouse_delta,
+            egui_wants_pointer,
+        );
+
+        // 7. Run continuous simulation ticks
+        self.run_simulation_ticks();
+
+        // 8. Resolution Change Revert Timer
+        self.update_resolution_revert_timer();
+
+        self.canvas.last_mouse_pos = mouse_pos_screen;
+    }
+
+    fn handle_touch_input(&mut self, egui_wants_pointer: bool) {
         let touch_events = touches();
         let is_multi_touch = touch_events.len() >= 2;
 
@@ -63,8 +94,9 @@ impl Editor {
             self.canvas.last_touch_dist = None;
             self.canvas.last_touch_center = None;
         }
+    }
 
-        // Keyboard Shortcuts
+    fn handle_keyboard_shortcuts(&mut self, egui_wants_pointer: bool) {
         if !egui_wants_pointer {
             if is_key_pressed(KeyCode::Space) {
                 self.engine.is_playing = !self.engine.is_playing;
@@ -104,8 +136,9 @@ impl Editor {
                 self.canvas.selected_tool = Some(ActiveTool::PlaceAnnotation);
             }
         }
+    }
 
-        // --- Magnetic Port Hover Detection ---
+    fn update_hovered_port(&mut self, mouse_pos_screen: Vec2, mouse_pos_world: Vec2, egui_wants_pointer: bool) {
         self.canvas.hovered_port = None;
         if !egui_wants_pointer && self.canvas.inspection_path.is_empty() {
             let mut hovered_chip = false;
@@ -179,8 +212,9 @@ impl Editor {
                 }
             }
         }
+    }
 
-        // 1. Zoom with mouse wheel
+    fn handle_mouse_zoom(&mut self, mouse_pos_screen: Vec2, egui_wants_pointer: bool) {
         if !egui_wants_pointer {
             let scroll = mouse_wheel().1;
             if scroll != 0.0 {
@@ -197,14 +231,24 @@ impl Editor {
                     - (mouse_pos_screen - self.canvas.pan) * (self.canvas.zoom / prev_zoom);
             }
         }
+    }
 
-        // 2. Pan with right drag
+    fn handle_right_drag_pan(&mut self, mouse_delta: Vec2, egui_wants_pointer: bool) {
         if !egui_wants_pointer && is_mouse_button_down(MouseButton::Right) {
             self.canvas.pan += mouse_delta;
             self.canvas.selected_tool = None;
         }
+    }
 
-        // 3. Interactions: Left click / drag (only in main canvas)
+    fn handle_canvas_interactions(
+        &mut self,
+        mouse_pos_world: Vec2,
+        mouse_delta: Vec2,
+        egui_wants_pointer: bool,
+    ) {
+        let touch_events = touches();
+        let is_multi_touch = touch_events.len() >= 2;
+
         if !egui_wants_pointer && !is_multi_touch && self.canvas.inspection_path.is_empty() {
             if is_mouse_button_pressed(MouseButton::Left) {
                 // Click on a port or component
@@ -714,8 +758,9 @@ impl Editor {
                 self.compile();
             }
         }
+    }
 
-        // 5. Run continuous simulation ticks with multi-domain clocks (batch-then-propagate)
+    fn run_simulation_ticks(&mut self) {
         if self.engine.is_playing {
             for _ in 0..self.engine.ticks_per_frame {
                 self.engine.sim_tick_counter = self.engine.sim_tick_counter.wrapping_add(1);
@@ -742,8 +787,9 @@ impl Editor {
                 }
             }
         }
+    }
 
-        // --- Resolution Change Revert Timer ---
+    fn update_resolution_revert_timer(&mut self) {
         if let Some(mut timer) = self.ui.resolution_revert_timer {
             timer -= get_frame_time();
             if timer <= 0.0 {
@@ -769,7 +815,5 @@ impl Editor {
                 self.ui.resolution_revert_timer = Some(timer);
             }
         }
-
-        self.canvas.last_mouse_pos = mouse_pos_screen;
     }
 }

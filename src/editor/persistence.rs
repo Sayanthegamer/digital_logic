@@ -13,7 +13,7 @@ pub struct ProjectFile {
 }
 
 impl Editor {
-    fn save_to_path<P: AsRef<std::path::Path>>(&self, path: P) {
+    pub(crate) fn save_to_path<P: AsRef<std::path::Path>>(&self, path: P) {
         let project = ProjectFile {
             library: self.engine.library.clone(),
             components: self.components.clone(),
@@ -29,11 +29,13 @@ impl Editor {
         }
     }
 
-    fn load_from_path<P: AsRef<std::path::Path>>(&mut self, path: P) -> bool {
-        if let Ok(mut file) = std::fs::File::open(path) {
+    pub(crate) fn load_from_path<P: AsRef<std::path::Path>>(&mut self, path: P) -> bool {
+        // Cap file reads at 50 MB to prevent OOM from maliciously large files.
+        const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024;
+        if let Ok(file) = std::fs::File::open(path) {
             let mut contents = String::new();
             use std::io::Read;
-            if file.read_to_string(&mut contents).is_ok()
+            if file.take(MAX_FILE_SIZE).read_to_string(&mut contents).is_ok()
                 && let Ok(project) = serde_json::from_str::<ProjectFile>(&contents)
             {
                 self.engine.library = project.library;
@@ -65,8 +67,8 @@ impl Editor {
 
         #[cfg(target_os = "android")]
         {
-            // On Android, save to a fixed local file since RFD is not supported
-            let path = std::path::PathBuf::from("project_save.logic");
+            let mut path = get_android_files_dir();
+            path.push("project_save.logic");
             self.save_to_path(path);
         }
     }
@@ -86,9 +88,29 @@ impl Editor {
 
         #[cfg(target_os = "android")]
         {
-            // On Android, load from the fixed local file since RFD is not supported
-            let path = std::path::PathBuf::from("project_save.logic");
+            let mut path = get_android_files_dir();
+            path.push("project_save.logic");
             self.load_from_path(path)
         }
     }
+}
+
+#[cfg(target_os = "android")]
+fn get_android_files_dir() -> std::path::PathBuf {
+    use jni::objects::JObject;
+
+    let get_path = || -> Result<String, Box<dyn std::error::Error>> {
+        let ctx = ndk_context::android_context();
+        let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }?;
+        let mut env = vm.attach_current_thread()?;
+        let context_obj = unsafe { JObject::from_raw(ctx.context() as jni::sys::jobject) };
+        let file_obj = env.call_method(context_obj, "getFilesDir", "()Ljava/io/File;", &[])?.l()?;
+        let path_jstring = env.call_method(file_obj, "getAbsolutePath", "()Ljava/lang/String;", &[])?.l()?;
+        let path: String = env.get_string(path_jstring.into())?.into();
+        Ok(path)
+    };
+
+    get_path()
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
 }

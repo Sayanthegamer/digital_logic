@@ -77,8 +77,16 @@ impl Editor {
     }
 
     fn setup_default_library(&mut self) {
-        // 0: AND (2 NANDs)
-        self.engine.library.push(ChipBlueprint {
+        self.engine.library.push(Self::create_and_blueprint());
+        self.engine.library.push(Self::create_or_blueprint());
+        self.engine.library.push(Self::create_xor_blueprint());
+        self.engine.library.push(Self::create_not_blueprint());
+        self.engine.library.push(Self::create_nor_blueprint());
+        self.engine.library.push(Self::create_xnor_blueprint());
+    }
+
+    fn create_and_blueprint() -> ChipBlueprint {
+        ChipBlueprint {
             name: "AND".to_string(),
             inputs: 2,
             outputs: 1,
@@ -139,10 +147,11 @@ impl Editor {
                     target: TargetPort::ChipOutput(0),
                 },
             ],
-        });
+        }
+    }
 
-        // 1: OR (3 NANDs)
-        self.engine.library.push(ChipBlueprint {
+    fn create_or_blueprint() -> ChipBlueprint {
+        ChipBlueprint {
             name: "OR".to_string(),
             inputs: 2,
             outputs: 1,
@@ -222,10 +231,11 @@ impl Editor {
                     target: TargetPort::ChipOutput(0),
                 },
             ],
-        });
+        }
+    }
 
-        // 2: XOR (4 NANDs)
-        self.engine.library.push(ChipBlueprint {
+    fn create_xor_blueprint() -> ChipBlueprint {
+        ChipBlueprint {
             name: "XOR".to_string(),
             inputs: 2,
             outputs: 1,
@@ -336,10 +346,11 @@ impl Editor {
                     target: TargetPort::ChipOutput(0),
                 },
             ],
-        });
+        }
+    }
 
-        // 3: NOT (1 NAND)
-        self.engine.library.push(ChipBlueprint {
+    fn create_not_blueprint() -> ChipBlueprint {
+        ChipBlueprint {
             name: "NOT".to_string(),
             inputs: 1,
             outputs: 1,
@@ -375,10 +386,11 @@ impl Editor {
                     target: TargetPort::ChipOutput(0),
                 },
             ],
-        });
+        }
+    }
 
-        // 4: NOR (4 NANDs)
-        self.engine.library.push(ChipBlueprint {
+    fn create_nor_blueprint() -> ChipBlueprint {
+        ChipBlueprint {
             name: "NOR".to_string(),
             inputs: 2,
             outputs: 1,
@@ -483,10 +495,11 @@ impl Editor {
                     target: TargetPort::ChipOutput(0),
                 },
             ],
-        });
+        }
+    }
 
-        // 5: XNOR (5 NANDs)
-        self.engine.library.push(ChipBlueprint {
+    fn create_xnor_blueprint() -> ChipBlueprint {
+        ChipBlueprint {
             name: "XNOR".to_string(),
             inputs: 2,
             outputs: 1,
@@ -616,7 +629,7 @@ impl Editor {
                     target: TargetPort::ChipOutput(0),
                 },
             ],
-        });
+        }
     }
 
     pub fn remap_library_chip(&mut self, from: usize, to: usize) {

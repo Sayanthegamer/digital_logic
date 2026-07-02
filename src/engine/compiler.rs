@@ -171,7 +171,7 @@ impl Simulator {
                 return cached;
             }
 
-            let mut current = start_node.clone();
+            let mut current = start_node;
             let mut visited = std::collections::HashSet::new();
             let mut path_nodes = Vec::new();
 
@@ -179,10 +179,10 @@ impl Simulator {
                 if let Some(&cached) = trace_cache.get(&current) {
                     break cached;
                 }
-                if !visited.insert(current.clone()) {
+                if !visited.insert(current) {
                     break OutputSource::Floating;
                 }
-                path_nodes.push(current.clone());
+                path_nodes.push(current);
 
                 match current {
                     TraceNode::ChipInput(idx) => {

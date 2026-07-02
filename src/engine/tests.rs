@@ -716,3 +716,76 @@ fn test_multi_domain_clocks() {
         );
     }
 }
+
+#[test]
+fn test_invalid_nested_component_compile_error() {
+    let mut sim = Simulator::new();
+    
+    // Create a library with a blueprint that has an internal Input/Output component type
+    let library = vec![
+        ChipBlueprint {
+            name: "BadInputChip".to_string(),
+            inputs: 1,
+            outputs: 1,
+            input_names: vec!["IN".to_string()],
+            output_names: vec!["OUT".to_string()],
+            components: vec![
+                Component {
+                    component_type: ComponentType::Input, // Invalid nested component type
+                    pos: (0.0, 0.0),
+                    clock_period: None,
+                }
+            ],
+            connections: vec![],
+        },
+        ChipBlueprint {
+            name: "BadOutputChip".to_string(),
+            inputs: 1,
+            outputs: 1,
+            input_names: vec!["IN".to_string()],
+            output_names: vec!["OUT".to_string()],
+            components: vec![
+                Component {
+                    component_type: ComponentType::Output, // Invalid nested component type
+                    pos: (0.0, 0.0),
+                    clock_period: None,
+                }
+            ],
+            connections: vec![],
+        }
+    ];
+
+    let mut active_clocks = Vec::new();
+    let mut inst_map = std::collections::HashMap::new();
+    let mut inst_outs = std::collections::HashMap::new();
+    
+    // Compiling BadInputChip should fail with the exact error message
+    let res_in = sim.instantiate_chip_with_mapping(
+        0,
+        &library,
+        &[],
+        &mut inst_map,
+        &mut inst_outs,
+        &mut active_clocks,
+    );
+    assert!(res_in.is_err());
+    assert_eq!(
+        res_in.unwrap_err(),
+        "Blueprint components cannot contain top-level Input or Output internally"
+    );
+
+    // Compiling BadOutputChip should also fail with the exact error message
+    let res_out = sim.instantiate_chip_with_mapping(
+        1,
+        &library,
+        &[],
+        &mut inst_map,
+        &mut inst_outs,
+        &mut active_clocks,
+    );
+    assert!(res_out.is_err());
+    assert_eq!(
+        res_out.unwrap_err(),
+        "Blueprint components cannot contain top-level Input or Output internally"
+    );
+}
