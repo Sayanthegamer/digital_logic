@@ -108,7 +108,12 @@ fn get_android_files_dir() -> std::path::PathBuf {
         let mut env = vm.attach_current_thread()?;
         let context_obj = unsafe { JObject::from_raw(ctx.context() as jni::sys::jobject) };
         let file_obj = env
-            .call_method(context_obj, "getFilesDir", "()Ljava/io/File;", &[])?
+            .call_method(
+                context_obj,
+                "getExternalFilesDir",
+                "(Ljava/lang/String;)Ljava/io/File;",
+                &[jni::objects::JValue::Object(JObject::null().as_ref())],
+            )?
             .l()?;
         let path_jstring = env
             .call_method(file_obj, "getAbsolutePath", "()Ljava/lang/String;", &[])?

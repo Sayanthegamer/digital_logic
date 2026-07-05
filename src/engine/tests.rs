@@ -935,4 +935,3 @@ fn test_seven_segment_8th_input_port_compiles() {
     // Ensure the 8th input (port 7) has a concrete target (the internal sink gate).
     assert_eq!(interface.inputs[7].len(), 1);
 }
-
