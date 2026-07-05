@@ -316,7 +316,7 @@ fn test_save_load_project() {
     temp_path.push("test_logic_simulator_project_save.json");
 
     // Save project
-    editor.save_to_path(&temp_path);
+    editor.save_to_path(&temp_path).unwrap();
     assert!(temp_path.exists());
 
     // Create a new editor and load
