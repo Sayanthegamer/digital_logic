@@ -1,4 +1,6 @@
-use crate::engine::ChipBlueprint;
+use crate::engine::{ChipBlueprint, ComponentType};
+use crate::editor::color_coding::ColorOverrides;
+use crate::editor::global_library;
 
 use super::Editor;
 use super::types::*;
@@ -10,6 +12,9 @@ pub struct ProjectFile {
     pub connections: Vec<VisualConnection>,
     pub next_component_id: usize,
     pub annotations: Vec<TextAnnotation>,
+    /// Per-component and per-wire colour overrides (backward compat: defaults to empty)
+    #[serde(default)]
+    pub color_overrides: ColorOverrides,
 }
 
 impl Editor {
@@ -23,6 +28,7 @@ impl Editor {
             connections: self.connections.clone(),
             next_component_id: self.next_component_id,
             annotations: self.annotations.clone(),
+            color_overrides: self.color_overrides.clone(),
         };
 
         let serialized = serde_json::to_string_pretty(&project)?;
@@ -44,11 +50,28 @@ impl Editor {
                 .is_ok()
                 && let Ok(project) = serde_json::from_str::<ProjectFile>(&contents)
             {
-                self.engine.library = project.library;
+                // Import project-local chips into the global library and get index mapping
+                let index_map = self.global_library.import_from_project(&project.library);
+                global_library::save_global_library(&self.global_library);
+
+                // Rebuild engine library from global library
+                self.engine.library = self.global_library.to_flat_list();
+
                 self.components = project.components;
+
+                // Remap subchip indices of loaded components to match the new flat library indices
+                for comp in &mut self.components {
+                    if let ComponentType::SubChip(ref mut sub_idx) = comp.comp_type {
+                        if let Some(&new_sub_idx) = index_map.get(sub_idx) {
+                            *sub_idx = new_sub_idx;
+                        }
+                    }
+                }
+
                 self.connections = project.connections;
                 self.next_component_id = project.next_component_id;
                 self.annotations = project.annotations;
+                self.color_overrides = project.color_overrides;
                 self.canvas.selected_comp_id = None;
                 self.canvas.selected_annotation_idx = None;
                 self.canvas.inspection_path.clear();

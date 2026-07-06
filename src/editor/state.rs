@@ -1,3 +1,4 @@
+use crate::editor::color_coding::ContextMenuTarget;
 use crate::editor::types::{ActiveTool, VisualConnection};
 use crate::engine::{ChipBlueprint, CompiledClock, OutputSource, Simulator};
 use macroquad::prelude::Vec2;
@@ -68,6 +69,7 @@ pub enum AppMode {
     MainMenu,
     Editor,
     ManageChips,
+    GlobalLibraryManager,
     Credits,
 }
 
@@ -98,6 +100,14 @@ pub struct UiState {
     // Custom chips DND state
     pub dragging_catalog_idx: Option<usize>,
     pub drag_hovered_idx: Option<usize>,
+
+    // Global library manager state
+    pub global_lib_selected_folder: Option<usize>,
+
+    // Context menu state (right-click on chip/wire)
+    pub show_context_menu: Option<ContextMenuTarget>,
+    pub context_menu_pos: (f32, f32),
+    pub context_menu_color: [f32; 4],
 }
 
 impl Default for UiState {
@@ -124,6 +134,10 @@ impl Default for UiState {
             canvas_viewport: None,
             dragging_catalog_idx: None,
             drag_hovered_idx: None,
+            global_lib_selected_folder: None,
+            show_context_menu: None,
+            context_menu_pos: (0.0, 0.0),
+            context_menu_color: [0.4, 0.45, 0.85, 1.0],
         }
     }
 }
@@ -171,6 +185,9 @@ pub struct CanvasState {
     // Sub-chip editing state
     pub editing_target: EditingTarget,
     pub stashed_main_canvas: Option<CanvasSnapshot>,
+
+    // Right-click context menu detection
+    pub right_drag_dist: f32,
 }
 
 impl Default for CanvasState {
@@ -203,6 +220,7 @@ impl Default for CanvasState {
             inspection_camera_stack: Vec::new(),
             editing_target: EditingTarget::MainCanvas,
             stashed_main_canvas: None,
+            right_drag_dist: 0.0,
         }
     }
 }

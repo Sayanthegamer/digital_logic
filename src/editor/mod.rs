@@ -1,7 +1,9 @@
 mod canvas;
+pub mod color_coding;
 mod drawing;
 mod drawing_shapes;
 mod drawing_wires;
+pub mod global_library;
 pub mod gui;
 mod history;
 mod input;
@@ -12,8 +14,10 @@ pub mod state;
 pub mod theme;
 pub mod types;
 mod ui_catalog;
+mod ui_global_library;
 mod ui_main_menu;
 mod ui_properties;
+mod wire_junctions;
 
 #[cfg(test)]
 mod tests;
@@ -40,6 +44,12 @@ pub struct Editor {
     pub ui: UiState,
     pub canvas: CanvasState,
     pub history: state::HistoryManager,
+
+    // Global chip library (persisted across projects)
+    pub global_library: global_library::GlobalLibrary,
+
+    // Per-component and per-wire colour overrides
+    pub color_overrides: color_coding::ColorOverrides,
 }
 
 impl Default for Editor {
@@ -68,10 +78,19 @@ impl Editor {
             ui: UiState::default(),
             canvas: CanvasState::default(),
             history: state::HistoryManager::default(),
+            global_library: global_library::load_global_library(),
+            color_overrides: color_coding::ColorOverrides::default(),
         };
 
-        // Add some basic chips to the library as initial examples
-        editor.setup_default_library();
+        // If global library has chips, use them; otherwise set up defaults and save
+        if editor.global_library.to_flat_list().is_empty() {
+            editor.setup_default_library();
+            // Save default chips to global library
+            editor.global_library.import_from_project(&editor.engine.library);
+            global_library::save_global_library(&editor.global_library);
+        } else {
+            editor.engine.library = editor.global_library.to_flat_list();
+        }
         editor.compile();
         editor
     }

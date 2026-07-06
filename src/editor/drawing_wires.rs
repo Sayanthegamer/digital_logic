@@ -39,13 +39,17 @@ impl Editor {
         tgt_pos: Vec2,
         wire_state: u8,
         is_selected: bool,
+        color_override: Option<Color>,
     ) {
-        let (color, thickness, is_active) = match wire_state {
+        let (base_color, thickness, is_active) = match wire_state {
             0b00 => (theme::ACCENT_GENERIC.mq(), 1.3 * self.canvas.zoom, false),
             0b01 => (theme::ACCENT_INACTIVE.mq(), 1.6 * self.canvas.zoom, false),
             0b10 => (theme::ACCENT_PRIMARY.mq(), 2.2 * self.canvas.zoom, true),
             _ => (theme::COMP_NAND.mq(), 2.8 * self.canvas.zoom, true),
         };
+
+        // Use color override if provided, otherwise use state-based color
+        let color = color_override.unwrap_or(base_color);
 
         // Active glow bloom effect under active wires
         if is_active || is_selected {

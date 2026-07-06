@@ -57,6 +57,9 @@ impl Editor {
                 AppMode::ManageChips => {
                     self.draw_manage_chips(ctx);
                 }
+                AppMode::GlobalLibraryManager => {
+                    self.draw_global_library_manager(ctx);
+                }
                 AppMode::Editor => {}
             }
 
@@ -114,12 +117,158 @@ impl Editor {
             } // END OF is_editor BLOCK
 
             self.draw_settings_dialog(ctx);
+            self.draw_context_menu(ctx);
 
             egui_wants_pointer = ctx.wants_pointer_input()
                 || ctx.wants_keyboard_input()
                 || ctx.is_pointer_over_area();
         });
         self.ui.egui_wants_pointer = egui_wants_pointer;
+    }
+
+    fn draw_context_menu(&mut self, ctx: &egui::Context) {
+        if self.ui.show_context_menu.is_none() {
+            return;
+        }
+
+        let target = self.ui.show_context_menu.clone().unwrap();
+        let mut keep_open = true;
+
+        let pos = egui::pos2(self.ui.context_menu_pos.0, self.ui.context_menu_pos.1);
+
+        egui::Window::new("Context Menu")
+            .fixed_pos(pos)
+            .collapsible(false)
+            .title_bar(false)
+            .resizable(false)
+            .auto_sized()
+            .frame(
+                egui::Frame::window(&ctx.style())
+                    .fill(egui::Color32::from_rgba_unmultiplied(25, 28, 32, 240)),
+            )
+            .show(ctx, |ui| {
+                match &target {
+                    crate::editor::color_coding::ContextMenuTarget::Component(comp_id) => {
+                        let comp_id = *comp_id;
+                        ui.label(
+                            egui::RichText::new(format!("{} Component Color", theme::ICON_EDIT))
+                                .strong()
+                                .color(theme::TEXT_PRIMARY.egui()),
+                        );
+                        ui.add_space(4.0);
+
+                        if ui
+                            .color_edit_button_rgba_unmultiplied(&mut self.ui.context_menu_color)
+                            .changed()
+                        {
+                            self.color_overrides
+                                .set_component_color(comp_id, Some(self.ui.context_menu_color));
+                        }
+
+                        ui.add_space(4.0);
+
+                        // Preset colors row
+                        ui.horizontal(|ui| {
+                            let presets: &[[f32; 4]] = &[
+                                [1.0, 0.55, 0.15, 1.0],  // Amber
+                                [0.00, 0.70, 1.00, 1.0], // Cyan
+                                [0.15, 0.85, 0.40, 1.0], // Green
+                                [0.90, 0.22, 0.27, 1.0], // Red
+                                [0.40, 0.45, 0.85, 1.0], // Indigo
+                                [0.85, 0.60, 0.90, 1.0], // Purple
+                                [1.0, 0.85, 0.20, 1.0],  // Yellow
+                                [0.95, 0.50, 0.60, 1.0], // Pink
+                            ];
+                            for preset in presets {
+                                let c = egui::Color32::from_rgba_unmultiplied(
+                                    (preset[0] * 255.0) as u8,
+                                    (preset[1] * 255.0) as u8,
+                                    (preset[2] * 255.0) as u8,
+                                    255,
+                                );
+                                if ui
+                                    .add(egui::Button::new("  ").fill(c))
+                                    .clicked()
+                                {
+                                    self.ui.context_menu_color = *preset;
+                                    self.color_overrides
+                                        .set_component_color(comp_id, Some(*preset));
+                                }
+                            }
+                        });
+
+                        ui.add_space(4.0);
+                        if ui.button(format!("{} Reset Color", theme::ICON_CLEAR)).clicked() {
+                            self.color_overrides.set_component_color(comp_id, None);
+                            keep_open = false;
+                        }
+                    }
+                    crate::editor::color_coding::ContextMenuTarget::Wire(conn) => {
+                        let conn = *conn;
+                        ui.label(
+                            egui::RichText::new(format!("{} Wire Color", theme::ICON_EDIT))
+                                .strong()
+                                .color(theme::TEXT_PRIMARY.egui()),
+                        );
+                        ui.add_space(4.0);
+
+                        if ui
+                            .color_edit_button_rgba_unmultiplied(&mut self.ui.context_menu_color)
+                            .changed()
+                        {
+                            self.color_overrides
+                                .set_wire_color(&conn, Some(self.ui.context_menu_color));
+                        }
+
+                        ui.add_space(4.0);
+
+                        // Preset colors row
+                        ui.horizontal(|ui| {
+                            let presets: &[[f32; 4]] = &[
+                                [1.0, 0.55, 0.15, 1.0],  // Amber
+                                [0.00, 0.70, 1.00, 1.0], // Cyan
+                                [0.15, 0.85, 0.40, 1.0], // Green
+                                [0.90, 0.22, 0.27, 1.0], // Red
+                                [0.40, 0.45, 0.85, 1.0], // Indigo
+                                [0.85, 0.60, 0.90, 1.0], // Purple
+                                [1.0, 0.85, 0.20, 1.0],  // Yellow
+                                [0.95, 0.50, 0.60, 1.0], // Pink
+                            ];
+                            for preset in presets {
+                                let c = egui::Color32::from_rgba_unmultiplied(
+                                    (preset[0] * 255.0) as u8,
+                                    (preset[1] * 255.0) as u8,
+                                    (preset[2] * 255.0) as u8,
+                                    255,
+                                );
+                                if ui
+                                    .add(egui::Button::new("  ").fill(c))
+                                    .clicked()
+                                {
+                                    self.ui.context_menu_color = *preset;
+                                    self.color_overrides
+                                        .set_wire_color(&conn, Some(*preset));
+                                }
+                            }
+                        });
+
+                        ui.add_space(4.0);
+                        if ui.button(format!("{} Reset Color", theme::ICON_CLEAR)).clicked() {
+                            self.color_overrides.set_wire_color(&conn, None);
+                            keep_open = false;
+                        }
+                    }
+                }
+
+                ui.add_space(4.0);
+                if ui.button(format!("{} Close", theme::ICON_CLOSE)).clicked() {
+                    keep_open = false;
+                }
+            });
+
+        if !keep_open {
+            self.ui.show_context_menu = None;
+        }
     }
 
     fn draw_mobile_editor_ui(&mut self, ctx: &egui::Context) {

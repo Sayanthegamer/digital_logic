@@ -211,7 +211,7 @@ impl Editor {
             };
 
             let state = self.get_raw_node_state_at_path(&src_node, &self.canvas.inspection_path);
-            self.draw_manhattan_wire(src_pos, tgt_pos, state, false);
+            self.draw_manhattan_wire(src_pos, tgt_pos, state, false, None);
         }
 
         // Draw internal components

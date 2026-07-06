@@ -98,7 +98,7 @@ impl Editor {
                             self.ui.mode = AppMode::Editor;
                         }
                     } else if clicked_manage {
-                        self.ui.mode = AppMode::ManageChips;
+                        self.ui.mode = AppMode::GlobalLibraryManager;
                     } else if clicked_settings {
                         self.ui.show_settings = true;
                         self.ui.temp_is_fullscreen = self.ui.is_fullscreen;

@@ -32,6 +32,9 @@ pub struct VisualComponent {
     pub height: f32,
     pub label: String,
     pub clock_period: Option<usize>, // Localized period in ticks (only for Clock)
+    /// Per-component colour override (RGBA). None = use theme default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<[f32; 4]>,
 }
 
 impl VisualComponent {
@@ -80,6 +83,17 @@ pub struct VisualConnection {
     pub src_port: usize,
     pub tgt_comp_id: usize,
     pub tgt_port: usize,
+}
+
+impl VisualConnection {
+    /// Per-wire colour override (RGBA). Stored externally in ColorOverrides.
+    /// This method is just documentation for the pattern.
+    pub fn color_key(&self) -> String {
+        format!(
+            "{},{},{},{}",
+            self.src_comp_id, self.src_port, self.tgt_comp_id, self.tgt_port
+        )
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

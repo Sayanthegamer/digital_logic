@@ -563,6 +563,7 @@ impl Editor {
                 height,
                 label,
                 clock_period: comp.clock_period,
+                color: None,
             });
             bp_comp_idx_to_visual_id.insert(i, vis_id);
         }
@@ -589,6 +590,7 @@ impl Editor {
                 height: 40.0,
                 label,
                 clock_period: None,
+                color: None,
             });
             bp_in_to_visual_id.insert(i, vis_id);
         }
@@ -613,6 +615,7 @@ impl Editor {
                 height: 40.0,
                 label,
                 clock_period: None,
+                color: None,
             });
             bp_out_to_visual_id.insert(i, vis_id);
         }

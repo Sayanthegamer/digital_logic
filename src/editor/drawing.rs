@@ -83,9 +83,14 @@ impl Editor {
                 };
 
                 let is_selected = self.canvas.selected_connections.contains(wire);
-                self.draw_manhattan_wire(src_pos, tgt_pos, wire_state, is_selected);
+                let wire_color_override = self.color_overrides.get_wire_color(wire);
+                self.draw_manhattan_wire(src_pos, tgt_pos, wire_state, is_selected, wire_color_override);
             }
         }
+
+        // 1.1 Draw Wire Junction/Crossing Indicators
+        let intersections = self.find_wire_intersections();
+        self.draw_wire_junctions(&intersections);
 
         // Draw active wire drag preview
         if let Some((src_id, src_port)) = self.canvas.active_wire_drag
@@ -295,20 +300,24 @@ impl Editor {
             );
 
             // Draw Top Accent Stripe
-            let accent_color = match comp.comp_type {
-                ComponentType::Nand => theme::COMP_NAND.mq(), // Amber orange
-                ComponentType::Clock => theme::ACCENT_PRIMARY.mq(), // Electric sky blue
-                ComponentType::Input | ComponentType::Output => {
-                    if is_input_active {
-                        theme::ACCENT_ACTIVE.mq() // Active green
-                    } else {
-                        theme::ACCENT_GENERIC.mq() // Muted gray
+            let accent_color = if let Some(color_override) = comp.color.map(|c| Color::new(c[0], c[1], c[2], c[3])).or_else(|| self.color_overrides.get_component_color(comp.id)) {
+                color_override
+            } else {
+                match comp.comp_type {
+                    ComponentType::Nand => theme::COMP_NAND.mq(), // Amber orange
+                    ComponentType::Clock => theme::ACCENT_PRIMARY.mq(), // Electric sky blue
+                    ComponentType::Input | ComponentType::Output => {
+                        if is_input_active {
+                            theme::ACCENT_ACTIVE.mq() // Active green
+                        } else {
+                            theme::ACCENT_GENERIC.mq() // Muted gray
+                        }
                     }
+                    ComponentType::SubChip(_) => theme::COMP_SUBCHIP.mq(), // Royal indigo
+                    ComponentType::SevenSegment => theme::COMP_SEVENSEG.mq(),
+                    ComponentType::TriStateBuffer => theme::COMP_NAND.mq(),
+                    ComponentType::Junction => theme::ACCENT_GENERIC.mq(),
                 }
-                ComponentType::SubChip(_) => theme::COMP_SUBCHIP.mq(), // Royal indigo
-                ComponentType::SevenSegment => theme::COMP_SEVENSEG.mq(),
-                ComponentType::TriStateBuffer => theme::COMP_NAND.mq(),
-                ComponentType::Junction => theme::ACCENT_GENERIC.mq(),
             };
             let stripe_height = 4.0 * self.canvas.zoom;
             draw_rounded_rect(

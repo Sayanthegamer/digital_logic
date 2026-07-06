@@ -245,7 +245,10 @@ impl Editor {
                             && let Some(new_bp) = self.package_current_canvas()
                         {
                             self.push_history_snapshot();
-                            self.engine.library.push(new_bp);
+                            // Add to global library and sync
+                            self.global_library.ungrouped.push(new_bp);
+                            crate::editor::global_library::save_global_library(&self.global_library);
+                            self.engine.library = self.global_library.to_flat_list();
                             self.components.clear();
                             self.connections.clear();
                             self.compile();

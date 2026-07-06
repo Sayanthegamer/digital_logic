@@ -14,6 +14,12 @@ impl Editor {
     }
 
     pub fn update(&mut self) {
+        if self.ui.mode != crate::editor::state::AppMode::Editor {
+            // Reset right drag tracking when entering/leaving menus
+            self.canvas.right_drag_dist = 0.0;
+            return;
+        }
+
         let mouse_pos_screen = mouse_position().into();
         let mouse_pos_world = self.to_world_space(mouse_pos_screen);
 
@@ -50,6 +56,9 @@ impl Editor {
         self.update_resolution_revert_timer();
 
         self.canvas.last_mouse_pos = mouse_pos_screen;
+
+        // 9. Right-click context menu detection
+        self.handle_right_click_context_menu(mouse_pos_world, egui_wants_pointer);
     }
 
     fn handle_touch_input(&mut self, egui_wants_pointer: bool) {
@@ -238,6 +247,76 @@ impl Editor {
         if !egui_wants_pointer && is_mouse_button_down(MouseButton::Right) {
             self.canvas.pan += mouse_delta;
             self.canvas.selected_tool = None;
+            // Track right-drag distance for context menu detection
+            self.canvas.right_drag_dist += mouse_delta.length();
+        }
+        if !egui_wants_pointer && is_mouse_button_pressed(MouseButton::Right) {
+            self.canvas.right_drag_dist = 0.0;
+        }
+    }
+
+    fn handle_right_click_context_menu(&mut self, mouse_pos_world: Vec2, egui_wants_pointer: bool) {
+        if egui_wants_pointer || !self.canvas.inspection_path.is_empty() {
+            return;
+        }
+
+        if is_mouse_button_released(MouseButton::Right) && self.canvas.right_drag_dist < 5.0 {
+            // Short right-click — check if over a component
+            for comp in &self.components {
+                if mouse_pos_world.x >= comp.pos.x
+                    && mouse_pos_world.x <= comp.pos.x + comp.width
+                    && mouse_pos_world.y >= comp.pos.y
+                    && mouse_pos_world.y <= comp.pos.y + comp.height
+                {
+                    let screen_pos = self.to_screen_space(mouse_pos_world);
+                    self.ui.context_menu_pos = (screen_pos.x, screen_pos.y);
+                    // Initialize picker with current override or default
+                    self.ui.context_menu_color = self
+                        .color_overrides
+                        .get_component_color(comp.id)
+                        .map(|c| [c.r, c.g, c.b, c.a])
+                        .unwrap_or([0.4, 0.45, 0.85, 1.0]);
+                    self.ui.show_context_menu = Some(
+                        crate::editor::color_coding::ContextMenuTarget::Component(comp.id),
+                    );
+                    return;
+                }
+            }
+
+            // Check if over a wire
+            let comp_by_id: std::collections::HashMap<usize, &super::types::VisualComponent> =
+                self.components.iter().map(|c| (c.id, c)).collect();
+            for conn in &self.connections {
+                let (src_comp_opt, tgt_comp_opt) = (
+                    comp_by_id.get(&conn.src_comp_id),
+                    comp_by_id.get(&conn.tgt_comp_id),
+                );
+                if let (Some(&src), Some(&tgt)) = (src_comp_opt, tgt_comp_opt) {
+                    let (_, outputs) = self.get_component_ports_count(src.comp_type);
+                    let (inputs, _) = self.get_component_ports_count(tgt.comp_type);
+                    let src_pos = src.output_port_pos(conn.src_port, outputs);
+                    let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
+
+                    if self.hit_test_manhattan_wire(
+                        src_pos,
+                        tgt_pos,
+                        mouse_pos_world,
+                        10.0 / self.canvas.zoom,
+                    ) {
+                        let screen_pos = self.to_screen_space(mouse_pos_world);
+                        self.ui.context_menu_pos = (screen_pos.x, screen_pos.y);
+                        self.ui.context_menu_color = self
+                            .color_overrides
+                            .get_wire_color(conn)
+                            .map(|c| [c.r, c.g, c.b, c.a])
+                            .unwrap_or([0.4, 0.45, 0.85, 1.0]);
+                        self.ui.show_context_menu = Some(
+                            crate::editor::color_coding::ContextMenuTarget::Wire(*conn),
+                        );
+                        return;
+                    }
+                }
+            }
         }
     }
 
@@ -447,6 +526,7 @@ impl Editor {
                                 height,
                                 label,
                                 clock_period,
+                                color: None,
                             });
                             self.canvas.selected_comp_id = Some(new_id);
                             self.canvas.selected_comp_ids.clear();
