@@ -76,6 +76,36 @@ impl Editor {
                             ComponentType::Junction,
                         ));
                     }
+                    if (search.is_empty() || "bus joiner".contains(&search))
+                        && ui
+                            .selectable_label(
+                                self.canvas.selected_tool
+                                    == Some(super::types::ActiveTool::PlaceComponent(
+                                        ComponentType::BusJoiner,
+                                    )),
+                                format!("{} Bus Joiner", theme::ICON_SETTINGS),
+                            )
+                            .clicked()
+                    {
+                        self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(
+                            ComponentType::BusJoiner,
+                        ));
+                    }
+                    if (search.is_empty() || "bus splitter".contains(&search))
+                        && ui
+                            .selectable_label(
+                                self.canvas.selected_tool
+                                    == Some(super::types::ActiveTool::PlaceComponent(
+                                        ComponentType::BusSplitter,
+                                    )),
+                                format!("{} Bus Splitter", theme::ICON_SETTINGS),
+                            )
+                            .clicked()
+                    {
+                        self.canvas.selected_tool = Some(super::types::ActiveTool::PlaceComponent(
+                            ComponentType::BusSplitter,
+                        ));
+                    }
                     if (search.is_empty() || "tri-state buffer".contains(&search))
                         && ui
                             .selectable_label(

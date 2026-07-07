@@ -2,11 +2,19 @@ use crate::editor::theme;
 use crate::engine::ComponentType;
 use macroquad::prelude::*;
 
+use crate::editor::types::VisualConnection;
 use super::Editor;
 
 use crate::editor::drawing_shapes::*;
 
 impl Editor {
+    pub fn is_bus_connection(&self, conn: &VisualConnection) -> bool {
+        let src_comp = self.components.iter().find(|c| c.id == conn.src_comp_id);
+        let tgt_comp = self.components.iter().find(|c| c.id == conn.tgt_comp_id);
+        src_comp.map_or(false, |c| c.comp_type == ComponentType::BusJoiner && conn.src_port == 0)
+            || tgt_comp.map_or(false, |c| c.comp_type == ComponentType::BusSplitter && conn.tgt_port == 0)
+    }
+
     pub fn draw(&mut self) {
         // Clear background with dark slate-navy
         clear_background(theme::BG_CANVAS.mq());
@@ -48,8 +56,8 @@ impl Editor {
             let tgt_comp = self.components.iter().find(|c| c.id == wire.tgt_comp_id);
 
             if let (Some(src), Some(tgt)) = (src_comp, tgt_comp) {
-                let (_, src_outputs) = self.get_component_ports_count(src.comp_type);
-                let (tgt_inputs, _) = self.get_component_ports_count(tgt.comp_type);
+                let (_, src_outputs) = self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
+                let (tgt_inputs, _) = self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
 
                 let src_pos = self.to_screen_space(src.output_port_pos(wire.src_port, src_outputs));
                 let tgt_pos = self.to_screen_space(tgt.input_port_pos(wire.tgt_port, tgt_inputs));
@@ -84,7 +92,17 @@ impl Editor {
 
                 let is_selected = self.canvas.selected_connections.contains(wire);
                 let wire_color_override = self.color_overrides.get_wire_color(wire);
-                self.draw_manhattan_wire(src_pos, tgt_pos, wire_state, is_selected, wire_color_override);
+                let offset = self.get_connection_routing_offset(wire);
+                let is_bus = self.is_bus_connection(wire);
+                self.draw_manhattan_wire(
+                    src_pos,
+                    tgt_pos,
+                    offset,
+                    wire_state,
+                    is_selected,
+                    wire_color_override,
+                    is_bus,
+                );
             }
         }
 
@@ -93,21 +111,29 @@ impl Editor {
         self.draw_wire_junctions(&intersections);
 
         // Draw active wire drag preview
-        if let Some((src_id, src_port)) = self.canvas.active_wire_drag
+        if let Some((src_id, src_port, src_is_input)) = self.canvas.active_wire_drag
             && let Some(src) = self.components.iter().find(|c| c.id == src_id)
         {
-            let (_, src_outputs) = self.get_component_ports_count(src.comp_type);
-            let start_pos = self.to_screen_space(src.output_port_pos(src_port, src_outputs));
+            let (src_inputs, src_outputs) = self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
+            let start_pos = if src_is_input {
+                self.to_screen_space(src.input_port_pos(src_port, src_inputs))
+            } else {
+                self.to_screen_space(src.output_port_pos(src_port, src_outputs))
+            };
             let mut end_pos: Vec2 = mouse_position().into();
 
             // Magnetic Snapping
-            if let Some((tgt_id, tgt_port, is_input)) = self.canvas.hovered_port
-                && is_input
+            if let Some((tgt_id, tgt_port, tgt_is_input)) = self.canvas.hovered_port
+                && tgt_is_input != src_is_input
                 && tgt_id != src_id
                 && let Some(tgt_comp) = self.components.iter().find(|c| c.id == tgt_id)
             {
-                let (inputs_count, _) = self.get_component_ports_count(tgt_comp.comp_type);
-                end_pos = self.to_screen_space(tgt_comp.input_port_pos(tgt_port, inputs_count));
+                let (tgt_inputs, tgt_outputs) = self.get_component_ports_count_with_width(tgt_comp.comp_type, Some(tgt_comp.bus_width()));
+                end_pos = if tgt_is_input {
+                    self.to_screen_space(tgt_comp.input_port_pos(tgt_port, tgt_inputs))
+                } else {
+                    self.to_screen_space(tgt_comp.output_port_pos(tgt_port, tgt_outputs))
+                };
             }
 
             draw_line(
@@ -316,7 +342,9 @@ impl Editor {
                     ComponentType::SubChip(_) => theme::COMP_SUBCHIP.mq(), // Royal indigo
                     ComponentType::SevenSegment => theme::COMP_SEVENSEG.mq(),
                     ComponentType::TriStateBuffer => theme::COMP_NAND.mq(),
-                    ComponentType::Junction => theme::ACCENT_GENERIC.mq(),
+                    ComponentType::Junction
+                    | ComponentType::BusJoiner
+                    | ComponentType::BusSplitter => theme::ACCENT_GENERIC.mq(),
                 }
             };
             let stripe_height = 4.0 * self.canvas.zoom;
@@ -381,7 +409,7 @@ impl Editor {
             }
 
             // Draw port circles
-            let (inputs_count, outputs_count) = self.get_component_ports_count(comp.comp_type);
+            let (inputs_count, outputs_count) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
             let port_radius = 4.0 * self.canvas.zoom;
 
             let mut seg_states = [false; 8];
@@ -599,13 +627,12 @@ impl Editor {
 
                 // Segment "minus" (port 7)
                 // Port ordering: A, B, C, D, E, F, G, minus
-                let minus_w = w * 0.6;
-                let minus_y = cy + h; // between middle and bottom
+                // Positioned to the left of the digit (as a negative sign indicator)
                 draw_line(
-                    cx - minus_w,
-                    minus_y,
-                    cx + minus_w,
-                    minus_y,
+                    cx - w - 20.0 * self.canvas.zoom,
+                    cy,
+                    cx - w - 10.0 * self.canvas.zoom,
+                    cy,
                     thick,
                     seg_color(seg_states[7]),
                 );
@@ -648,7 +675,7 @@ impl Editor {
         if let Some((comp_id, port_idx, is_input)) = self.canvas.hovered_port
             && let Some(comp) = self.components.iter().find(|c| c.id == comp_id)
         {
-            let (inputs_count, outputs_count) = self.get_component_ports_count(comp.comp_type);
+            let (inputs_count, outputs_count) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
             let pos = if is_input {
                 self.to_screen_space(comp.input_port_pos(port_idx, inputs_count))
             } else {

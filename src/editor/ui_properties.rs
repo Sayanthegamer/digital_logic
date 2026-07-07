@@ -73,6 +73,7 @@ impl Editor {
             let mut trigger_history = false;
             let mut new_label: Option<String> = None;
             let mut new_period: Option<usize> = None;
+            let mut new_bus_width: Option<usize> = None;
             let mut do_inspection = false;
 
             if let Some(sel_id) = self.canvas.selected_comp_id {
@@ -134,6 +135,31 @@ impl Editor {
                             });
                     }
 
+                    if let ComponentType::BusJoiner | ComponentType::BusSplitter = comp.comp_type {
+                        ui.add_space(5.0);
+                        egui::CollapsingHeader::new("Bus Properties")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                egui::Grid::new("comp_bus_grid")
+                                    .num_columns(2)
+                                    .spacing([10.0, 10.0])
+                                    .show(ui, |ui| {
+                                        ui.label("Width (bits):");
+                                        let mut width = comp.bus_width();
+                                        let response = ui.add(
+                                            egui::Slider::new(&mut width, 2..=16).text("bits"),
+                                        );
+                                        if response.drag_started() {
+                                            trigger_history = true;
+                                        }
+                                        if response.changed() {
+                                            new_bus_width = Some(width);
+                                        }
+                                        ui.end_row();
+                                    });
+                            });
+                    }
+
                     if let ComponentType::SubChip(bp_idx) = comp.comp_type {
                         ui.add_space(5.0);
                         egui::CollapsingHeader::new("Actions")
@@ -172,9 +198,10 @@ impl Editor {
                 self.center_camera_on_inspection_view();
             }
 
-            if (new_label.is_some() || new_period.is_some())
+            if (new_label.is_some() || new_period.is_some() || new_bus_width.is_some())
                 && let Some(sel_id) = self.canvas.selected_comp_id
             {
+                let mut size_changed = false;
                 for c in &mut self.components {
                     if c.id == sel_id {
                         if let Some(ref l) = new_label {
@@ -191,8 +218,38 @@ impl Editor {
                                 active_clk.period = p;
                             }
                         }
+                        if let Some(w) = new_bus_width {
+                            c.clock_period = Some(w);
+                            c.width = 50.0;
+                            c.height = 40.0 + (w as f32 * 16.0);
+                            size_changed = true;
+                        }
                     }
                 }
+
+                if size_changed {
+                    let (ins, outs) = if let Some(comp) = self.components.iter().find(|c| c.id == sel_id) {
+                        self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()))
+                    } else {
+                        (0, 0)
+                    };
+
+                    self.connections.retain(|conn| {
+                        let src_ok = if conn.src_comp_id == sel_id {
+                            conn.src_port < outs
+                        } else {
+                            true
+                        };
+                        let tgt_ok = if conn.tgt_comp_id == sel_id {
+                            conn.tgt_port < ins
+                        } else {
+                            true
+                        };
+                        src_ok && tgt_ok
+                    });
+                }
+
+                self.compile();
             }
 
             let mut delete_annotation_idx = None;

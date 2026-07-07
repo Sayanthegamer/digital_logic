@@ -210,8 +210,22 @@ impl Editor {
                 },
             };
 
+            let offset = self.get_blueprint_connection_routing_offset(conn, &blueprint);
             let state = self.get_raw_node_state_at_path(&src_node, &self.canvas.inspection_path);
-            self.draw_manhattan_wire(src_pos, tgt_pos, state, false, None);
+            let is_bus = match conn.source {
+                SourcePort::ComponentOutput { component_idx, port_idx } => {
+                    let comp = &internal_components[component_idx];
+                    comp.component_type == ComponentType::BusJoiner && port_idx == 0
+                }
+                _ => false,
+            } || match conn.target {
+                TargetPort::ComponentInput { component_idx, port_idx } => {
+                    let comp = &internal_components[component_idx];
+                    comp.component_type == ComponentType::BusSplitter && port_idx == 0
+                }
+                _ => false,
+            };
+            self.draw_manhattan_wire(src_pos, tgt_pos, offset, state, false, None, is_bus);
         }
 
         // Draw internal components
@@ -265,7 +279,9 @@ impl Editor {
                 ComponentType::SubChip(_) => theme::COMP_SUBCHIP.mq(),
                 ComponentType::SevenSegment => theme::COMP_SEVENSEG.mq(),
                 ComponentType::TriStateBuffer => theme::COMP_NAND.mq(),
-                ComponentType::Junction => theme::ACCENT_GENERIC.mq(),
+                ComponentType::Junction
+                | ComponentType::BusJoiner
+                | ComponentType::BusSplitter => theme::ACCENT_GENERIC.mq(),
             };
             let stripe_height = 4.0 * self.canvas.zoom;
             draw_rectangle(

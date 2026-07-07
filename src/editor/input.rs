@@ -30,12 +30,13 @@ impl Editor {
         };
 
         let egui_wants_pointer = self.ui.egui_wants_pointer;
+        let egui_wants_keyboard = self.ui.egui_wants_keyboard;
 
         // 1. Touch Input Abstraction (Mobile)
         self.handle_touch_input(egui_wants_pointer);
 
         // 2. Keyboard & Tool Shortcuts
-        self.handle_keyboard_shortcuts(egui_wants_pointer);
+        self.handle_keyboard_shortcuts(egui_wants_keyboard);
 
         // 3. Magnetic Port Hover Detection
         self.update_hovered_port(mouse_pos_screen, mouse_pos_world, egui_wants_pointer);
@@ -101,8 +102,8 @@ impl Editor {
         }
     }
 
-    fn handle_keyboard_shortcuts(&mut self, egui_wants_pointer: bool) {
-        if !egui_wants_pointer {
+    fn handle_keyboard_shortcuts(&mut self, egui_wants_keyboard: bool) {
+        if !egui_wants_keyboard {
             if is_key_pressed(KeyCode::Space) {
                 self.engine.is_playing = !self.engine.is_playing;
             }
@@ -188,15 +189,19 @@ impl Editor {
 
                         if dist < closest_dist {
                             closest_dist = dist;
-                            // When dragging a wire, prefer the input port; otherwise prefer the output port.
-                            let want_input = self.canvas.active_wire_drag.is_some();
+                            // When dragging a wire, prefer target ports of the opposite type.
+                            let want_input = if let Some((_, _, start_is_input)) = self.canvas.active_wire_drag {
+                                !start_is_input
+                            } else {
+                                false
+                            };
                             self.canvas.hovered_port = Some((comp.id, 0, want_input));
                         }
                         continue;
                     }
 
                     let (inputs_count, outputs_count) =
-                        self.get_component_ports_count(comp.comp_type);
+                        self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
 
                     // Check inputs
                     for i in 0..inputs_count {
@@ -292,14 +297,16 @@ impl Editor {
                     comp_by_id.get(&conn.tgt_comp_id),
                 );
                 if let (Some(&src), Some(&tgt)) = (src_comp_opt, tgt_comp_opt) {
-                    let (_, outputs) = self.get_component_ports_count(src.comp_type);
-                    let (inputs, _) = self.get_component_ports_count(tgt.comp_type);
+                    let (_, outputs) = self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
+                    let (inputs, _) = self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
                     let src_pos = src.output_port_pos(conn.src_port, outputs);
                     let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
 
+                    let offset = self.get_connection_routing_offset(conn);
                     if self.hit_test_manhattan_wire(
                         src_pos,
                         tgt_pos,
+                        offset,
                         mouse_pos_world,
                         10.0 / self.canvas.zoom,
                     ) {
@@ -342,9 +349,8 @@ impl Editor {
                 // Check ports first (wiring starts here)
                 if !bypass_wiring
                     && let Some((comp_id, port_idx, is_input)) = self.canvas.hovered_port
-                    && !is_input
                 {
-                    self.canvas.active_wire_drag = Some((comp_id, port_idx));
+                    self.canvas.active_wire_drag = Some((comp_id, port_idx, is_input));
                     clicked_something = true;
                 }
 
@@ -447,15 +453,17 @@ impl Editor {
                                     );
                                     if let (Some(&src), Some(&tgt)) = (src_comp_opt, tgt_comp_opt) {
                                         let (_, outputs) =
-                                            self.get_component_ports_count(src.comp_type);
+                                            self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
                                         let (inputs, _) =
-                                            self.get_component_ports_count(tgt.comp_type);
+                                            self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
                                         let src_pos = src.output_port_pos(conn.src_port, outputs);
                                         let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
 
+                                        let offset = self.get_connection_routing_offset(conn);
                                         if self.hit_test_manhattan_wire(
                                             src_pos,
                                             tgt_pos,
+                                            offset,
                                             mouse_pos_world,
                                             10.0 / self.canvas.zoom,
                                         ) {
@@ -496,6 +504,7 @@ impl Editor {
                             let mut height = 40.0 + (max_ports as f32 * 16.0);
                             let mut width = match comp_type {
                                 ComponentType::SubChip(_) => 100.0,
+                                ComponentType::BusJoiner | ComponentType::BusSplitter => 50.0,
                                 _ => 70.0,
                             };
 
@@ -508,6 +517,7 @@ impl Editor {
 
                             let clock_period = match comp_type {
                                 ComponentType::Clock => Some(20),
+                                ComponentType::BusJoiner | ComponentType::BusSplitter => Some(4),
                                 _ => None,
                             };
 
@@ -690,37 +700,17 @@ impl Editor {
                             }
                         }
 
-                        let zoom = self.canvas.zoom;
-                        let wire_bounds = |src_pos: Vec2, tgt_pos: Vec2| -> Rect {
-                            // Mirror the Manhattan routing used by rendering/hit-testing.
-                            let mut points: Vec<Vec2> = vec![src_pos, tgt_pos];
-
-                            if tgt_pos.x >= src_pos.x + 20.0 * zoom {
-                                let mid_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0;
-                                points.push(Vec2::new(mid_x, src_pos.y));
-                                points.push(Vec2::new(mid_x, tgt_pos.y));
-                            } else {
-                                let stub_src = src_pos.x + 20.0 * zoom;
-                                let stub_tgt = tgt_pos.x - 20.0 * zoom;
-
-                                let mut mid_y = src_pos.y + (tgt_pos.y - src_pos.y) / 2.0;
-                                if (tgt_pos.y - src_pos.y).abs() < 10.0 * zoom {
-                                    mid_y += 35.0 * zoom;
-                                }
-
-                                points.push(Vec2::new(stub_src, src_pos.y));
-                                points.push(Vec2::new(stub_src, mid_y));
-                                points.push(Vec2::new(stub_tgt, mid_y));
-                                points.push(Vec2::new(stub_tgt, tgt_pos.y));
-                            }
-
+                        let wire_bounds = |src_pos: Vec2, tgt_pos: Vec2, offset: f32| -> Rect {
+                            let segments = Self::compute_wire_segments_world(src_pos, tgt_pos, offset);
                             let (mut min_x, mut max_x) = (f32::INFINITY, f32::NEG_INFINITY);
                             let (mut min_y, mut max_y) = (f32::INFINITY, f32::NEG_INFINITY);
-                            for p in points {
-                                min_x = min_x.min(p.x);
-                                max_x = max_x.max(p.x);
-                                min_y = min_y.min(p.y);
-                                max_y = max_y.max(p.y);
+                            for (a, b) in segments {
+                                for p in [a, b] {
+                                    min_x = min_x.min(p.x);
+                                    max_x = max_x.max(p.x);
+                                    min_y = min_y.min(p.y);
+                                    max_y = max_y.max(p.y);
+                                }
                             }
                             Rect::new(min_x, min_y, max_x - min_x, max_y - min_y)
                         };
@@ -733,12 +723,13 @@ impl Editor {
                                 comp_by_id.get(&conn.tgt_comp_id),
                             );
                             if let (Some(&src), Some(&tgt)) = (src_comp_opt, tgt_comp_opt) {
-                                let (_, outputs) = self.get_component_ports_count(src.comp_type);
-                                let (inputs, _) = self.get_component_ports_count(tgt.comp_type);
+                                let (_, outputs) = self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
+                                let (inputs, _) = self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
                                 let src_pos = src.output_port_pos(conn.src_port, outputs);
                                 let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
 
-                                let wire_rect = wire_bounds(src_pos, tgt_pos);
+                                let offset = self.get_connection_routing_offset(conn);
+                                let wire_rect = wire_bounds(src_pos, tgt_pos, offset);
                                 if wire_rect.overlaps(&box_rect) {
                                     self.canvas.selected_connections.insert(*conn);
                                 }
@@ -764,17 +755,23 @@ impl Editor {
                 self.canvas.drag_snapshot_pushed = false;
 
                 // Handle wiring connection release
-                if let Some((src_id, src_port)) = self.canvas.active_wire_drag {
+                if let Some((src_id, src_port, src_is_input)) = self.canvas.active_wire_drag {
                     let mut connection_made = false;
 
-                    if let Some((tgt_id, tgt_port, is_input)) = self.canvas.hovered_port
-                        && is_input
+                    if let Some((tgt_id, tgt_port, tgt_is_input)) = self.canvas.hovered_port
+                        && tgt_is_input != src_is_input
                         && tgt_id != src_id
                     {
+                        let (out_id, out_port, in_id, in_port) = if src_is_input {
+                            (tgt_id, tgt_port, src_id, src_port)
+                        } else {
+                            (src_id, src_port, tgt_id, tgt_port)
+                        };
+
                         self.push_history_snapshot();
                         let mut is_junction = false;
                         for comp in &self.components {
-                            if comp.id == tgt_id
+                            if comp.id == in_id
                                 && comp.comp_type == crate::engine::ComponentType::Junction
                             {
                                 is_junction = true;
@@ -783,13 +780,13 @@ impl Editor {
                         }
                         if !is_junction {
                             self.connections
-                                .retain(|c| !(c.tgt_comp_id == tgt_id && c.tgt_port == tgt_port));
+                                .retain(|c| !(c.tgt_comp_id == in_id && c.tgt_port == in_port));
                         }
                         self.connections.push(VisualConnection {
-                            src_comp_id: src_id,
-                            src_port,
-                            tgt_comp_id: tgt_id,
-                            tgt_port,
+                            src_comp_id: out_id,
+                            src_port: out_port,
+                            tgt_comp_id: in_id,
+                            tgt_port: in_port,
                         });
                         connection_made = true;
                     }

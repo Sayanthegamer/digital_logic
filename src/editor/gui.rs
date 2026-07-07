@@ -122,6 +122,7 @@ impl Editor {
             egui_wants_pointer = ctx.wants_pointer_input()
                 || ctx.wants_keyboard_input()
                 || ctx.is_pointer_over_area();
+            self.ui.egui_wants_keyboard = ctx.wants_keyboard_input();
         });
         self.ui.egui_wants_pointer = egui_wants_pointer;
     }

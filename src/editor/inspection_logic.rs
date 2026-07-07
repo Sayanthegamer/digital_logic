@@ -233,6 +233,13 @@ impl Editor {
                         };
                         self.trace_local_driver(&in_node, blueprint, path)
                     }
+                    ComponentType::BusJoiner | ComponentType::BusSplitter => {
+                        let in_node = TraceNode::CompInput {
+                            component_idx: *component_idx,
+                            port_idx: *port_idx,
+                        };
+                        self.trace_local_driver(&in_node, blueprint, path)
+                    }
                     ComponentType::Input | ComponentType::Output | ComponentType::SevenSegment => {
                         OutputSource::Floating
                     }

@@ -17,6 +17,14 @@ use super::types::*;
 
 impl Editor {
     pub fn get_component_ports_count(&self, comp_type: ComponentType) -> (usize, usize) {
+        self.get_component_ports_count_with_width(comp_type, None)
+    }
+
+    pub fn get_component_ports_count_with_width(
+        &self,
+        comp_type: ComponentType,
+        bus_width: Option<usize>,
+    ) -> (usize, usize) {
         match comp_type {
             ComponentType::Nand => (2, 1),
             ComponentType::Input => (0, 1),
@@ -25,6 +33,8 @@ impl Editor {
             ComponentType::SevenSegment => (8, 0),
             ComponentType::TriStateBuffer => (2, 1),
             ComponentType::Junction => (1, 1),
+            ComponentType::BusJoiner => (bus_width.unwrap_or(4), 1),
+            ComponentType::BusSplitter => (1, bus_width.unwrap_or(4)),
             ComponentType::SubChip(idx) => self
                 .engine
                 .library
@@ -42,12 +52,45 @@ impl Editor {
             ComponentType::SevenSegment => "7SEG".to_string(),
             ComponentType::TriStateBuffer => "TRI".to_string(),
             ComponentType::Junction => "".to_string(),
+            ComponentType::BusJoiner => "JOIN".to_string(),
+            ComponentType::BusSplitter => "SPLIT".to_string(),
             ComponentType::SubChip(idx) => self
                 .engine
                 .library
                 .get(idx)
                 .map_or("UNKNOWN".to_string(), |bp| bp.name.clone()),
         }
+    }
+
+    pub fn expand_connections(&self) -> Vec<VisualConnection> {
+        let mut expanded = Vec::new();
+        let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
+            self.components.iter().map(|c| (c.id, c)).collect();
+
+        for conn in &self.connections {
+            let src_comp = comp_by_id.get(&conn.src_comp_id);
+            let tgt_comp = comp_by_id.get(&conn.tgt_comp_id);
+
+            let is_bus = src_comp.map_or(false, |c| c.comp_type == ComponentType::BusJoiner && conn.src_port == 0)
+                && tgt_comp.map_or(false, |c| c.comp_type == ComponentType::BusSplitter && conn.tgt_port == 0);
+
+            if is_bus {
+                let w_src = src_comp.map_or(4, |c| c.bus_width());
+                let w_tgt = tgt_comp.map_or(4, |c| c.bus_width());
+                let w = w_src.min(w_tgt);
+                for i in 0..w {
+                    expanded.push(VisualConnection {
+                        src_comp_id: conn.src_comp_id,
+                        src_port: i,
+                        tgt_comp_id: conn.tgt_comp_id,
+                        tgt_port: i,
+                    });
+                }
+            } else {
+                expanded.push(conn.clone());
+            }
+        }
+        expanded
     }
 
     pub fn compile(&mut self) {
@@ -77,13 +120,15 @@ impl Editor {
             &mut active_clocks,
         );
 
+        let expanded_connections = self.expand_connections();
+
         // 2. Wire up all component inputs on the canvas in the simulator
         let mut net_cache = HashMap::new();
-        self.wire_up_component_inputs(&mut sim, &component_ports, &mut net_cache);
+        self.wire_up_component_inputs(&mut sim, &expanded_connections, &component_ports, &mut net_cache);
 
         // 3. Resolve the visual output port states map
         let port_to_sim_gate_map =
-            self.resolve_port_to_sim_gate_map(&mut sim, &component_ports, &mut net_cache);
+            self.resolve_port_to_sim_gate_map(&mut sim, &expanded_connections, &component_ports, &mut net_cache);
 
         // Settle initial states
         let max_steps = (sim.gates.len() * 10).max(1000);
@@ -165,6 +210,26 @@ impl Editor {
                         (vec![vec![]], vec![OutputSource::PassedThrough(0)]),
                     );
                 }
+                ComponentType::BusJoiner => {
+                    let w = comp.bus_width();
+                    component_ports.insert(
+                        comp.id,
+                        (
+                            vec![vec![]; w],
+                            (0..w).map(|i| OutputSource::PassedThrough(i)).collect(),
+                        ),
+                    );
+                }
+                ComponentType::BusSplitter => {
+                    let w = comp.bus_width();
+                    component_ports.insert(
+                        comp.id,
+                        (
+                            vec![vec![]; w],
+                            (0..w).map(|i| OutputSource::PassedThrough(i)).collect(),
+                        ),
+                    );
+                }
                 ComponentType::SevenSegment => {
                     let mut inputs = Vec::new();
                     for _ in 0..7 {
@@ -196,18 +261,19 @@ impl Editor {
     fn wire_up_component_inputs(
         &self,
         sim: &mut Simulator,
+        connections: &[VisualConnection],
         component_ports: &HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
         net_cache: &mut HashMap<Vec<usize>, OutputSource>,
     ) {
         for comp in &self.components {
-            let (inputs_count, _) = self.get_component_ports_count(comp.comp_type);
+            let (inputs_count, _) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
 
             for port_idx in 0..inputs_count {
                 let start_node = CanvasNode::CompInput {
                     comp_id: comp.id,
                     port_idx,
                 };
-                let driver = self.trace_canvas_node(start_node, sim, component_ports, net_cache);
+                let driver = self.trace_canvas_node(start_node, sim, connections, component_ports, net_cache);
 
                 if let OutputSource::DrivenByGate(src_g_idx) = driver
                     && let Some((inputs, _)) = component_ports.get(&comp.id)
@@ -225,19 +291,20 @@ impl Editor {
     fn resolve_port_to_sim_gate_map(
         &self,
         sim: &mut Simulator,
+        connections: &[VisualConnection],
         component_ports: &HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
         net_cache: &mut HashMap<Vec<usize>, OutputSource>,
     ) -> HashMap<(usize, usize), usize> {
         let mut port_to_sim_gate_map = HashMap::new();
         for comp in &self.components {
-            let (_, outputs_count) = self.get_component_ports_count(comp.comp_type);
+            let (_, outputs_count) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
 
             for port_idx in 0..outputs_count {
                 let start_node = CanvasNode::CompOutput {
                     comp_id: comp.id,
                     port_idx,
                 };
-                let driver = self.trace_canvas_node(start_node, sim, component_ports, net_cache);
+                let driver = self.trace_canvas_node(start_node, sim, connections, component_ports, net_cache);
                 if let OutputSource::DrivenByGate(g_idx) = driver {
                     port_to_sim_gate_map.insert((comp.id, port_idx), g_idx);
                 }
@@ -250,6 +317,7 @@ impl Editor {
         &self,
         start_node: CanvasNode,
         sim: &mut Simulator,
+        connections: &[VisualConnection],
         component_ports: &HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
         net_cache: &mut HashMap<Vec<usize>, OutputSource>,
     ) -> OutputSource {
@@ -284,7 +352,7 @@ impl Editor {
                     }
                 }
                 CanvasNode::CompInput { comp_id, port_idx } => {
-                    for conn in &self.connections {
+                    for conn in connections {
                         if conn.tgt_comp_id == comp_id && conn.tgt_port == port_idx {
                             queue.push(CanvasNode::CompOutput {
                                 comp_id: conn.src_comp_id,
@@ -464,7 +532,15 @@ impl Editor {
     }
 
     pub fn get_component_dimensions(&self, comp_type: ComponentType) -> (f32, f32) {
-        let (inputs, outputs) = self.get_component_ports_count(comp_type);
+        self.get_component_dimensions_with_width(comp_type, None)
+    }
+
+    pub fn get_component_dimensions_with_width(
+        &self,
+        comp_type: ComponentType,
+        bus_width: Option<usize>,
+    ) -> (f32, f32) {
+        let (inputs, outputs) = self.get_component_ports_count_with_width(comp_type, bus_width);
         let max_ports = inputs.max(outputs);
         let mut height = 40.0 + (max_ports as f32 * 16.0);
         let mut width = match comp_type {
@@ -489,6 +565,7 @@ impl Editor {
                     100.0
                 }
             }
+            ComponentType::BusJoiner | ComponentType::BusSplitter => 50.0,
             _ => 70.0,
         };
         if comp_type == ComponentType::Junction {

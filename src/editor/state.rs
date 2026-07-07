@@ -92,6 +92,7 @@ pub struct UiState {
     pub chip_name_input: String,
     pub catalog_search_text: String,
     pub egui_wants_pointer: bool,
+    pub egui_wants_keyboard: bool,
 
     /// Screen-space canvas viewport rect (x, y, w, h) after egui panels are laid out.
     /// Used for camera fit/recenter calculations.
@@ -131,6 +132,7 @@ impl Default for UiState {
             chip_name_input: "MY_CHIP".to_string(),
             catalog_search_text: String::new(),
             egui_wants_pointer: false,
+            egui_wants_keyboard: false,
             canvas_viewport: None,
             dragging_catalog_idx: None,
             drag_hovered_idx: None,
@@ -153,7 +155,7 @@ pub struct CanvasState {
     pub zoom: f32,
     pub last_mouse_pos: Vec2,
     pub selected_tool: Option<ActiveTool>,
-    pub active_wire_drag: Option<(usize, usize)>,
+    pub active_wire_drag: Option<(usize, usize, bool)>,
     pub hovered_port: Option<(usize, usize, bool)>,
     pub dragging_comp_id: Option<usize>,
     pub drag_offset: Vec2,

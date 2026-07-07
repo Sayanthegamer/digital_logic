@@ -2,7 +2,7 @@ use macroquad::prelude::*;
 
 use super::Editor;
 use super::theme;
-use super::types::VisualConnection;
+use super::types::{VisualConnection, VisualComponent};
 
 /// The type of wire intersection.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -20,6 +20,10 @@ pub struct WireIntersection {
     /// Direction of the "upper" wire at this crossing (for drawing the bridge arc).
     /// Only meaningful for Crossing type. true = horizontal upper wire, false = vertical.
     pub upper_horizontal: bool,
+    pub lower_color: Color,
+    pub lower_thickness: f32,
+    pub upper_color: Color,
+    pub upper_thickness: f32,
 }
 
 /// A wire segment with an associated connection identity.
@@ -31,23 +35,148 @@ pub struct IdentifiedSegment {
 }
 
 impl Editor {
+    pub fn get_connection_style(&self, conn: &VisualConnection) -> (Color, f32) {
+        let wire_state = if let Some(&gate_idx) = self
+            .engine
+            .port_to_sim_gate_map
+            .get(&(conn.src_comp_id, conn.src_port))
+        {
+            self.engine.simulator.get_raw_state(gate_idx)
+        } else if let Some(src) = self.components.iter().find(|c| c.id == conn.src_comp_id) {
+            if src.comp_type == crate::engine::ComponentType::Input {
+                if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&src.id) {
+                    self.engine.simulator.get_raw_state(gate_idx)
+                } else {
+                    0b00
+                }
+            } else {
+                0b00
+            }
+        } else {
+            0b00
+        };
+
+        let (base_color, thickness, _) = match wire_state {
+            0b00 => (theme::ACCENT_GENERIC.mq(), 1.3 * self.canvas.zoom, false),
+            0b01 => (theme::ACCENT_INACTIVE.mq(), 1.6 * self.canvas.zoom, false),
+            0b10 => (theme::ACCENT_PRIMARY.mq(), 2.2 * self.canvas.zoom, true),
+            _ => (theme::COMP_NAND.mq(), 2.8 * self.canvas.zoom, true),
+        };
+        let color = self.color_overrides.get_wire_color(conn).unwrap_or(base_color);
+        (color, thickness)
+    }
+
+    pub fn get_connection_routing_offset(&self, conn: &VisualConnection) -> f32 {
+        // Find all connections sharing the same source port
+        let mut sharing: Vec<&VisualConnection> = self.connections.iter()
+            .filter(|c| c.src_comp_id == conn.src_comp_id && c.src_port == conn.src_port)
+            .collect();
+        
+        let fanout_offset = if sharing.len() <= 1 {
+            0.0
+        } else {
+            // Sort them deterministically.
+            let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
+                self.components.iter().map(|c| (c.id, c)).collect();
+
+            sharing.sort_by(|a, b| {
+                let pos_a = comp_by_id.get(&a.tgt_comp_id).map(|c| c.pos).unwrap_or(Vec2::ZERO);
+                let pos_b = comp_by_id.get(&b.tgt_comp_id).map(|c| c.pos).unwrap_or(Vec2::ZERO);
+                
+                pos_a.y.partial_cmp(&pos_b.y)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then(pos_a.x.partial_cmp(&pos_b.x).unwrap_or(std::cmp::Ordering::Equal))
+                    .then(a.tgt_port.cmp(&b.tgt_port))
+            });
+
+            if let Some(idx) = sharing.iter().position(|c| c.tgt_comp_id == conn.tgt_comp_id && c.tgt_port == conn.tgt_port) {
+                let n = sharing.len() as f32;
+                (idx as f32 - (n - 1.0) / 2.0) * 10.0
+            } else {
+                0.0
+            }
+        };
+
+        // Add a small target-port/component based hash to differentiate vertical lines
+        // from different source pins that happen to cross
+        let hash = (conn.tgt_comp_id + conn.tgt_port) % 3;
+        let hash_offset = (hash as f32 - 1.0) * 4.0;
+
+        fanout_offset + hash_offset
+    }
+
+    pub fn get_blueprint_connection_routing_offset(
+        &self,
+        conn: &crate::engine::Connection,
+        blueprint: &crate::engine::ChipBlueprint,
+    ) -> f32 {
+        // Find all connections sharing the same source
+        let mut sharing: Vec<&crate::engine::Connection> = blueprint.connections.iter()
+            .filter(|c| c.source == conn.source)
+            .collect();
+
+        let fanout_offset = if sharing.len() <= 1 {
+            0.0
+        } else {
+            sharing.sort_by(|a, b| {
+                use crate::engine::TargetPort;
+                let (type_a, idx_a, port_a) = match a.target {
+                    TargetPort::ChipOutput(i) => (1, i, 0),
+                    TargetPort::ComponentInput { component_idx, port_idx } => (0, component_idx, port_idx),
+                };
+                let (type_b, idx_b, port_b) = match b.target {
+                    TargetPort::ChipOutput(i) => (1, i, 0),
+                    TargetPort::ComponentInput { component_idx, port_idx } => (0, component_idx, port_idx),
+                };
+
+                type_a.cmp(&type_b)
+                    .then(idx_a.cmp(&idx_b))
+                    .then(port_a.cmp(&port_b))
+            });
+
+            if let Some(idx) = sharing.iter().position(|c| c.target == conn.target) {
+                let n = sharing.len() as f32;
+                (idx as f32 - (n - 1.0) / 2.0) * 10.0
+            } else {
+                0.0
+            }
+        };
+
+        use crate::engine::TargetPort;
+        let (tgt_comp_id, tgt_port) = match conn.target {
+            TargetPort::ChipOutput(i) => (8888, i),
+            TargetPort::ComponentInput { component_idx, port_idx } => (component_idx, port_idx),
+        };
+        let hash = (tgt_comp_id + tgt_port) % 3;
+        let hash_offset = (hash as f32 - 1.0) * 4.0;
+
+        fanout_offset + hash_offset
+    }
+
     /// Compute all Manhattan wire segments for a given connection, in screen space.
     pub fn compute_wire_segments_screen(
         src_pos: Vec2,
         tgt_pos: Vec2,
+        routing_offset: f32,
         zoom: f32,
     ) -> Vec<(Vec2, Vec2)> {
         let mut segments = Vec::new();
         if tgt_pos.x >= src_pos.x + 20.0 * zoom {
-            let mid_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0;
+            let offset = routing_offset * zoom;
+            let mut mid_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0 + offset;
+            mid_x = mid_x.clamp(src_pos.x + 8.0 * zoom, tgt_pos.x - 8.0 * zoom);
+
             segments.push((Vec2::new(src_pos.x, src_pos.y), Vec2::new(mid_x, src_pos.y)));
             segments.push((Vec2::new(mid_x, src_pos.y), Vec2::new(mid_x, tgt_pos.y)));
             segments.push((Vec2::new(mid_x, tgt_pos.y), Vec2::new(tgt_pos.x, tgt_pos.y)));
         } else {
-            let stub_src = src_pos.x + 20.0 * zoom;
-            let stub_tgt = tgt_pos.x - 20.0 * zoom;
+            let offset_x = routing_offset.abs() * 0.7 * zoom;
+            let offset_y = routing_offset * zoom;
 
-            let mut mid_y = src_pos.y + (tgt_pos.y - src_pos.y) / 2.0;
+            let stub_src = src_pos.x + 20.0 * zoom + offset_x;
+            let stub_tgt = tgt_pos.x - 20.0 * zoom - offset_x;
+
+            let mut mid_y = src_pos.y + (tgt_pos.y - src_pos.y) / 2.0 + offset_y;
             if (tgt_pos.y - src_pos.y).abs() < 10.0 * zoom {
                 mid_y += 35.0 * zoom;
             }
@@ -61,6 +190,15 @@ impl Editor {
         segments
     }
 
+    /// Compute all Manhattan wire segments in world space (without zoom).
+    pub fn compute_wire_segments_world(
+        src_pos: Vec2,
+        tgt_pos: Vec2,
+        routing_offset: f32,
+    ) -> Vec<(Vec2, Vec2)> {
+        Self::compute_wire_segments_screen(src_pos, tgt_pos, routing_offset, 1.0)
+    }
+
     /// Find all wire intersections (junctions and crossings) across all connections.
     pub fn find_wire_intersections(&self) -> Vec<WireIntersection> {
         let mut all_segments: Vec<IdentifiedSegment> = Vec::new();
@@ -71,13 +209,19 @@ impl Editor {
             let tgt_comp = self.components.iter().find(|c| c.id == wire.tgt_comp_id);
 
             if let (Some(src), Some(tgt)) = (src_comp, tgt_comp) {
-                let (_, src_outputs) = self.get_component_ports_count(src.comp_type);
-                let (tgt_inputs, _) = self.get_component_ports_count(tgt.comp_type);
+                let (_, src_outputs) = self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
+                let (tgt_inputs, _) = self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
 
                 let src_pos = self.to_screen_space(src.output_port_pos(wire.src_port, src_outputs));
                 let tgt_pos = self.to_screen_space(tgt.input_port_pos(wire.tgt_port, tgt_inputs));
 
-                let segments = Self::compute_wire_segments_screen(src_pos, tgt_pos, self.canvas.zoom);
+                let offset = self.get_connection_routing_offset(wire);
+                let segments = Self::compute_wire_segments_screen(
+                    src_pos,
+                    tgt_pos,
+                    offset,
+                    self.canvas.zoom,
+                );
                 for (a, b) in segments {
                     all_segments.push(IdentifiedSegment { a, b, conn_idx });
                 }
@@ -113,18 +257,33 @@ impl Editor {
                     let conn_j = &self.connections[all_segments[j].conn_idx];
 
                     let connected = wires_share_endpoint(conn_i, conn_j);
+                    if connected {
+                        continue; // Same electrical net, no crossings or junctions needed
+                    }
 
                     // Determine which wire is "upper" for bridge arc direction
                     let seg_i_horizontal = is_horizontal(all_segments[i].a, all_segments[i].b);
 
+                    let (lower_conn_idx, upper_conn_idx) = if seg_i_horizontal {
+                        (all_segments[j].conn_idx, all_segments[i].conn_idx)
+                    } else {
+                        (all_segments[i].conn_idx, all_segments[j].conn_idx)
+                    };
+
+                    let lower_conn = &self.connections[lower_conn_idx];
+                    let (lower_color, lower_thickness) = self.get_connection_style(lower_conn);
+
+                    let upper_conn = &self.connections[upper_conn_idx];
+                    let (upper_color, upper_thickness) = self.get_connection_style(upper_conn);
+
                     intersections.push(WireIntersection {
                         point,
-                        junction_type: if connected {
-                            JunctionType::Connected
-                        } else {
-                            JunctionType::Crossing
-                        },
+                        junction_type: JunctionType::Crossing,
                         upper_horizontal: seg_i_horizontal,
+                        lower_color,
+                        lower_thickness,
+                        upper_color,
+                        upper_thickness,
                     });
                 }
             }
@@ -137,26 +296,51 @@ impl Editor {
     pub fn draw_wire_junctions(&self, intersections: &[WireIntersection]) {
         for intersection in intersections {
             match intersection.junction_type {
-                JunctionType::Connected => {
-                    // Filled dot indicating electrical connection
-                    let radius = 4.0 * self.canvas.zoom;
-                    draw_circle(
-                        intersection.point.x,
-                        intersection.point.y,
-                        radius,
-                        theme::ACCENT_PRIMARY.mq(),
-                    );
-                }
+                JunctionType::Connected => {} // Ignored
                 JunctionType::Crossing => {
                     // Bridge arc — small semicircle hop
                     let arc_radius = 6.0 * self.canvas.zoom;
+
+                    // 1. Draw a background circle to mask/erase both lines
+                    draw_circle(
+                        intersection.point.x,
+                        intersection.point.y,
+                        arc_radius,
+                        theme::BG_CANVAS.mq(),
+                    );
+
+                    // 2. Draw the lower wire segment straight through the center
+                    if intersection.upper_horizontal {
+                        // Upper wire is horizontal (arc goes up/down).
+                        // Lower wire is vertical, draw straight vertical segment.
+                        draw_line(
+                            intersection.point.x,
+                            intersection.point.y - arc_radius,
+                            intersection.point.x,
+                            intersection.point.y + arc_radius,
+                            intersection.lower_thickness,
+                            intersection.lower_color,
+                        );
+                    } else {
+                        // Upper wire is vertical (arc goes left/right).
+                        // Lower wire is horizontal, draw straight horizontal segment.
+                        draw_line(
+                            intersection.point.x - arc_radius,
+                            intersection.point.y,
+                            intersection.point.x + arc_radius,
+                            intersection.point.y,
+                            intersection.lower_thickness,
+                            intersection.lower_color,
+                        );
+                    }
+
+                    // 3. Draw the bridge arc for the upper wire using its style
                     draw_bridge_arc(
                         intersection.point,
                         arc_radius,
                         intersection.upper_horizontal,
-                        theme::BG_CANVAS.mq(),
-                        1.8 * self.canvas.zoom,
-                        theme::ACCENT_GENERIC.mq(),
+                        intersection.upper_thickness,
+                        intersection.upper_color,
                     );
                 }
             }
@@ -188,36 +372,8 @@ fn segment_intersection(
     let a_horiz = (a1.y - a2.y).abs() < epsilon;
     let b_horiz = (b1.y - b2.y).abs() < epsilon;
 
-    // Both same orientation: check for collinear overlap
+    // Parallel or collinear segments do not cross
     if a_horiz == b_horiz {
-        if a_horiz {
-            // Both horizontal
-            if (a1.y - b1.y).abs() < epsilon {
-                // Same Y — check X overlap
-                let a_min_x = a1.x.min(a2.x);
-                let a_max_x = a1.x.max(a2.x);
-                let b_min_x = b1.x.min(b2.x);
-                let b_max_x = b1.x.max(b2.x);
-                let overlap_min = a_min_x.max(b_min_x);
-                let overlap_max = a_max_x.min(b_max_x);
-                if overlap_min <= overlap_max + epsilon {
-                    return Some(Vec2::new((overlap_min + overlap_max) / 2.0, a1.y));
-                }
-            }
-        } else {
-            // Both vertical
-            if (a1.x - b1.x).abs() < epsilon {
-                let a_min_y = a1.y.min(a2.y);
-                let a_max_y = a1.y.max(a2.y);
-                let b_min_y = b1.y.min(b2.y);
-                let b_max_y = b1.y.max(b2.y);
-                let overlap_min = a_min_y.max(b_min_y);
-                let overlap_max = a_max_y.min(b_max_y);
-                if overlap_min <= overlap_max + epsilon {
-                    return Some(Vec2::new(a1.x, (overlap_min + overlap_max) / 2.0));
-                }
-            }
-        }
         return None;
     }
 
@@ -254,14 +410,10 @@ fn draw_bridge_arc(
     center: Vec2,
     radius: f32,
     upper_is_horizontal: bool,
-    bg_color: Color,
     thickness: f32,
     wire_color: Color,
 ) {
-    // First, draw a background circle to "erase" the lower wire at the crossing
-    draw_circle(center.x, center.y, radius, bg_color);
-
-    // Then draw a semicircle arc for the bridge
+    // Draw a semicircle arc for the bridge
     let segments = 12;
     let (start_angle, end_angle) = if upper_is_horizontal {
         // Horizontal wire hops over: arc goes upward (from -PI to 0)

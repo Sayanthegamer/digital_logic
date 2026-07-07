@@ -88,6 +88,7 @@ impl Editor {
 
             // Clear any lingering selection or interactions
             self.canvas.selected_comp_id = None;
+            self.canvas.selected_comp_ids.clear();
             self.canvas.selected_connections.clear();
             self.canvas.active_wire_drag = None;
             self.canvas.dragging_comp_id = None;

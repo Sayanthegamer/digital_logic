@@ -24,6 +24,8 @@ pub enum ComponentType {
     SevenSegment,
     TriStateBuffer,
     Junction,
+    BusJoiner,
+    BusSplitter,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -31,6 +33,12 @@ pub struct Component {
     pub component_type: ComponentType,
     pub pos: (f32, f32),             // Visual layout position for inspection mode
     pub clock_period: Option<usize>, // Localized period in ticks (only for ComponentType::Clock)
+}
+
+impl Component {
+    pub fn bus_width(&self) -> usize {
+        self.clock_period.unwrap_or(4)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
