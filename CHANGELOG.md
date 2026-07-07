@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0-alpha.2] - 2026-07-08
+
+### Added
+- **Scale-Breaking Points Documentation:** Added `SCALE_BREAKING_POINTS.md` documenting known performance bottlenecks, quadratic complexities ($O(n^2)$ routing offset and junction detection), and port count metadata mismatches.
+
+### Fixed
+- **Seven-Segment Display Port Allocation:** Fixed top-level `SevenSegment` component allocation to correctly allocate all 8 input gates (A-G and minus segment), correcting an off-by-one error where the 8th port (minus segment) silently dropped its connection.
+
 ## [2.2.0-alpha.1] - 2026-07-07
 
 ### Added

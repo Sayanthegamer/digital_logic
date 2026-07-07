@@ -618,3 +618,69 @@ fn test_bus_compilation_and_propagation() {
     }
 }
 
+#[test]
+fn test_seven_segment_top_level_port_allocation() {
+    let mut editor = Editor::new();
+    editor.components.clear();
+    editor.connections.clear();
+
+    // SevenSegment (comp ID 0)
+    editor.components.push(VisualComponent {
+        id: 0,
+        comp_type: ComponentType::SevenSegment,
+        pos: Vec2::new(100.0, 100.0),
+        width: 60.0,
+        height: 90.0,
+        label: "7SEG".to_string(),
+        clock_period: None,
+        color: None,
+    });
+
+    // 8 Inputs (comp IDs 1..=8)
+    for i in 1..=8 {
+        editor.components.push(VisualComponent {
+            id: i,
+            comp_type: ComponentType::Input,
+            pos: Vec2::new(0.0, (i - 1) as f32 * 50.0),
+            width: 70.0,
+            height: 40.0,
+            label: format!("IN_{}", i - 1),
+            clock_period: None,
+            color: None,
+        });
+    }
+
+    // Connect Inputs 1..=8 to SevenSegment ports 0..7
+    for i in 1..=8 {
+        editor.connections.push(VisualConnection {
+            src_comp_id: i,
+            src_port: 0,
+            tgt_comp_id: 0,
+            tgt_port: i - 1,
+        });
+    }
+
+    // Compile
+    editor.compile();
+
+    // Verify compilation succeeded without errors
+    assert!(editor.engine.propagation_error.is_none());
+
+    // Toggle 8th input (minus segment, port 7)
+    let in_8_id = 8;
+    let sim_idx = *editor.engine.visual_to_sim_map.get(&in_8_id).expect("Input 8 not mapped");
+    editor.engine.simulator.set_input(sim_idx, true);
+
+    // Propagate signals
+    let propagate_ok = editor.engine.simulator.propagate_events(100).is_ok();
+    assert!(propagate_ok);
+
+    // Verify that the minus segment (port index 7) state in the simulator is true.
+    let dependents = &editor.engine.simulator.dependents[sim_idx];
+    assert!(!dependents.is_empty(), "Input 8 has no dependents wired up!");
+    
+    let target_gate_idx = dependents[0];
+    let state = editor.engine.simulator.get_state(target_gate_idx);
+    assert!(state, "The 8th input segment (minus sign) did not receive the signal!");
+}
+

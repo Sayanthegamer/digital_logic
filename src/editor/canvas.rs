@@ -212,6 +212,8 @@ impl Editor {
                 }
                 ComponentType::BusJoiner => {
                     let w = comp.bus_width();
+                    // NOTE: Officially BusJoiner has (w, 1) ports, but internally we represent it
+                    // as w inputs and w outputs (PassedThrough) to trace each channel independently.
                     component_ports.insert(
                         comp.id,
                         (
@@ -222,6 +224,8 @@ impl Editor {
                 }
                 ComponentType::BusSplitter => {
                     let w = comp.bus_width();
+                    // NOTE: Officially BusSplitter has (1, w) ports, but internally we represent it
+                    // as w inputs and w outputs (PassedThrough) to trace each channel independently.
                     component_ports.insert(
                         comp.id,
                         (
@@ -232,7 +236,8 @@ impl Editor {
                 }
                 ComponentType::SevenSegment => {
                     let mut inputs = Vec::new();
-                    for _ in 0..7 {
+                    // Port ordering: A, B, C, D, E, F, G, minus (8 ports total)
+                    for _ in 0..8 {
                         let sim_idx = sim.add_gate(GateType::Output);
                         inputs.push(vec![(sim_idx, 0u8)]);
                     }

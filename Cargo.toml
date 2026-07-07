@@ -1,6 +1,6 @@
 [package]
 name = "logic_simulator"
-version = "2.1.0-alpha.2"
+version = "2.2.0-alpha.2"
 edition = "2024"
 
 

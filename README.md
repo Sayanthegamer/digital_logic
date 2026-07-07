@@ -390,6 +390,7 @@ Each of these goes deeper into one specific slice of the project than this READM
 - **[SPEC.md](SPEC.md)** — the formal specification of primitives, event propagation, oscillation detection, and multi-domain clock timing.
 - **[SYSTEM.md](SYSTEM.md)** — supported platforms, minimum requirements, and the full dependency list.
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** — step-by-step build & release instructions for desktop and Android, including keystore setup.
+- **[SCALE_BREAKING_POINTS.md](SCALE_BREAKING_POINTS.md)** — known performance bottlenecks and quadratic complexity limits in the simulation engine and editor/rendering layers.
 - **[CHANGELOG.md](CHANGELOG.md)** — version history, following [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [SemVer](https://semver.org/).
 
 ## 🤝 Contributing

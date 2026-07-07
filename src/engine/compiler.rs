@@ -51,6 +51,9 @@ impl Simulator {
                 }
                 ComponentType::BusJoiner | ComponentType::BusSplitter => {
                     let w = component.bus_width();
+                    // NOTE: Officially BusJoiner has (w, 1) ports and BusSplitter has (1, w) ports,
+                    // but internally they are both compiled with w inputs and w outputs (PassedThrough)
+                    // to trace each channel independently during compilation.
                     component_ports.push((
                         vec![vec![]; w],
                         (0..w).map(|i| OutputSource::PassedThrough(i)).collect(),
