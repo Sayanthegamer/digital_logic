@@ -477,3 +477,144 @@ fn test_save_load_nested_project() {
     let _ = std::fs::remove_file(temp_path);
 }
 
+#[test]
+fn test_hit_test_manhattan_wire_zoom() {
+    let mut editor = Editor::new();
+    editor.canvas.zoom = 2.0;
+
+    // A wire from (100.0, 100.0) to (130.0, 100.0) in world space
+    let src = Vec2::new(100.0, 100.0);
+    let tgt = Vec2::new(130.0, 100.0);
+
+    // In world space, tgt.x (130) >= src.x (100) + 20.0 (120)
+    // So this routes as a 3-segment horizontal-vertical-horizontal wire.
+    // The segments are:
+    // 1. (100, 100) -> (115, 100)
+    // 2. (115, 100) -> (115, 100) (zero-length vertical)
+    // 3. (115, 100) -> (130, 100)
+    // Thus, (110.0, 100.0) is on segment 1.
+    // Under the zoom-corrected logic, hit testing at (110.0, 100.0) should succeed.
+    let click_point = Vec2::new(110.0, 100.0);
+    let hit = editor.hit_test_manhattan_wire(src, tgt, 0.0, click_point, 2.0);
+    assert!(hit);
+}
+
+#[test]
+fn test_bus_compilation_and_propagation() {
+    let mut editor = Editor::new();
+    editor.components.clear();
+    editor.connections.clear();
+
+    // 1. Create components
+    // Inputs (comp IDs 0..4)
+    for i in 0..4 {
+        editor.components.push(VisualComponent {
+            id: i,
+            comp_type: ComponentType::Input,
+            pos: Vec2::new(0.0, i as f32 * 50.0),
+            width: 70.0,
+            height: 40.0,
+            label: format!("IN_{}", i),
+            clock_period: None,
+            color: None,
+        });
+    }
+
+    // BusJoiner (comp ID 4)
+    editor.components.push(VisualComponent {
+        id: 4,
+        comp_type: ComponentType::BusJoiner,
+        pos: Vec2::new(150.0, 100.0),
+        width: 50.0,
+        height: 104.0, // 40.0 + 4 * 16.0
+        label: "JOIN".to_string(),
+        clock_period: Some(4), // width = 4
+        color: None,
+    });
+
+    // BusSplitter (comp ID 5)
+    editor.components.push(VisualComponent {
+        id: 5,
+        comp_type: ComponentType::BusSplitter,
+        pos: Vec2::new(300.0, 100.0),
+        width: 50.0,
+        height: 104.0,
+        label: "SPLIT".to_string(),
+        clock_period: Some(4), // width = 4
+        color: None,
+    });
+
+    // Outputs (comp IDs 6..10)
+    for i in 0..4 {
+        editor.components.push(VisualComponent {
+            id: 6 + i,
+            comp_type: ComponentType::Output,
+            pos: Vec2::new(450.0, i as f32 * 50.0),
+            width: 70.0,
+            height: 40.0,
+            label: format!("OUT_{}", i),
+            clock_period: None,
+            color: None,
+        });
+    }
+
+    // 2. Add connections
+    // Connect Inputs to BusJoiner
+    for i in 0..4 {
+        editor.connections.push(VisualConnection {
+            src_comp_id: i,
+            src_port: 0,
+            tgt_comp_id: 4,
+            tgt_port: i,
+        });
+    }
+
+    // Connect BusJoiner to BusSplitter (The Bus wire)
+    editor.connections.push(VisualConnection {
+        src_comp_id: 4,
+        src_port: 0,
+        tgt_comp_id: 5,
+        tgt_port: 0,
+    });
+
+    // Connect BusSplitter to Outputs
+    for i in 0..4 {
+        editor.connections.push(VisualConnection {
+            src_comp_id: 5,
+            src_port: i,
+            tgt_comp_id: 6 + i,
+            tgt_port: 0,
+        });
+    }
+
+    // 3. Compile
+    editor.compile();
+
+    // Verify compilation succeeded without errors
+    assert!(editor.engine.propagation_error.is_none());
+
+    // 4. Test signal propagation
+    // Toggle inputs: IN_0 = true, IN_1 = false, IN_2 = true, IN_3 = false
+    let input_states = [true, false, true, false];
+    for i in 0..4 {
+        if let Some(&sim_idx) = editor.engine.visual_to_sim_map.get(&i) {
+            editor.engine.simulator.set_input(sim_idx, input_states[i]);
+        }
+    }
+
+    // Run propagation
+    let propagate_ok = editor.engine.simulator.propagate_events(100).is_ok();
+    assert!(propagate_ok);
+
+    // Verify output values match input values
+    for i in 0..4 {
+        if let Some(&sim_idx) = editor.engine.visual_to_sim_map.get(&(6 + i)) {
+            let output_val = editor.engine.simulator.get_raw_state(sim_idx);
+            let expected_val = if input_states[i] { 0b10 } else { 0b01 };
+            assert_eq!(output_val, expected_val, "Output {} state mismatch!", i);
+        } else {
+            panic!("Output {} not compiled in visual_to_sim_map!", i);
+        }
+    }
+}
+

@@ -4,52 +4,35 @@ use macroquad::prelude::*;
 use super::Editor;
 
 impl Editor {
-    pub(crate) fn draw_manhattan_wire_segments(
-        src_pos: Vec2,
-        tgt_pos: Vec2,
-        thickness: f32,
-        color: Color,
-        zoom: f32,
-    ) {
-        if tgt_pos.x >= src_pos.x + 20.0 * zoom {
-            let mid_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0;
-            draw_line(src_pos.x, src_pos.y, mid_x, src_pos.y, thickness, color);
-            draw_line(mid_x, src_pos.y, mid_x, tgt_pos.y, thickness, color);
-            draw_line(mid_x, tgt_pos.y, tgt_pos.x, tgt_pos.y, thickness, color);
-        } else {
-            let stub_src = src_pos.x + 20.0 * zoom;
-            let stub_tgt = tgt_pos.x - 20.0 * zoom;
-
-            let mut mid_y = src_pos.y + (tgt_pos.y - src_pos.y) / 2.0;
-            if (tgt_pos.y - src_pos.y).abs() < 10.0 * zoom {
-                mid_y += 35.0 * zoom;
-            }
-
-            draw_line(src_pos.x, src_pos.y, stub_src, src_pos.y, thickness, color);
-            draw_line(stub_src, src_pos.y, stub_src, mid_y, thickness, color);
-            draw_line(stub_src, mid_y, stub_tgt, mid_y, thickness, color);
-            draw_line(stub_tgt, mid_y, stub_tgt, tgt_pos.y, thickness, color);
-            draw_line(stub_tgt, tgt_pos.y, tgt_pos.x, tgt_pos.y, thickness, color);
-        }
-    }
-
     pub(crate) fn draw_manhattan_wire(
         &self,
         src_pos: Vec2,
         tgt_pos: Vec2,
+        routing_offset: f32,
         wire_state: u8,
         is_selected: bool,
         color_override: Option<Color>,
+        is_bus: bool,
     ) {
-        let (base_color, thickness, is_active) = match wire_state {
+        let (base_color, mut thickness, is_active) = match wire_state {
             0b00 => (theme::ACCENT_GENERIC.mq(), 1.3 * self.canvas.zoom, false),
             0b01 => (theme::ACCENT_INACTIVE.mq(), 1.6 * self.canvas.zoom, false),
             0b10 => (theme::ACCENT_PRIMARY.mq(), 2.2 * self.canvas.zoom, true),
             _ => (theme::COMP_NAND.mq(), 2.8 * self.canvas.zoom, true),
         };
+        if is_bus {
+            thickness *= 2.2;
+        }
 
         // Use color override if provided, otherwise use state-based color
         let color = color_override.unwrap_or(base_color);
+
+        let segments = Self::compute_wire_segments_screen(
+            src_pos,
+            tgt_pos,
+            routing_offset,
+            self.canvas.zoom,
+        );
 
         // Active glow bloom effect under active wires
         if is_active || is_selected {
@@ -61,16 +44,14 @@ impl Editor {
             let glow_color = Color::new(glow_color.r, glow_color.g, glow_color.b, 0.2);
             let glow_thickness =
                 thickness + (if is_selected { 6.0 } else { 4.0 }) * self.canvas.zoom;
-            Self::draw_manhattan_wire_segments(
-                src_pos,
-                tgt_pos,
-                glow_thickness,
-                glow_color,
-                self.canvas.zoom,
-            );
+            for &(a, b) in &segments {
+                draw_line(a.x, a.y, b.x, b.y, glow_thickness, glow_color);
+            }
         }
 
-        Self::draw_manhattan_wire_segments(src_pos, tgt_pos, thickness, color, self.canvas.zoom);
+        for &(a, b) in &segments {
+            draw_line(a.x, a.y, b.x, b.y, thickness, color);
+        }
 
         // Draw concentric terminal circle/indicator at target
         let port_radius = 4.0 * self.canvas.zoom;
@@ -95,38 +76,11 @@ impl Editor {
         &self,
         src_pos: Vec2,
         tgt_pos: Vec2,
+        routing_offset: f32,
         point: Vec2,
         threshold: f32,
     ) -> bool {
-        let zoom = self.canvas.zoom;
-        let mut segments = Vec::new();
-
-        if tgt_pos.x >= src_pos.x + 20.0 * zoom {
-            let mid_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0;
-            segments.push((Vec2::new(src_pos.x, src_pos.y), Vec2::new(mid_x, src_pos.y)));
-            segments.push((Vec2::new(mid_x, src_pos.y), Vec2::new(mid_x, tgt_pos.y)));
-            segments.push((Vec2::new(mid_x, tgt_pos.y), Vec2::new(tgt_pos.x, tgt_pos.y)));
-        } else {
-            let stub_src = src_pos.x + 20.0 * zoom;
-            let stub_tgt = tgt_pos.x - 20.0 * zoom;
-
-            let mut mid_y = src_pos.y + (tgt_pos.y - src_pos.y) / 2.0;
-            if (tgt_pos.y - src_pos.y).abs() < 10.0 * zoom {
-                mid_y += 35.0 * zoom;
-            }
-
-            segments.push((
-                Vec2::new(src_pos.x, src_pos.y),
-                Vec2::new(stub_src, src_pos.y),
-            ));
-            segments.push((Vec2::new(stub_src, src_pos.y), Vec2::new(stub_src, mid_y)));
-            segments.push((Vec2::new(stub_src, mid_y), Vec2::new(stub_tgt, mid_y)));
-            segments.push((Vec2::new(stub_tgt, mid_y), Vec2::new(stub_tgt, tgt_pos.y)));
-            segments.push((
-                Vec2::new(stub_tgt, tgt_pos.y),
-                Vec2::new(tgt_pos.x, tgt_pos.y),
-            ));
-        }
+        let segments = Self::compute_wire_segments_world(src_pos, tgt_pos, routing_offset);
 
         for (a, b) in segments {
             let line_vec = b - a;

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0-alpha.1] - 2026-07-07
+
+### Added
+- **True Multi-Bit Buses:** Implemented high-level Bus routing capabilities using Joiner and Splitter components.
+- **Bus Joiner & Splitter Components:** Added dynamic Joiner and Splitter parts under the "Bus & Routing" catalog to group/split 2-16 single-bit signals.
+- **Thick Bus Line Rendering:** Bus connections are drawn at 2.2x thickness with glowing bloom overlays for distinct visual representation on the canvas.
+- **Sorted Fan-Out Routing:** Overhauled Manhattan connection routing to dynamically sort and lane fan-out lines, entirely avoiding overlapping overlaps on shared source/target nodes.
+- **Continuous Wire Crossing Arcs:** Improved bridge arc visual quality by showing the underlying continuous wire passing through crossings.
+- **Dynamic Port Scaling:** Visual port pins, selection boxes, and click hit-testing now automatically resize and align in real-time as bus widths change.
+
 ## [2.1.0-alpha.2] - 2026-07-02
 
 ### Added

@@ -49,6 +49,13 @@ impl Simulator {
                 ComponentType::Junction => {
                     component_ports.push((vec![vec![]], vec![OutputSource::PassedThrough(0)]));
                 }
+                ComponentType::BusJoiner | ComponentType::BusSplitter => {
+                    let w = component.bus_width();
+                    component_ports.push((
+                        vec![vec![]; w],
+                        (0..w).map(|i| OutputSource::PassedThrough(i)).collect(),
+                    ));
+                }
                 ComponentType::Clock => {
                     let clock_idx = self.add_gate(GateType::Input);
                     // Record visual component instance mapping
@@ -154,7 +161,10 @@ impl Simulator {
                         | ComponentType::Input
                         | ComponentType::Output
                         | ComponentType::Clock => None,
-                        ComponentType::SubChip(_) | ComponentType::Junction => {
+                        ComponentType::SubChip(_)
+                        | ComponentType::Junction
+                        | ComponentType::BusJoiner
+                        | ComponentType::BusSplitter => {
                             let (_, ref outputs) = component_ports[*component_idx];
                             match outputs[*port_idx] {
                                 OutputSource::PassedThrough(in_idx) => Some(TraceNode::CompInput {
@@ -219,7 +229,10 @@ impl Simulator {
                                     _ => break OutputSource::Floating,
                                 }
                             }
-                            ComponentType::SubChip(_) | ComponentType::Junction => {
+                            ComponentType::SubChip(_)
+                            | ComponentType::Junction
+                            | ComponentType::BusJoiner
+                            | ComponentType::BusSplitter => {
                                 let (_, ref outputs) = component_ports[component_idx];
                                 match outputs[port_idx] {
                                     OutputSource::DrivenByGate(g_idx) => {
@@ -266,6 +279,8 @@ impl Simulator {
                 ComponentType::SevenSegment => 8,
                 ComponentType::TriStateBuffer => 2,
                 ComponentType::Junction => 1,
+                ComponentType::BusJoiner => component.bus_width(),
+                ComponentType::BusSplitter => 1,
                 ComponentType::SubChip(sub_idx) => library[*sub_idx].inputs,
             };
 
@@ -298,6 +313,8 @@ impl Simulator {
                     ComponentType::SevenSegment => 8,
                     ComponentType::TriStateBuffer => 2,
                     ComponentType::Junction => 1,
+                    ComponentType::BusJoiner => component.bus_width(),
+                    ComponentType::BusSplitter => 1,
                     ComponentType::SubChip(sub_idx) => library[*sub_idx].inputs,
                 };
 

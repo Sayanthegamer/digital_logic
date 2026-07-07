@@ -38,6 +38,10 @@ pub struct VisualComponent {
 }
 
 impl VisualComponent {
+    pub fn bus_width(&self) -> usize {
+        self.clock_period.unwrap_or(4)
+    }
+
     pub fn input_port_pos(&self, port_idx: usize, num_inputs: usize) -> Vec2 {
         if self.comp_type == ComponentType::Junction {
             // Treat a Junction as a thin bar (either horizontal or vertical).
