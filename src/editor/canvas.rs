@@ -825,7 +825,7 @@ impl Editor {
 
         let zoom_x = view_w / padded_width;
         let zoom_y = view_h / padded_height;
-        let target_zoom = zoom_x.min(zoom_y).clamp(0.1, 2.0);
+        let target_zoom = zoom_x.min(zoom_y).clamp(0.01, 2.0);
 
         self.canvas.zoom = target_zoom;
         let scx = view_x + view_w / 2.0;

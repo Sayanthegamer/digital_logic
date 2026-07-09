@@ -98,6 +98,7 @@ impl Editor {
                     src_pos,
                     tgt_pos,
                     offset,
+                    wire.tgt_port,
                     wire_state,
                     is_selected,
                     wire_color_override,

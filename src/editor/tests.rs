@@ -495,7 +495,7 @@ fn test_hit_test_manhattan_wire_zoom() {
     // Thus, (110.0, 100.0) is on segment 1.
     // Under the zoom-corrected logic, hit testing at (110.0, 100.0) should succeed.
     let click_point = Vec2::new(110.0, 100.0);
-    let hit = editor.hit_test_manhattan_wire(src, tgt, 0.0, click_point, 2.0);
+    let hit = editor.hit_test_manhattan_wire(src, tgt, 0.0, 0, click_point, 2.0);
     assert!(hit);
 }
 

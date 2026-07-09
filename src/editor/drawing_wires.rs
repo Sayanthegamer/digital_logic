@@ -9,6 +9,7 @@ impl Editor {
         src_pos: Vec2,
         tgt_pos: Vec2,
         routing_offset: f32,
+        tgt_port: usize,
         wire_state: u8,
         is_selected: bool,
         color_override: Option<Color>,
@@ -31,6 +32,7 @@ impl Editor {
             src_pos,
             tgt_pos,
             routing_offset,
+            tgt_port,
             self.canvas.zoom,
         );
 
@@ -77,10 +79,11 @@ impl Editor {
         src_pos: Vec2,
         tgt_pos: Vec2,
         routing_offset: f32,
+        tgt_port: usize,
         point: Vec2,
         threshold: f32,
     ) -> bool {
-        let segments = Self::compute_wire_segments_world(src_pos, tgt_pos, routing_offset);
+        let segments = Self::compute_wire_segments_world(src_pos, tgt_pos, routing_offset, tgt_port);
 
         for (a, b) in segments {
             let line_vec = b - a;

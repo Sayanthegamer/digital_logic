@@ -239,7 +239,7 @@ impl Editor {
                 } else {
                     self.canvas.zoom /= 1.15;
                 }
-                self.canvas.zoom = self.canvas.zoom.clamp(0.15, 4.0);
+                self.canvas.zoom = self.canvas.zoom.clamp(0.01, 4.0);
 
                 // Pan adjustment to zoom on mouse cursor
                 self.canvas.pan = mouse_pos_screen
@@ -307,6 +307,7 @@ impl Editor {
                         src_pos,
                         tgt_pos,
                         offset,
+                        conn.tgt_port,
                         mouse_pos_world,
                         10.0 / self.canvas.zoom,
                     ) {
@@ -464,6 +465,7 @@ impl Editor {
                                             src_pos,
                                             tgt_pos,
                                             offset,
+                                            conn.tgt_port,
                                             mouse_pos_world,
                                             10.0 / self.canvas.zoom,
                                         ) {
@@ -484,6 +486,7 @@ impl Editor {
                                         self.canvas.selected_connections.insert(wire);
                                     }
                                     clicked_something = true;
+                                    self.canvas.dragging_wire = Some(wire);
                                 } else {
                                     self.canvas.selected_comp_ids.clear();
                                     self.canvas.selected_connections.clear();
@@ -650,7 +653,22 @@ impl Editor {
                         (target_pos.y / 20.0).round() * 20.0,
                     );
                 }
+
+                // Drag wire nudge
+                if let Some(wire) = self.canvas.dragging_wire {
+                    let delta = if mouse_delta.x.abs() > mouse_delta.y.abs() {
+                        mouse_delta.x
+                    } else {
+                        mouse_delta.y
+                    };
+                    if delta.abs() > 0.0 {
+                        let key = wire.color_key();
+                        let current = self.wire_nudges.get(&key).copied().unwrap_or(0.0);
+                        self.wire_nudges.insert(key, current + delta / self.canvas.zoom);
+                    }
+                }
             } else if is_mouse_button_released(MouseButton::Left) {
+                self.canvas.dragging_wire = None;
                 // If it was an Input component and it was clicked (not dragged far)
                 if let Some(comp_id) = self.canvas.dragging_comp_id
                     && self.canvas.drag_dist_pixels < 5.0
@@ -700,8 +718,8 @@ impl Editor {
                             }
                         }
 
-                        let wire_bounds = |src_pos: Vec2, tgt_pos: Vec2, offset: f32| -> Rect {
-                            let segments = Self::compute_wire_segments_world(src_pos, tgt_pos, offset);
+                        let wire_bounds = |src_pos: Vec2, tgt_pos: Vec2, offset: f32, tgt_port: usize| -> Rect {
+                            let segments = Self::compute_wire_segments_world(src_pos, tgt_pos, offset, tgt_port);
                             let (mut min_x, mut max_x) = (f32::INFINITY, f32::NEG_INFINITY);
                             let (mut min_y, mut max_y) = (f32::INFINITY, f32::NEG_INFINITY);
                             for (a, b) in segments {
@@ -729,7 +747,7 @@ impl Editor {
                                 let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
 
                                 let offset = self.get_connection_routing_offset(conn);
-                                let wire_rect = wire_bounds(src_pos, tgt_pos, offset);
+                                let wire_rect = wire_bounds(src_pos, tgt_pos, offset, conn.tgt_port);
                                 if wire_rect.overlaps(&box_rect) {
                                     self.canvas.selected_connections.insert(*conn);
                                 }

@@ -16,6 +16,9 @@ pub struct ProjectFile {
     /// Per-component and per-wire colour overrides (backward compat: defaults to empty)
     #[serde(default)]
     pub color_overrides: ColorOverrides,
+    /// Manual routing nudges per wire
+    #[serde(default)]
+    pub wire_nudges: std::collections::HashMap<String, f32>,
 }
 
 impl Editor {
@@ -30,6 +33,7 @@ impl Editor {
             next_component_id: self.next_component_id,
             annotations: self.annotations.clone(),
             color_overrides: self.color_overrides.clone(),
+            wire_nudges: self.wire_nudges.clone(),
         };
 
         let serialized = serde_json::to_string_pretty(&project)?;
@@ -73,6 +77,7 @@ impl Editor {
                 self.next_component_id = project.next_component_id;
                 self.annotations = project.annotations;
                 self.color_overrides = project.color_overrides;
+                self.wire_nudges = project.wire_nudges;
                 self.canvas.selected_comp_id = None;
                 self.canvas.selected_annotation_idx = None;
                 self.canvas.inspection_path.clear();
@@ -279,7 +284,7 @@ impl Editor {
                 let tgt_pos = tgt.input_port_pos(wire.tgt_port, tgt_inputs);
 
                 let offset = self.get_connection_routing_offset(wire);
-                let segments = Self::compute_wire_segments_world(src_pos, tgt_pos, offset);
+                let segments = Self::compute_wire_segments_world(src_pos, tgt_pos, offset, wire.tgt_port);
                 let is_bus = self.is_bus_connection(wire);
 
                 let wire_state = if let Some(&gate_idx) = self

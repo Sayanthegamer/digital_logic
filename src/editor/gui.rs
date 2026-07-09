@@ -531,6 +531,13 @@ impl Editor {
                                             max_y = max_y.max(comp.pos.y + comp.height);
                                         }
 
+                                        for ann in &self.annotations {
+                                            min_x = min_x.min(ann.pos.x);
+                                            min_y = min_y.min(ann.pos.y);
+                                            max_x = max_x.max(ann.pos.x + 150.0);
+                                            max_y = max_y.max(ann.pos.y + 20.0);
+                                        }
+
                                         let padding = 100.0;
                                         let w = (max_x - min_x).max(100.0);
                                         let h = (max_y - min_y).max(100.0);
@@ -538,11 +545,11 @@ impl Editor {
                                         // Target zoom to fit all components into the actual viewport.
                                         let zoom_x = view_w / (w + padding * 2.0);
                                         let zoom_y = view_h / (h + padding * 2.0);
-                                        self.canvas.zoom = zoom_x.min(zoom_y).clamp(0.1, 5.0);
+                                        self.canvas.zoom = zoom_x.min(zoom_y).clamp(0.01, 5.0);
 
                                         // Target pan to center content in the viewport.
-                                        let center_x = min_x + w / 2.0;
-                                        let center_y = min_y + h / 2.0;
+                                        let center_x = (min_x + max_x) / 2.0;
+                                        let center_y = (min_y + max_y) / 2.0;
                                         self.canvas.pan = macroquad::prelude::Vec2::new(
                                             view_min_x + view_w / 2.0,
                                             view_min_y + view_h / 2.0,
@@ -621,14 +628,13 @@ impl Editor {
                 });
             });
 
-        // Cache the actual canvas viewport (remaining area) in screen pixels.
+        // Cache the actual canvas viewport (remaining area) in logical pixels.
         let r = ctx.available_rect();
-        let ppp = ctx.pixels_per_point();
         self.ui.canvas_viewport.replace((
-            r.min.x * ppp,
-            r.min.y * ppp,
-            r.width() * ppp,
-            r.height() * ppp,
+            r.min.x,
+            r.min.y,
+            r.width(),
+            r.height(),
         ));
     }
 

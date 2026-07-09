@@ -102,7 +102,9 @@ impl Editor {
         let hash = (conn.tgt_comp_id + conn.tgt_port) % 3;
         let hash_offset = (hash as f32 - 1.0) * 4.0;
 
-        fanout_offset + hash_offset
+        let manual_nudge = self.wire_nudges.get(&conn.color_key()).copied().unwrap_or(0.0);
+
+        fanout_offset + hash_offset + manual_nudge
     }
 
     pub fn get_blueprint_connection_routing_offset(
@@ -158,6 +160,7 @@ impl Editor {
         src_pos: Vec2,
         tgt_pos: Vec2,
         routing_offset: f32,
+        tgt_port: usize,
         zoom: f32,
     ) -> Vec<(Vec2, Vec2)> {
         let mut segments = Vec::new();
@@ -172,9 +175,10 @@ impl Editor {
         } else {
             let offset_x = routing_offset.abs() * 0.7 * zoom;
             let offset_y = routing_offset * zoom;
+            let target_stagger = (tgt_port as f32 * 6.0) * zoom; // Stagger backward routing
 
             let stub_src = src_pos.x + 20.0 * zoom + offset_x;
-            let stub_tgt = tgt_pos.x - 20.0 * zoom - offset_x;
+            let stub_tgt = tgt_pos.x - 20.0 * zoom - offset_x - target_stagger;
 
             let mut mid_y = src_pos.y + (tgt_pos.y - src_pos.y) / 2.0 + offset_y;
             if (tgt_pos.y - src_pos.y).abs() < 10.0 * zoom {
@@ -195,8 +199,9 @@ impl Editor {
         src_pos: Vec2,
         tgt_pos: Vec2,
         routing_offset: f32,
+        tgt_port: usize,
     ) -> Vec<(Vec2, Vec2)> {
-        Self::compute_wire_segments_screen(src_pos, tgt_pos, routing_offset, 1.0)
+        Self::compute_wire_segments_screen(src_pos, tgt_pos, routing_offset, tgt_port, 1.0)
     }
 
     /// Find all wire intersections (junctions and crossings) across all connections.
@@ -220,6 +225,7 @@ impl Editor {
                     src_pos,
                     tgt_pos,
                     offset,
+                    wire.tgt_port,
                     self.canvas.zoom,
                 );
                 for (a, b) in segments {
@@ -263,11 +269,16 @@ impl Editor {
 
                     // Determine which wire is "upper" for bridge arc direction
                     let seg_i_horizontal = is_horizontal(all_segments[i].a, all_segments[i].b);
+                    let seg_j_horizontal = is_horizontal(all_segments[j].a, all_segments[j].b);
 
-                    let (lower_conn_idx, upper_conn_idx) = if seg_i_horizontal {
-                        (all_segments[j].conn_idx, all_segments[i].conn_idx)
+                    // We always want the horizontal wire to jump (be the upper wire)
+                    let (lower_conn_idx, upper_conn_idx, upper_is_horizontal) = if seg_i_horizontal {
+                        (all_segments[j].conn_idx, all_segments[i].conn_idx, true)
+                    } else if seg_j_horizontal {
+                        (all_segments[i].conn_idx, all_segments[j].conn_idx, true)
                     } else {
-                        (all_segments[i].conn_idx, all_segments[j].conn_idx)
+                        // Fallback if they somehow cross while both vertical/horizontal (shouldn't happen with orthogonal)
+                        (all_segments[j].conn_idx, all_segments[i].conn_idx, seg_i_horizontal)
                     };
 
                     let lower_conn = &self.connections[lower_conn_idx];
@@ -279,7 +290,7 @@ impl Editor {
                     intersections.push(WireIntersection {
                         point,
                         junction_type: JunctionType::Crossing,
-                        upper_horizontal: seg_i_horizontal,
+                        upper_horizontal: upper_is_horizontal,
                         lower_color,
                         lower_thickness,
                         upper_color,

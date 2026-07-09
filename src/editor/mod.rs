@@ -47,9 +47,10 @@ pub struct Editor {
 
     // Global chip library (persisted across projects)
     pub global_library: global_library::GlobalLibrary,
-
     // Per-component and per-wire colour overrides
     pub color_overrides: color_coding::ColorOverrides,
+    // Manual routing nudges per wire
+    pub wire_nudges: std::collections::HashMap<String, f32>,
 }
 
 impl Default for Editor {
@@ -80,6 +81,7 @@ impl Editor {
             history: state::HistoryManager::default(),
             global_library: global_library::load_global_library(),
             color_overrides: color_coding::ColorOverrides::default(),
+            wire_nudges: std::collections::HashMap::new(),
         };
 
         // If global library has chips, use them; otherwise set up defaults and save
