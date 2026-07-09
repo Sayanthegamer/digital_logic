@@ -816,16 +816,20 @@ impl Editor {
         let padded_width = width + 400.0;
         let padded_height = height + 400.0;
 
-        let screen_w = macroquad::window::screen_width();
-        let screen_h = macroquad::window::screen_height();
+        let (view_x, view_y, view_w, view_h) = self.ui.canvas_viewport.unwrap_or((
+            0.0,
+            0.0,
+            macroquad::window::screen_width(),
+            macroquad::window::screen_height(),
+        ));
 
-        let zoom_x = screen_w / padded_width;
-        let zoom_y = screen_h / padded_height;
+        let zoom_x = view_w / padded_width;
+        let zoom_y = view_h / padded_height;
         let target_zoom = zoom_x.min(zoom_y).clamp(0.1, 2.0);
 
         self.canvas.zoom = target_zoom;
-        let scx = screen_w / 2.0;
-        let scy = screen_h / 2.0;
+        let scx = view_x + view_w / 2.0;
+        let scy = view_y + view_h / 2.0;
 
         let cx = (min_x + max_x) / 2.0;
         let cy = (min_y + max_y) / 2.0;

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0-alpha.5] - 2026-07-09
+
+### Fixed
+- **DPI-Aware Camera Centering:** Fixed `apply_camera_bounds` to use the cached canvas viewport area in physical pixels (`self.ui.canvas_viewport`) instead of the raw window boundaries. This ensures that camera recentering and fit-to-screen functions calculate zoom and pan accurately on high DPI screens and respect egui side panels without clipping/hiding components.
+
 ## [2.2.0-alpha.4] - 2026-07-09
 
 ### Added
