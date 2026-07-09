@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0-alpha.3] - 2026-07-09
+
+### Added
+- **High DPI Resolution Support:** Configured Macroquad `Conf` with `high_dpi: true` to enable sharp, high-resolution rendering on modern Retina and high-DPI displays, resolving blurry/pixelated viewport issues.
+- **Multisample Anti-Aliasing (MSAA):** Added `sample_count: 4` to window configuration to smoothly render diagonal wire lines, circles, and borders.
+- **Dynamic Text Decluttering on Zoom Out:** Automatically hide component labels and sub-chip port names when zooming out below 35% (`zoom < 0.35`) to avoid illegible microscopic text and screen pixelation.
+
 ## [2.2.0-alpha.2] - 2026-07-08
 
 ### Added

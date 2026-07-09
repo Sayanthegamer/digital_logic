@@ -31,7 +31,16 @@ pub async fn run() {
     }
 }
 
-#[macroquad::main("Digital Logic Simulator")]
+fn window_conf() -> Conf {
+    Conf {
+        window_title: "Digital Logic Simulator".to_string(),
+        high_dpi: true,
+        sample_count: 4,
+        ..Default::default()
+    }
+}
+
+#[macroquad::main(window_conf)]
 pub async fn main() {
     run().await;
 }

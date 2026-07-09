@@ -393,7 +393,7 @@ impl Editor {
             let text_y = screen_pos.y + (comp_height + text_size.height) / 2.0;
 
             let text_color = theme::TEXT_PRIMARY.mq();
-            if comp.comp_type != ComponentType::SevenSegment {
+            if comp.comp_type != ComponentType::SevenSegment && self.canvas.zoom >= 0.35 {
                 draw_text_ex(
                     &comp.label,
                     text_x,
@@ -504,6 +504,7 @@ impl Editor {
             // Draw custom port names inside sub-chip boundary boxes
             if let ComponentType::SubChip(idx) = comp.comp_type
                 && let Some(bp) = self.engine.library.get(idx)
+                && self.canvas.zoom >= 0.35
             {
                 let target_text_size_px = (10.0 * self.canvas.zoom).max(5.0);
                 let base_font_size = 32.0;
