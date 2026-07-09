@@ -684,3 +684,69 @@ fn test_seven_segment_top_level_port_allocation() {
     assert!(state, "The 8th input segment (minus sign) did not receive the signal!");
 }
 
+#[test]
+fn test_svg_export() {
+    let mut editor = Editor::new();
+    editor.components.clear();
+    editor.connections.clear();
+
+    // Add Nand Gate (comp ID 0)
+    editor.components.push(VisualComponent {
+        id: 0,
+        comp_type: ComponentType::Nand,
+        pos: Vec2::new(100.0, 100.0),
+        width: 70.0,
+        height: 40.0,
+        label: "NAND".to_string(),
+        clock_period: None,
+        color: None,
+    });
+
+    // Add Input (comp ID 1)
+    editor.components.push(VisualComponent {
+        id: 1,
+        comp_type: ComponentType::Input,
+        pos: Vec2::new(0.0, 100.0),
+        width: 70.0,
+        height: 40.0,
+        label: "IN".to_string(),
+        clock_period: None,
+        color: None,
+    });
+
+    // Wire them up
+    editor.connections.push(VisualConnection {
+        src_comp_id: 1,
+        src_port: 0,
+        tgt_comp_id: 0,
+        tgt_port: 0,
+    });
+
+    // Compile
+    editor.compile();
+
+    // Export to temporary file path
+    let mut svg_path = std::env::temp_dir();
+    svg_path.push("test_logic_simulator_project_export.svg");
+    
+    let res = editor.export_svg_to_path(&svg_path);
+    assert!(res.is_ok(), "Failed to export SVG: {:?}", res);
+
+    // Verify SVG file content
+    assert!(svg_path.exists(), "SVG file does not exist");
+    let svg_content = std::fs::read_to_string(&svg_path).expect("Failed to read SVG file");
+    
+    assert!(svg_content.starts_with("<svg"), "SVG should start with <svg tag");
+    assert!(svg_content.ends_with("</svg>\n") || svg_content.ends_with("</svg>"), "SVG should end with </svg>");
+    
+    // Check for key elements
+    assert!(svg_content.contains("rect class=\"bg\""), "SVG should contain canvas background");
+    assert!(svg_content.contains("class=\"component\""), "SVG should contain component body");
+    assert!(svg_content.contains("class=\"wire\""), "SVG should contain wire path");
+    assert!(svg_content.contains("<circle class=\"port\""), "SVG should contain port circles");
+    assert!(svg_content.contains("NAND"), "SVG should contain text labels");
+
+    // Clean up
+    let _ = std::fs::remove_file(&svg_path);
+}
+

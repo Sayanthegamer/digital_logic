@@ -79,3 +79,5 @@ pub const ICON_CLEAR: &str = "\u{e14c}"; // clear
 pub const ICON_REDO: &str = "\u{e15a}"; // redo
 pub const ICON_RECENTER: &str = "\u{e55c}"; // pin_drop / filter_center_focus
 pub const ICON_REFRESH: &str = "\u{e5d5}"; // refresh
+pub const ICON_IMAGE: &str = "\u{e3f4}";   // image / export picture
+

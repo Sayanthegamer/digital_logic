@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0-alpha.4] - 2026-07-09
+
+### Added
+- **SVG Vector Picture Export:** Added a toolbar option to export a high-fidelity vector diagram of the entire circuit bounds to `.svg` format. Wires, component labels, body shapes, accent colors, ports, custom sub-chip port names, and annotations are fully structured, translated, styled, and rendered.
+- **SVG Export Test Coverage:** Added unit test `test_svg_export` to verify generated SVG file integrity.
+
 ## [2.2.0-alpha.3] - 2026-07-09
 
 ### Added

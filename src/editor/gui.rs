@@ -576,6 +576,13 @@ impl Editor {
                                 self.load_project();
                             }
                             if ui
+                                .button(theme::ICON_IMAGE)
+                                .on_hover_text("Export SVG Picture")
+                                .clicked()
+                            {
+                                self.export_to_svg();
+                            }
+                            if ui
                                 .button(theme::ICON_SETTINGS)
                                 .on_hover_text("Settings")
                                 .clicked()
