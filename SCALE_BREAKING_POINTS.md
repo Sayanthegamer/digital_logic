@@ -73,3 +73,13 @@ for i in 0..all_segments.len() {
 This does not break compilation because the backward signal walk (`trace_root`) resolves the signals via recursive `PassedThrough` logic. However, this discrepancy means:
 - The visual "bus" wire's activity color only reflects the state of bit 0 of the bus rather than evaluating the entire word.
 - It can cause confusion when extending the compiler or inspector logic.
+
+---
+
+## 5. Junction Port Overlap & Connection Stacking [SOLVED]
+
+### The Resolution
+This layout clutter issue has been fully resolved.
+1. **Perpendicular Tap Routing**: We introduced `get_connection_ports` and `get_junction_connect_pos` inside `editor/mod.rs`. Wires connected to a stretched Junction now tap perpendicularly along the closest coordinate of the Junction's body instead of routing to its endpoints. This entirely prevents horizontal/vertical overlapping segments on fan-out and fan-in wires connecting to Junction buses.
+2. **Wire Deduplication**: We added a filtering rule in `input_release.rs` that cleans up matching connections (`src_comp_id`, `src_port`, `tgt_comp_id`, `tgt_port`) before pushing new ones, ensuring no duplicate wires stack on top of each other.
+

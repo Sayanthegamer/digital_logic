@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0-alpha.2] - 2026-07-10
+
+### Added
+- **Smart Perpendicular Junction Tap Routing**: Wires now dynamically attach/tap perpendicularly along the nearest point of a stretched Junction component body relative to the target/source coordinates. This completely eliminates wire-endpoint clutter and overlaps around stretched Junction blocks.
+- **Connection Deduplication**: Added connection filtering to prevent identical wire connection duplicates from stacking on top of each other.
+
+### Optimized
+- **Global Channel-Based Wire Routing**: Replaced the local, quadratic $O(n \cdot m)$ dynamic routing offset solver with a global lane allocation pass. Using greedy interval coloring and spatial sorting, the editor resolves and caches non-overlapping alternating offsets (0, +12, -12, +24, -24, ...) on compile and layout changes, reducing the per-frame lookup to a clean $O(1)$ HashMap fetch.
+- **Decomposed Input Management**: Decomposed the massive, monolithic `input.rs` and `input_interactions.rs` files into 10 highly cohesive submodules (navigation, keyboard, hover, interactions, press, down, release, delete, context_menu, and simulation) to improve maintainability and decouple state orchestration.
+
 ## [2.3.0-alpha.1] - 2026-07-09
 
 ### Added

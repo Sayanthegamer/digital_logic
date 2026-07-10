@@ -330,7 +330,8 @@ digital_logic/
 │   ├── editor/               # Macroquad + egui frontend
 │   │   ├── canvas.rs         # Visual → simulator compilation bridge
 │   │   ├── drawing*.rs       # Wire/component rendering & manhattan routing
-│   │   ├── input.rs          # Mouse / touch / keyboard handling
+│   │   ├── input.rs          # Input entry point and coordinator
+│   │   ├── input_*.rs        # Modular phase-specific input handlers (press, drag, release, hover, etc.)
 │   │   ├── inspection_*.rs   # "Look Inside" deep-trace overlay
 │   │   ├── ui_*.rs           # egui panels: catalog, properties
 │   │   ├── history.rs        # Undo / redo snapshot stack

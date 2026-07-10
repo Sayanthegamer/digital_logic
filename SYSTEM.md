@@ -30,7 +30,7 @@ sudo apt-get install -y pkg-config libx11-dev libxi-dev libgl1-mesa-dev libasoun
 To package the app for Android, you must configure:
 - **Android NDK & SDK**: Ensure both are installed. Set `ANDROID_NDK_ROOT` to point to the NDK path (e.g., version `r25c`).
 - **Rust Android Targets**: Run `rustup target add aarch64-linux-android armv7-linux-androideabi`.
-- **cargo-apk**: The compilation tool installed via `cargo install cargo-apk`.
+- **cargo-ndk**: The compilation tool installed via `cargo install cargo-ndk`.
 
 
 ## Cargo Dependencies
