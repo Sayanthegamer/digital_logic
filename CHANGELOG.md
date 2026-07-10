@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.3.0-alpha.2] - 2026-07-10
+## [3.0.0-alpha.1] - 2026-07-10
 
 ### Added
 - **Smart Perpendicular Junction Tap Routing**: Wires now dynamically attach/tap perpendicularly along the nearest point of a stretched Junction component body relative to the target/source coordinates. This completely eliminates wire-endpoint clutter and overlaps around stretched Junction blocks.

@@ -193,10 +193,7 @@ impl Editor {
                 -(lane / 2) as f32 * 12.0
             };
 
-            let key = data.conn.color_key();
-            let manual_nudge = self.wire_nudges.get(&key).copied().unwrap_or(0.0);
-
-            wire_offsets.insert(data.conn, lane_offset + manual_nudge);
+            wire_offsets.insert(data.conn, lane_offset);
         }
 
         self.wire_offsets = wire_offsets;
