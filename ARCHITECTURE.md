@@ -31,6 +31,7 @@ The Editor UI has been modularized to ensure high maintainability and structured
 - **`gui.rs` & `ui_*.rs`**: Handles layout orchestration, toolbars, properties panels, and standalone menus like Settings or Credits (egui).
 - **`drawing.rs` & `drawing_*.rs`**: Handles primitive math, shape rendering, and routing of manhattan wires (Macroquad).
 - **`inspection_logic.rs` & `inspection_ui.rs`**: Handles tracing states deep inside sub-chips and visualizing them in a read-only overlay.
+- **`input.rs` & `input_*.rs`**: Handles user input events (touch camera controls, keyboard shortcuts, magnetic port hovering, context menu targets, and canvas left-click drag-and-drop state machines). To optimize maintainability, these are structured as a slim coordinator (`input.rs`) dispatching to separate submodules representing distinct interaction phases (`input_press.rs`, `input_down.rs`, `input_release.rs`, `input_delete.rs`).
 
 ### Separation of State
 The `Editor` struct maintains the visual state (positions, zooming, tool selection) and interacts with the `Simulator`. Visual components are mapped to underlying simulation indices (`port_to_sim_gate_map`, `visual_to_sim_map`), meaning the UI is just a "viewer" and "controller" for the high-performance core, never dragging down the simulation speed.

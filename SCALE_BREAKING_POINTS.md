@@ -13,33 +13,30 @@ Currently, editing the circuit (placing components, deleting wires, or changing 
 
 ---
 
-## 2. Editor Bottlenecks: Quadratic Connection Routing Offset
+## 2. Editor Bottlenecks: Quadratic Connection Routing Offset [SOLVED]
 
-### The Issue
-The connection routing offset function `get_connection_routing_offset` in [wire_junctions.rs](file:///c:/Users/Anon/Desktop/logic-sim(rust)/logic_simulator/src/editor/wire_junctions.rs#L69) is $O(n)$ per call:
+### The Resolution
+This bottleneck has been fully resolved. We replaced the local, $O(n)$ per-wire routing offset solver with a **global channel-based lane allocator** (`recompute_wire_offsets`). 
+
+Instead of computing offsets dynamically on every frame query, the solver runs once during compilation or frame updates while dragging a component or wire. It:
+1. Groups all connections by spatial corridors based on their ideal vertical segment coordinates in world coordinates.
+2. Checks Y-interval overlaps (with a 4px cushion) to detect conflicts.
+3. Applies greedy interval coloring to assign non-conflicting lane indices (0, 1, 2, ...).
+4. Maps lanes to alternating offsets (0, +12, -12, +24, -24, ...) and caches the results in a `HashMap` directly on the `Editor` struct.
+
+### Call Sites & Complexity
+The `get_connection_routing_offset` method is now a simple $O(1)$ cached map lookup:
 ```rust
 pub fn get_connection_routing_offset(&self, conn: &VisualConnection) -> f32 {
-    let mut sharing: Vec<&VisualConnection> = self.connections.iter()
-        .filter(|c| c.src_comp_id == conn.src_comp_id && c.src_port == conn.src_port)
-        .collect();
-    ...
+    self.wire_offsets.get(conn).copied().unwrap_or(0.0)
 }
 ```
-Every time a connection is queried, it scans all active visual connections. 
-Furthermore, if multiple wires share a source port, it builds a `HashMap` mapping all components by ID:
-```rust
-let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
-    self.components.iter().map(|c| (c.id, c)).collect();
-```
-This hashmap allocation and traversal happens **on every single invocation** of a shared port query.
+This entirely eliminates frame-by-frame traversal and intermediate `HashMap` allocations in:
+- The main drawing loop (`drawing.rs`).
+- The intersection bridge arc renderer (`wire_junctions.rs`).
+- Input event handlers (`input_interactions` submodules).
 
-### Call Sites & Quadratic Behavior
-This function is called:
-- Once per wire in the main drawing loop (`drawing.rs`).
-- Once per wire segment inside `find_wire_intersections` (`wire_junctions.rs`).
-- In multiple places inside input event handler loops (`input.rs`).
-
-Because this is executed once per wire, every single frame, it leads to $O(n \cdot m)$ complexity where $n$ is the number of connections and $m$ is the number of components. At CPU-scale layout sizes (2,000+ wires), this leads to millions of operations and frequent hashmap reallocations, severely impacting the frame rate.
+The rendering complexity has been reduced from $O(n \cdot m)$ to a clean $O(n)$ cached layout query per frame.
 
 ---
 
