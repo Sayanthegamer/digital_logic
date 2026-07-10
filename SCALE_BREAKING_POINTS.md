@@ -38,6 +38,20 @@ This entirely eliminates frame-by-frame traversal and intermediate `HashMap` all
 
 The rendering complexity has been reduced from $O(n \cdot m)$ to a clean $O(n)$ cached layout query per frame.
 
+### Remaining Drag-Path Limitations
+> [!IMPORTANT]
+> While the rendering/hit-testing paths are now a fast $O(1)$ map lookup from the cache, the lane allocation pass itself (`recompute_wire_offsets`) has an $O(n^2)$ time complexity in terms of total connections (due to the pairwise Y-overlap checks required for greedy coloring).
+>
+> Currently, this allocator is executed unconditionally **every frame** during active component or wire drags in `input.rs`:
+> ```rust
+> if self.canvas.dragging_comp_id.is_some() || self.canvas.dragging_wire.is_some() {
+>     self.recompute_wire_offsets();
+> }
+> ```
+> At massive scale (thousands of wires), running this $O(n^2)$ pass 60 times a second can cause drag stutter. 
+> 
+> **Proposed Fix**: Throttle or localize the drag-time recomputation (e.g. only recompute lane offsets for connections connected to the dragged component's inputs and outputs rather than re-coloring the entire canvas graph).
+
 ---
 
 ## 3. Editor Bottlenecks: Quadratic Junction & Crossing Detection

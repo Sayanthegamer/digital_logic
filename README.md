@@ -293,7 +293,7 @@ Full details, including keystore generation for signed release APKs, live in [`D
 The resulting executable lands at:
 - **Linux / macOS:** `./target/release/logic_simulator`
 - **Windows:** `.\target\release\logic_simulator.exe`
-- **Android:** `.\target\android-artifacts\release\apk\logic_simulator.apk` (local build) or via the Gradle pipeline above
+- **Android:** `.\android\app\build\outputs\apk\release\app-release.apk` (local build) or via the Gradle pipeline above
 
 ## ⌨️ Controls Cheat Sheet
 

@@ -65,25 +65,26 @@ You can also build the application as a standalone Android APK. Because the inte
    rustup target add aarch64-linux-android armv7-linux-androideabi
    ```
 
-3. **Install cargo-quad-apk**:
+3. **Install cargo-ndk**:
    ```bash
-   cargo install cargo-quad-apk
+   cargo install cargo-ndk
    ```
 
 ### Building the Release APK
 
-1. **Generate a Keystore**:
-   To build in release mode, a keystore file named `release.keystore` must exist in the root directory of the `logic_simulator` package. You can generate a self-signed one using:
+1. **Compile Native Libraries**:
+   Compile the Rust codebase using `cargo-ndk` to generate the `.so` native library binaries:
    ```bash
-   keytool -genkey -v -keystore release.keystore -alias release-key -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android, O=Android, C=US" -storepass android -keypass android
-   ```
-   *(Note: The keystore credentials `android` and alias `release-key` match the pre-configured settings in `Cargo.toml`).*
-
-2. **Compile the APK (Local Setup)**:
-   ```bash
-   cargo quad-apk build --release
+   cargo ndk -t arm64-v8a -t armeabi-v7a -o android/app/src/main/jniLibs build --release
    ```
 
-The resulting signed APK will be located at:
-- `.\target\android-artifacts\release\apk\logic_simulator.apk`
+2. **Assemble APK with Gradle**:
+   Navigate to the `android/` Gradle project directory and compile the package:
+   ```bash
+   cd android
+   ./gradlew assembleRelease
+   ```
+
+The resulting signed release APK will be located at:
+- `android/app/build/outputs/apk/release/app-release.apk`
 
