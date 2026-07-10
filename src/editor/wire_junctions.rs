@@ -67,7 +67,9 @@ impl Editor {
     }
 
     pub fn get_connection_routing_offset(&self, conn: &VisualConnection) -> f32 {
-        self.wire_offsets.get(conn).copied().unwrap_or(0.0)
+        let base_offset = self.wire_offsets.get(conn).copied().unwrap_or(0.0);
+        let manual_nudge = self.wire_nudges.get(&conn.color_key()).copied().unwrap_or(0.0);
+        base_offset + manual_nudge
     }
 
     pub fn recompute_wire_offsets(&mut self) {

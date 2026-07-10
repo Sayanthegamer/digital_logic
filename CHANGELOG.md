@@ -5,8 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.2.0-alpha.5] - 2026-07-09
+## [2.3.0-alpha.1] - 2026-07-09
 
+### Added
+- **Manual Wire Nudging:** You can now manually click and drag any wire to adjust its routing offset, allowing precise control to detour around large components. Custom routing offsets are seamlessly integrated with the global lane solver and are saved within your `.logic` project file.
+
+### Fixed
+- **Jump Arc Consistency:** Fixed a bug where intersecting wire jump arcs would draw horizontally or vertically depending on arbitrary processing order, often using the wrong color. Arcs are now strictly bound to the horizontal wire.
+- **Backward Routing Overlap:** Fixed an issue where multiple wires routing backwards (right-to-left) into the same component would draw overlapping vertical segments that caused visual tearing and color swapping. Backward routes now intelligently stagger like bus splitters to guarantee they never overlap.
+- **Zoom Clamping Limits:** Drastically lowered the minimum zoom clamp down to `0.01` to allow smooth recentering and viewing of massive circuits without artificial cutoffs.
+- **Recenter Annotations:** The Recenter button now includes floating text annotations when framing the circuit bounding box, mirroring the SVG export logic.
+
+## [2.2.0-alpha.5] - 2026-07-09
 ### Fixed
 - **DPI-Aware Camera Centering:** Fixed `apply_camera_bounds` to use the cached canvas viewport area in physical pixels (`self.ui.canvas_viewport`) instead of the raw window boundaries. This ensures that camera recentering and fit-to-screen functions calculate zoom and pan accurately on high DPI screens and respect egui side panels without clipping/hiding components.
 
