@@ -710,4 +710,46 @@ impl Editor {
             *idx = map[*idx];
         }
     }
+
+    pub fn get_connection_ports(
+        &self,
+        conn: &types::VisualConnection,
+        src: &types::VisualComponent,
+        tgt: &types::VisualComponent,
+    ) -> (Vec2, Vec2) {
+        let (_, src_outputs) = self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
+        let (tgt_inputs, _) = self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
+
+        let src_is_junc = src.comp_type == ComponentType::Junction;
+        let tgt_is_junc = tgt.comp_type == ComponentType::Junction;
+
+        if src_is_junc && tgt_is_junc {
+            let src_pos = src.output_port_pos(conn.src_port, src_outputs);
+            let tgt_pos = tgt.input_port_pos(conn.tgt_port, tgt_inputs);
+            (src_pos, tgt_pos)
+        } else if src_is_junc {
+            let tgt_pos = tgt.input_port_pos(conn.tgt_port, tgt_inputs);
+            let src_pos = self.get_junction_connect_pos(src, tgt_pos);
+            (src_pos, tgt_pos)
+        } else if tgt_is_junc {
+            let src_pos = src.output_port_pos(conn.src_port, src_outputs);
+            let tgt_pos = self.get_junction_connect_pos(tgt, src_pos);
+            (src_pos, tgt_pos)
+        } else {
+            let src_pos = src.output_port_pos(conn.src_port, src_outputs);
+            let tgt_pos = tgt.input_port_pos(conn.tgt_port, tgt_inputs);
+            (src_pos, tgt_pos)
+        }
+    }
+
+    fn get_junction_connect_pos(&self, junc: &types::VisualComponent, other_pos: Vec2) -> Vec2 {
+        let horizontal = junc.width >= junc.height;
+        if horizontal {
+            let x = other_pos.x.clamp(junc.pos.x, junc.pos.x + junc.width);
+            Vec2::new(x, junc.pos.y + junc.height / 2.0)
+        } else {
+            let y = other_pos.y.clamp(junc.pos.y, junc.pos.y + junc.height);
+            Vec2::new(junc.pos.x + junc.width / 2.0, y)
+        }
+    }
 }

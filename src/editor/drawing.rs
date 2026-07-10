@@ -56,11 +56,9 @@ impl Editor {
             let tgt_comp = self.components.iter().find(|c| c.id == wire.tgt_comp_id);
 
             if let (Some(src), Some(tgt)) = (src_comp, tgt_comp) {
-                let (_, src_outputs) = self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
-                let (tgt_inputs, _) = self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
-
-                let src_pos = self.to_screen_space(src.output_port_pos(wire.src_port, src_outputs));
-                let tgt_pos = self.to_screen_space(tgt.input_port_pos(wire.tgt_port, tgt_inputs));
+                let (src_p, tgt_p) = self.get_connection_ports(wire, src, tgt);
+                let src_pos = self.to_screen_space(src_p);
+                let tgt_pos = self.to_screen_space(tgt_p);
 
                 // Wire frustum culling: skip drawing wire if it is completely off-screen
                 let pad = 50.0 * self.canvas.zoom;

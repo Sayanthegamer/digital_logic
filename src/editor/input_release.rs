@@ -137,6 +137,15 @@ impl Editor {
                     self.connections
                         .retain(|c| !(c.tgt_comp_id == in_id && c.tgt_port == in_port));
                 }
+                
+                // Deduplicate connection
+                self.connections.retain(|c| {
+                    !(c.src_comp_id == out_id
+                        && c.src_port == out_port
+                        && c.tgt_comp_id == in_id
+                        && c.tgt_port == in_port)
+                });
+
                 self.connections.push(VisualConnection {
                     src_comp_id: out_id,
                     src_port: out_port,
