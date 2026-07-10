@@ -7,6 +7,16 @@ pub mod global_library;
 pub mod gui;
 mod history;
 mod input;
+mod input_context_menu;
+mod input_hover;
+mod input_interactions;
+mod input_press;
+mod input_down;
+mod input_release;
+mod input_delete;
+mod input_keyboard;
+mod input_navigation;
+mod input_simulation;
 mod inspection_logic;
 mod inspection_ui;
 mod persistence;
@@ -51,6 +61,7 @@ pub struct Editor {
     pub color_overrides: color_coding::ColorOverrides,
     // Manual routing nudges per wire
     pub wire_nudges: std::collections::HashMap<String, f32>,
+    pub wire_offsets: std::collections::HashMap<VisualConnection, f32>,
 }
 
 impl Default for Editor {
@@ -82,6 +93,7 @@ impl Editor {
             global_library: global_library::load_global_library(),
             color_overrides: color_coding::ColorOverrides::default(),
             wire_nudges: std::collections::HashMap::new(),
+            wire_offsets: std::collections::HashMap::new(),
         };
 
         // If global library has chips, use them; otherwise set up defaults and save

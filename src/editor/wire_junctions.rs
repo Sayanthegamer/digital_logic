@@ -2,7 +2,7 @@ use macroquad::prelude::*;
 
 use super::Editor;
 use super::theme;
-use super::types::{VisualConnection, VisualComponent};
+use super::types::VisualConnection;
 
 /// The type of wire intersection.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -67,44 +67,141 @@ impl Editor {
     }
 
     pub fn get_connection_routing_offset(&self, conn: &VisualConnection) -> f32 {
-        // Find all connections sharing the same source port
-        let mut sharing: Vec<&VisualConnection> = self.connections.iter()
-            .filter(|c| c.src_comp_id == conn.src_comp_id && c.src_port == conn.src_port)
-            .collect();
-        
-        let fanout_offset = if sharing.len() <= 1 {
-            0.0
-        } else {
-            // Sort them deterministically.
-            let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
-                self.components.iter().map(|c| (c.id, c)).collect();
+        self.wire_offsets.get(conn).copied().unwrap_or(0.0)
+    }
 
-            sharing.sort_by(|a, b| {
-                let pos_a = comp_by_id.get(&a.tgt_comp_id).map(|c| c.pos).unwrap_or(Vec2::ZERO);
-                let pos_b = comp_by_id.get(&b.tgt_comp_id).map(|c| c.pos).unwrap_or(Vec2::ZERO);
-                
-                pos_a.y.partial_cmp(&pos_b.y)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    .then(pos_a.x.partial_cmp(&pos_b.x).unwrap_or(std::cmp::Ordering::Equal))
-                    .then(a.tgt_port.cmp(&b.tgt_port))
-            });
+    pub fn recompute_wire_offsets(&mut self) {
+        let mut wire_offsets = std::collections::HashMap::new();
 
-            if let Some(idx) = sharing.iter().position(|c| c.tgt_comp_id == conn.tgt_comp_id && c.tgt_port == conn.tgt_port) {
-                let n = sharing.len() as f32;
-                (idx as f32 - (n - 1.0) / 2.0) * 10.0
-            } else {
-                0.0
+        struct ConnectionSegments {
+            conn: VisualConnection,
+            vertical_segs: Vec<VerticalSeg>,
+            source_y: f32,
+        }
+        struct VerticalSeg {
+            ideal_x: f32,
+            y_min: f32,
+            y_max: f32,
+        }
+
+        let mut conn_data = Vec::new();
+
+        for conn in &self.connections {
+            let src_comp = self.components.iter().find(|c| c.id == conn.src_comp_id);
+            let tgt_comp = self.components.iter().find(|c| c.id == conn.tgt_comp_id);
+
+            if let (Some(src), Some(tgt)) = (src_comp, tgt_comp) {
+                let (_, src_outputs) = self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
+                let (tgt_inputs, _) = self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
+
+                let src_pos = src.output_port_pos(conn.src_port, src_outputs);
+                let tgt_pos = tgt.input_port_pos(conn.tgt_port, tgt_inputs);
+
+                let mut vertical_segs = Vec::new();
+
+                if tgt_pos.x >= src_pos.x + 20.0 {
+                    // Forward routing: 1 vertical segment
+                    let ideal_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0;
+                    vertical_segs.push(VerticalSeg {
+                        ideal_x,
+                        y_min: src_pos.y.min(tgt_pos.y),
+                        y_max: src_pos.y.max(tgt_pos.y),
+                    });
+                } else {
+                    // Backward routing: 2 vertical segments
+                    let stub_src = src_pos.x + 20.0;
+                    let target_stagger = conn.tgt_port as f32 * 6.0;
+                    let stub_tgt = tgt_pos.x - 20.0 - target_stagger;
+
+                    let mut mid_y = src_pos.y + (tgt_pos.y - src_pos.y) / 2.0;
+                    if (tgt_pos.y - src_pos.y).abs() < 10.0 {
+                        mid_y += 35.0;
+                    }
+
+                    vertical_segs.push(VerticalSeg {
+                        ideal_x: stub_src,
+                        y_min: src_pos.y.min(mid_y),
+                        y_max: src_pos.y.max(mid_y),
+                    });
+                    vertical_segs.push(VerticalSeg {
+                        ideal_x: stub_tgt,
+                        y_min: mid_y.min(tgt_pos.y),
+                        y_max: mid_y.max(tgt_pos.y),
+                    });
+                }
+
+                conn_data.push(ConnectionSegments {
+                    conn: *conn,
+                    vertical_segs,
+                    source_y: src_pos.y,
+                });
             }
-        };
+        }
 
-        // Add a small target-port/component based hash to differentiate vertical lines
-        // from different source pins that happen to cross
-        let hash = (conn.tgt_comp_id + conn.tgt_port) % 3;
-        let hash_offset = (hash as f32 - 1.0) * 4.0;
+        // Spatial Sorting: Sort connections so lane assignment is deterministic and ordered
+        // We sort by main vertical corridor ideal X, then Y span start, then Y source coordinate
+        conn_data.sort_by(|a, b| {
+            let a_x = a.vertical_segs.first().map(|s| s.ideal_x).unwrap_or(0.0);
+            let b_x = b.vertical_segs.first().map(|s| s.ideal_x).unwrap_or(0.0);
+            
+            a_x.partial_cmp(&b_x)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.source_y.partial_cmp(&b.source_y).unwrap_or(std::cmp::Ordering::Equal))
+        });
 
-        let manual_nudge = self.wire_nudges.get(&conn.color_key()).copied().unwrap_or(0.0);
+        // Greedy interval coloring to assign non-overlapping lanes
+        let mut assigned_lanes = vec![0; conn_data.len()];
 
-        fanout_offset + hash_offset + manual_nudge
+        for i in 0..conn_data.len() {
+            let mut occupied_lanes = std::collections::HashSet::new();
+            for j in 0..i {
+                let mut conflict = false;
+                for s1 in &conn_data[i].vertical_segs {
+                    for s2 in &conn_data[j].vertical_segs {
+                        // Check if they route in the same corridor
+                        let same_corridor = (s1.ideal_x - s2.ideal_x).abs() < 15.0;
+                        // Check if their Y spans overlap (with 4px margin)
+                        let y_overlap = s1.y_min - 4.0 < s2.y_max && s2.y_min - 4.0 < s1.y_max;
+
+                        if same_corridor && y_overlap {
+                            conflict = true;
+                            break;
+                        }
+                    }
+                    if conflict {
+                        break;
+                    }
+                }
+                if conflict {
+                    occupied_lanes.insert(assigned_lanes[j]);
+                }
+            }
+
+            let mut lane = 0;
+            while occupied_lanes.contains(&lane) {
+                lane += 1;
+            }
+            assigned_lanes[i] = lane;
+        }
+
+        // Map lanes to alternating offsets (0, +12, -12, +24, -24, ...) and apply nudges
+        for (i, data) in conn_data.iter().enumerate() {
+            let lane = assigned_lanes[i];
+            let lane_offset = if lane == 0 {
+                0.0
+            } else if lane % 2 == 1 {
+                ((lane + 1) / 2) as f32 * 12.0
+            } else {
+                -(lane / 2) as f32 * 12.0
+            };
+
+            let key = data.conn.color_key();
+            let manual_nudge = self.wire_nudges.get(&key).copied().unwrap_or(0.0);
+
+            wire_offsets.insert(data.conn, lane_offset + manual_nudge);
+        }
+
+        self.wire_offsets = wire_offsets;
     }
 
     pub fn get_blueprint_connection_routing_offset(

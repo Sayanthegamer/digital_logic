@@ -143,6 +143,8 @@ impl Editor {
         self.engine.instance_to_sim_map = instance_to_sim_map;
         self.engine.instance_outputs = instance_outputs;
         self.engine.active_clocks = active_clocks;
+
+        self.recompute_wire_offsets();
     }
 
     fn allocate_visual_components(
