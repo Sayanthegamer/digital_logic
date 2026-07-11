@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.0.0-alpha.1] - 2026-07-10
 
 ### Added
+- **Auto Arrange:** Added an automatic layout engine based on the Sugiyama framework. This feature automatically sorts components left-to-right, reserves routing space (dummy nodes) for long wires, minimizes crossings via multi-sweep barycenter heuristics, aligns components on the Y-axis to straighten wires, and snaps everything to the grid. Available via the new "Auto Arrange" button in the toolbar.
 - **Smart Perpendicular Junction Tap Routing**: Wires now dynamically attach/tap perpendicularly along the nearest point of a stretched Junction component body relative to the target/source coordinates. This completely eliminates wire-endpoint clutter and overlaps around stretched Junction blocks.
 - **Connection Deduplication**: Added connection filtering to prevent identical wire connection duplicates from stacking on top of each other.
 

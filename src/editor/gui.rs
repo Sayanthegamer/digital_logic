@@ -357,6 +357,11 @@ impl Editor {
                                     }
                                 });
 
+                                ui.add_space(5.0);
+                                if ui.button(format!("{} Auto Arrange", theme::ICON_REFRESH)).clicked() {
+                                    self.auto_arrange_components();
+                                }
+
                                 ui.horizontal(|ui| {
                                     ui.label("Speed:");
                                     ui.add(
@@ -472,6 +477,13 @@ impl Editor {
                             }
 
                             ui.separator();
+                            
+                            if ui.button(format!("{} Auto Arrange", crate::editor::theme::ICON_REFRESH))
+                                .on_hover_text("Automatically arrange components based on connections")
+                                .clicked() 
+                            {
+                                self.auto_arrange_components();
+                            }
 
                             // RECENTER BUTTON CALCULATION
                             if !self.components.is_empty() {

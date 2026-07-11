@@ -71,6 +71,7 @@ The goal, stated plainly: **run a real 8-bit (eventually 16-bit) CPU, built enti
 | 🧵 **4-State Logic** | Wires aren't just true/false — they track Floating, Low, High, and Contention states, so you can actually debug bus conflicts and unconnected pins. |
 | 🚌 **True Multi-Bit Buses** | Group 2–16 single-bit signals into thick physical Bus lines using dynamic Bus Joiner and Bus Splitter components to keep your layouts clean and uncluttered. |
 | 🪢 **Wire Nudging** | Click and drag any wire segment to manually customize its routing and detour around tight spaces. |
+| 🪄 **Auto Arrange** | Click a button to magically untangle your circuit. Uses a Sugiyama-based DAG layout engine with crossing minimization, dummy nodes for wire routing, and smart Y-alignment for beautiful, straight wires. |
 | 🔎 **Component Search** | Dynamically filter the parts catalog to find exactly the primitive or custom chip you need without scrolling. |
 | ↩️ **Undo / Redo** | Full history stack for canvas edits — place, wire, delete, drag — all reversible. |
 | 💾 **Save / Load Projects** | Serializes your entire chip library, canvas, wiring, and annotations to a portable `.json` project file. |

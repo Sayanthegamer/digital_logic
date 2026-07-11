@@ -19,6 +19,7 @@ mod input_navigation;
 mod input_simulation;
 mod inspection_logic;
 mod inspection_ui;
+mod layout;
 mod persistence;
 pub mod state;
 pub mod theme;
@@ -107,6 +108,15 @@ impl Editor {
         }
         editor.compile();
         editor
+    }
+
+    pub fn auto_arrange_components(&mut self) {
+        if self.components.is_empty() {
+            return;
+        }
+        self.push_history_snapshot();
+        layout::auto_arrange(&mut self.components, &self.connections);
+        self.wire_offsets.clear();
     }
 
     fn setup_default_library(&mut self) {
