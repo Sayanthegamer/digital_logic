@@ -174,15 +174,15 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
     }
 
     // 6. Smart Y-Coordinate Assignment
-    let x_gap = 200.0;
-    let y_gap = 60.0;
+    let x_gap: f32 = 200.0;
+    let y_gap: f32 = 60.0;
     
-    let mut y_positions = vec![0.0; nodes.len()];
-    let mut current_x = 100.0;
+    let mut y_positions = vec![0.0_f32; nodes.len()];
+    let mut current_x: f32 = 100.0;
 
     for l in 0..=max_layer {
         let mut layer_max_width: f32 = 0.0;
-        let mut current_y = 100.0; // Minimum Y for this layer
+        let mut current_y: f32 = 100.0; // Minimum Y for this layer
         
         for &idx in &layers[l] {
             layer_max_width = layer_max_width.max(nodes[idx].width);
@@ -215,8 +215,8 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
                 let mut final_y = y_positions[idx];
                 
                 // Snap to 20px grid for clean editor alignment
-                final_x = (final_x / 20.0).round() * 20.0;
-                final_y = (final_y / 20.0).round() * 20.0;
+                final_x = (final_x / 20.0_f32).round() * 20.0_f32;
+                final_y = (final_y / 20.0_f32).round() * 20.0_f32;
                 
                 components[comp_idx].pos = Vec2::new(final_x, final_y);
             }
