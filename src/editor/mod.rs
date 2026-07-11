@@ -117,6 +117,7 @@ impl Editor {
         self.push_history_snapshot();
         layout::auto_arrange(&mut self.components, &self.connections);
         self.wire_offsets.clear();
+        self.wire_nudges.clear();
     }
 
     fn setup_default_library(&mut self) {

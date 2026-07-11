@@ -39,30 +39,48 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
     let mut rec_stack = vec![false; components.len()];
     let mut dag_adj = vec![vec![]; components.len()];
 
-    fn dfs(
-        u: usize,
+    fn dfs_iterative(
+        start_u: usize,
         adj: &[Vec<usize>],
         visited: &mut Vec<bool>,
         rec_stack: &mut Vec<bool>,
         dag_adj: &mut Vec<Vec<usize>>,
     ) {
-        visited[u] = true;
-        rec_stack[u] = true;
+        let mut stack = vec![(start_u, 0)];
+        visited[start_u] = true;
+        rec_stack[start_u] = true;
 
-        for &v in &adj[u] {
-            if !visited[v] {
-                dag_adj[u].push(v);
-                dfs(v, adj, visited, rec_stack, dag_adj);
-            } else if !rec_stack[v] {
-                dag_adj[u].push(v);
+        while let Some((u, edge_idx)) = stack.pop() {
+            let mut advanced_edge_idx = edge_idx;
+            let mut pushed_new = false;
+
+            while advanced_edge_idx < adj[u].len() {
+                let v = adj[u][advanced_edge_idx];
+                advanced_edge_idx += 1;
+
+                if !visited[v] {
+                    dag_adj[u].push(v);
+                    visited[v] = true;
+                    rec_stack[v] = true;
+                    
+                    stack.push((u, advanced_edge_idx));
+                    stack.push((v, 0));
+                    pushed_new = true;
+                    break;
+                } else if !rec_stack[v] {
+                    dag_adj[u].push(v);
+                }
+            }
+
+            if !pushed_new {
+                rec_stack[u] = false;
             }
         }
-        rec_stack[u] = false;
     }
 
     for i in 0..components.len() {
         if !visited[i] {
-            dfs(i, &adj, &mut visited, &mut rec_stack, &mut dag_adj);
+            dfs_iterative(i, &adj, &mut visited, &mut rec_stack, &mut dag_adj);
         }
     }
 
@@ -142,35 +160,72 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
     }
 
     // 5. Multi-sweep Crossing Minimization
+    let mut node_pos = vec![0; nodes.len()];
+    for l in 0..=max_layer {
+        for (i, &node) in layers[l].iter().enumerate() {
+            node_pos[node] = i;
+        }
+    }
+
     for _sweep in 0..4 {
         // Forward sweep (left-to-right)
         for l in 1..=max_layer {
-            let prev_layer = layers[l - 1].clone();
+            let mut barycenters = vec![0.0; nodes.len()];
+            for &node in &layers[l] {
+                let mut sum = 0.0;
+                let mut count = 0;
+                for &parent in &nodes[node].parents {
+                    sum += node_pos[parent] as f32;
+                    count += 1;
+                }
+                barycenters[node] = if count == 0 { 0.0 } else { sum / (count as f32) };
+            }
             layers[l].sort_by(|&a, &b| {
-                let barycenter_a = compute_barycenter(a, &nodes, &prev_layer, true);
-                let barycenter_b = compute_barycenter(b, &nodes, &prev_layer, true);
-                barycenter_a.partial_cmp(&barycenter_b).unwrap_or(std::cmp::Ordering::Equal)
+                barycenters[a].partial_cmp(&barycenters[b]).unwrap_or(std::cmp::Ordering::Equal)
             });
+            for (i, &node) in layers[l].iter().enumerate() {
+                node_pos[node] = i;
+            }
         }
         // Backward sweep (right-to-left)
         for l in (0..max_layer).rev() {
-            let next_layer = layers[l + 1].clone();
+            let mut barycenters = vec![0.0; nodes.len()];
+            for &node in &layers[l] {
+                let mut sum = 0.0;
+                let mut count = 0;
+                for &child in &nodes[node].children {
+                    sum += node_pos[child] as f32;
+                    count += 1;
+                }
+                barycenters[node] = if count == 0 { 0.0 } else { sum / (count as f32) };
+            }
             layers[l].sort_by(|&a, &b| {
-                let barycenter_a = compute_barycenter(a, &nodes, &next_layer, false);
-                let barycenter_b = compute_barycenter(b, &nodes, &next_layer, false);
-                barycenter_a.partial_cmp(&barycenter_b).unwrap_or(std::cmp::Ordering::Equal)
+                barycenters[a].partial_cmp(&barycenters[b]).unwrap_or(std::cmp::Ordering::Equal)
             });
+            for (i, &node) in layers[l].iter().enumerate() {
+                node_pos[node] = i;
+            }
         }
     }
 
     // Final forward sweep to ensure strict left-to-right alignment stability
     for l in 1..=max_layer {
-        let prev_layer = layers[l - 1].clone();
+        let mut barycenters = vec![0.0; nodes.len()];
+        for &node in &layers[l] {
+            let mut sum = 0.0;
+            let mut count = 0;
+            for &parent in &nodes[node].parents {
+                sum += node_pos[parent] as f32;
+                count += 1;
+            }
+            barycenters[node] = if count == 0 { 0.0 } else { sum / (count as f32) };
+        }
         layers[l].sort_by(|&a, &b| {
-            let barycenter_a = compute_barycenter(a, &nodes, &prev_layer, true);
-            let barycenter_b = compute_barycenter(b, &nodes, &prev_layer, true);
-            barycenter_a.partial_cmp(&barycenter_b).unwrap_or(std::cmp::Ordering::Equal)
+            barycenters[a].partial_cmp(&barycenters[b]).unwrap_or(std::cmp::Ordering::Equal)
         });
+        for (i, &node) in layers[l].iter().enumerate() {
+            node_pos[node] = i;
+        }
     }
 
     // 6. Smart Y-Coordinate Assignment
@@ -226,27 +281,4 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
     }
 }
 
-// compute_barycenter uses the positions of neighbors in the adjacent layer
-fn compute_barycenter(node: usize, nodes: &[LayoutNode], adj_layer: &[usize], use_parents: bool) -> f32 {
-    let mut sum = 0.0;
-    let mut count = 0;
-    
-    let neighbors = if use_parents {
-        &nodes[node].parents
-    } else {
-        &nodes[node].children
-    };
 
-    for (i, &adj_node) in adj_layer.iter().enumerate() {
-        if neighbors.contains(&adj_node) {
-            sum += i as f32;
-            count += 1;
-        }
-    }
-    
-    if count == 0 {
-        0.0 
-    } else {
-        sum / (count as f32)
-    }
-}
