@@ -39,52 +39,43 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
     let mut rec_stack = vec![false; components.len()];
     let mut dag_adj = vec![vec![]; components.len()];
 
-    fn dfs_iterative(
-        start_u: usize,
-        adj: &[Vec<usize>],
-        visited: &mut Vec<bool>,
-        rec_stack: &mut Vec<bool>,
-        dag_adj: &mut Vec<Vec<usize>>,
-    ) {
-        let mut stack = vec![(start_u, 0)];
-        visited[start_u] = true;
-        rec_stack[start_u] = true;
-
-        while let Some((u, edge_idx)) = stack.pop() {
-            let mut advanced_edge_idx = edge_idx;
-            let mut pushed_new = false;
-
-            while advanced_edge_idx < adj[u].len() {
-                let v = adj[u][advanced_edge_idx];
-                advanced_edge_idx += 1;
-
-                if !visited[v] {
-                    dag_adj[u].push(v);
-                    visited[v] = true;
-                    rec_stack[v] = true;
-                    
-                    stack.push((u, advanced_edge_idx));
-                    stack.push((v, 0));
-                    pushed_new = true;
-                    break;
-                } else if !rec_stack[v] {
-                    dag_adj[u].push(v);
-                }
-            }
-
-            if !pushed_new {
-                rec_stack[u] = false;
-            }
-        }
-    }
-
     for i in 0..components.len() {
         if !visited[i] {
             dfs_iterative(i, &adj, &mut visited, &mut rec_stack, &mut dag_adj);
         }
     }
 
-    // 3. Layer Assignment (Longest Path)
+    fn dfs_iterative(
+        start: usize,
+        adj: &[Vec<usize>],
+        visited: &mut [bool],
+        rec_stack: &mut [bool],
+        dag_adj: &mut [Vec<usize>],
+    ) {
+        let mut stack = vec![(start, 0)];
+        visited[start] = true;
+        rec_stack[start] = true;
+
+        while let Some((u, i)) = stack.pop() {
+            if i < adj[u].len() {
+                let v = adj[u][i];
+                stack.push((u, i + 1));
+                
+                if !visited[v] {
+                    visited[v] = true;
+                    rec_stack[v] = true;
+                    dag_adj[u].push(v);
+                    stack.push((v, 0));
+                } else if !rec_stack[v] {
+                    dag_adj[u].push(v);
+                }
+            } else {
+                rec_stack[u] = false;
+            }
+        }
+    }
+
+    // 3. Kahn's Algorithm for Topological Sort on DAG
     let mut in_degree = vec![0; components.len()];
     for u in 0..components.len() {
         for &v in &dag_adj[u] {

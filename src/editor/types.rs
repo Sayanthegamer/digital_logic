@@ -32,6 +32,8 @@ pub struct VisualComponent {
     pub height: f32,
     pub label: String,
     pub clock_period: Option<usize>, // Localized period in ticks (only for Clock)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bus_width: Option<usize>,    // Width of the bus (only for BusJoiner/BusSplitter)
     /// Per-component colour override (RGBA). None = use theme default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<[f32; 4]>,
@@ -39,7 +41,7 @@ pub struct VisualComponent {
 
 impl VisualComponent {
     pub fn bus_width(&self) -> usize {
-        self.clock_period.unwrap_or(4)
+        self.bus_width.unwrap_or(4)
     }
 
     pub fn input_port_pos(&self, port_idx: usize, num_inputs: usize) -> Vec2 {
@@ -89,16 +91,6 @@ pub struct VisualConnection {
     pub tgt_port: usize,
 }
 
-impl VisualConnection {
-    /// Per-wire colour override (RGBA). Stored externally in ColorOverrides.
-    /// This method is just documentation for the pattern.
-    pub fn color_key(&self) -> String {
-        format!(
-            "{},{},{},{}",
-            self.src_comp_id, self.src_port, self.tgt_comp_id, self.tgt_port
-        )
-    }
-}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ActiveTool {

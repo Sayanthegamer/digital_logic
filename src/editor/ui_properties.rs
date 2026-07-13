@@ -52,9 +52,9 @@ impl Editor {
                     .clicked()
                 {
                     self.push_history_snapshot();
-                    self.components
+                    self.circuit.components
                         .retain(|c| !self.canvas.selected_comp_ids.contains(&c.id));
-                    self.connections.retain(|c| {
+                    self.circuit.connections.retain(|c| {
                         !self.canvas.selected_comp_ids.contains(&c.src_comp_id)
                             && !self.canvas.selected_comp_ids.contains(&c.tgt_comp_id)
                             && !self.canvas.selected_connections.contains(c)
@@ -77,13 +77,7 @@ impl Editor {
             let mut do_inspection = false;
 
             if let Some(sel_id) = self.canvas.selected_comp_id {
-                let mut comp_clone = None;
-                for c in &self.components {
-                    if c.id == sel_id {
-                        comp_clone = Some(c.clone());
-                        break;
-                    }
-                }
+                let comp_clone = self.get_component(sel_id).cloned();
 
                 if let Some(comp) = comp_clone {
                     has_selection = true;
@@ -202,39 +196,41 @@ impl Editor {
                 && let Some(sel_id) = self.canvas.selected_comp_id
             {
                 let mut size_changed = false;
-                for c in &mut self.components {
-                    if c.id == sel_id {
-                        if let Some(ref l) = new_label {
-                            c.label = l.clone();
-                        }
-                        if let Some(p) = new_period {
-                            c.clock_period = Some(p);
-                            if let Some(active_clk) = self
-                                .engine
-                                .active_clocks
-                                .iter_mut()
-                                .find(|ac| ac.visual_id == Some(sel_id))
-                            {
-                                active_clk.period = p;
-                            }
-                        }
-                        if let Some(w) = new_bus_width {
-                            c.clock_period = Some(w);
-                            c.width = 50.0;
-                            c.height = 40.0 + (w as f32 * 16.0);
-                            size_changed = true;
-                        }
+                if let Some(ref l) = new_label {
+                    if let Some(c) = self.get_component_mut(sel_id) {
+                        c.label = l.clone();
                     }
+                }
+                if let Some(p) = new_period {
+                    if let Some(c) = self.get_component_mut(sel_id) {
+                        c.clock_period = Some(p);
+                    }
+                    if let Some(active_clk) = self
+                        .engine
+                        .active_clocks
+                        .iter_mut()
+                        .find(|ac| ac.visual_id == Some(sel_id))
+                    {
+                        active_clk.period = p;
+                    }
+                }
+                if let Some(w) = new_bus_width {
+                    if let Some(c) = self.get_component_mut(sel_id) {
+                        c.bus_width = Some(w);
+                        c.width = 50.0;
+                        c.height = 40.0 + (w as f32 * 16.0);
+                    }
+                    size_changed = true;
                 }
 
                 if size_changed {
-                    let (ins, outs) = if let Some(comp) = self.components.iter().find(|c| c.id == sel_id) {
+                    let (ins, outs) = if let Some(comp) = self.get_component(sel_id) {
                         self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()))
                     } else {
                         (0, 0)
                     };
 
-                    self.connections.retain(|conn| {
+                    self.circuit.connections.retain(|conn| {
                         let src_ok = if conn.src_comp_id == sel_id {
                             conn.src_port < outs
                         } else {
@@ -254,7 +250,7 @@ impl Editor {
 
             let mut delete_annotation_idx = None;
             if let Some(idx) = self.canvas.selected_annotation_idx
-                && let Some(ann) = self.annotations.get_mut(idx)
+                && let Some(ann) = self.circuit.annotations.get_mut(idx)
             {
                 has_selection = true;
                 egui::CollapsingHeader::new(format!("{} Text Note", theme::ICON_SETTINGS))
@@ -278,7 +274,7 @@ impl Editor {
             }
 
             if let Some(idx) = delete_annotation_idx {
-                self.annotations.remove(idx);
+                self.circuit.annotations.remove(idx);
                 self.canvas.selected_annotation_idx = None;
             }
 
@@ -306,8 +302,8 @@ impl Editor {
                             self.global_library.ungrouped.push(new_bp);
                             crate::editor::global_library::save_global_library(&self.global_library);
                             self.engine.library = self.global_library.to_flat_list();
-                            self.components.clear();
-                            self.connections.clear();
+                            self.circuit.components.clear();
+                            self.circuit.connections.clear();
                             self.compile();
                         }
                     });
@@ -324,8 +320,8 @@ impl Editor {
                             .clicked()
                         {
                             self.push_history_snapshot();
-                            self.components.clear();
-                            self.connections.clear();
+                            self.circuit.components.clear();
+                            self.circuit.connections.clear();
                             self.compile();
                         }
                         if ui

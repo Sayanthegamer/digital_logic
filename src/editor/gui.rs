@@ -171,7 +171,7 @@ impl Editor {
                             .color_edit_button_rgba_unmultiplied(&mut self.ui.context_menu_color)
                             .changed()
                         {
-                            self.color_overrides
+                            self.circuit.color_overrides
                                 .set_component_color(comp_id, Some(self.ui.context_menu_color));
                         }
 
@@ -201,7 +201,7 @@ impl Editor {
                                     .clicked()
                                 {
                                     self.ui.context_menu_color = *preset;
-                                    self.color_overrides
+                                    self.circuit.color_overrides
                                         .set_component_color(comp_id, Some(*preset));
                                 }
                             }
@@ -209,7 +209,7 @@ impl Editor {
 
                         ui.add_space(4.0);
                         if ui.button(format!("{} Reset Color", theme::ICON_CLEAR)).clicked() {
-                            self.color_overrides.set_component_color(comp_id, None);
+                            self.circuit.color_overrides.set_component_color(comp_id, None);
                             keep_open = false;
                         }
                     }
@@ -226,7 +226,7 @@ impl Editor {
                             .color_edit_button_rgba_unmultiplied(&mut self.ui.context_menu_color)
                             .changed()
                         {
-                            self.color_overrides
+                            self.circuit.color_overrides
                                 .set_wire_color(&conn, Some(self.ui.context_menu_color));
                         }
 
@@ -256,7 +256,7 @@ impl Editor {
                                     .clicked()
                                 {
                                     self.ui.context_menu_color = *preset;
-                                    self.color_overrides
+                                    self.circuit.color_overrides
                                         .set_wire_color(&conn, Some(*preset));
                                 }
                             }
@@ -264,7 +264,7 @@ impl Editor {
 
                         ui.add_space(4.0);
                         if ui.button(format!("{} Reset Color", theme::ICON_CLEAR)).clicked() {
-                            self.color_overrides.set_wire_color(&conn, None);
+                            self.circuit.color_overrides.set_wire_color(&conn, None);
                             keep_open = false;
                         }
                     }
@@ -495,7 +495,7 @@ impl Editor {
                             }
 
                             // RECENTER BUTTON CALCULATION
-                            if !self.components.is_empty() {
+                            if !self.circuit.components.is_empty() {
                                 let (screen_w, screen_h) = (
                                     macroquad::prelude::screen_width(),
                                     macroquad::prelude::screen_height(),
@@ -514,7 +514,7 @@ impl Editor {
                                 let view_max_y = vy + view_h;
 
                                 let mut any_outside_viewport = false;
-                                for comp in &self.components {
+                                for comp in &self.circuit.components {
                                     let p1 = (comp.pos * self.canvas.zoom) + self.canvas.pan;
                                     let p2 = p1
                                         + macroquad::prelude::Vec2::new(comp.width, comp.height)
@@ -545,14 +545,14 @@ impl Editor {
                                         let mut max_x = f32::MIN;
                                         let mut max_y = f32::MIN;
 
-                                        for comp in &self.components {
+                                        for comp in &self.circuit.components {
                                             min_x = min_x.min(comp.pos.x);
                                             min_y = min_y.min(comp.pos.y);
                                             max_x = max_x.max(comp.pos.x + comp.width);
                                             max_y = max_y.max(comp.pos.y + comp.height);
                                         }
 
-                                        for ann in &self.annotations {
+                                        for ann in &self.circuit.annotations {
                                             min_x = min_x.min(ann.pos.x);
                                             min_y = min_y.min(ann.pos.y);
                                             max_x = max_x.max(ann.pos.x + 150.0);

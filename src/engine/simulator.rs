@@ -1,6 +1,4 @@
 use super::types::*;
-use rayon::prelude::*;
-
 #[derive(Debug, Clone)]
 pub struct GateNode {
     pub gate: PrimitiveGate,
@@ -176,43 +174,70 @@ impl Simulator {
         let num_nodes = self.nodes.capacity();
         if num_nodes == 0 { return; }
 
-        for (_, node) in self.nodes.iter_mut() {
-            node.depth = 0;
+        let mut in_degree = vec![0; num_nodes];
+        for i in 0..num_nodes {
+            if let Some(node) = self.nodes.get(i) {
+                for &dep in &node.dependents {
+                    if dep < num_nodes {
+                        in_degree[dep] += 1;
+                    }
+                }
+            }
         }
 
-        let mut changed = true;
-        let mut iters = 0;
+        let mut queue = Vec::new();
+        for i in 0..num_nodes {
+            if self.nodes.contains(i) {
+                self.nodes[i].depth = 0;
+                if in_degree[i] == 0 {
+                    queue.push(i);
+                }
+            }
+        }
 
-        while changed && iters < num_nodes {
-            changed = false;
-            iters += 1;
+        let mut max_depth = 0;
+        let mut processed = 0;
+        
+        while let Some(u) = queue.pop() {
+            processed += 1;
+            let u_depth = self.nodes[u].depth;
+            max_depth = max_depth.max(u_depth);
+            
+            let deps = std::mem::take(&mut self.nodes[u].dependents);
+            
+            for &v in &deps {
+                if let Some(v_node) = self.nodes.get_mut(v) {
+                    v_node.depth = v_node.depth.max(u_depth + 1);
+                }
+                in_degree[v] -= 1;
+                if in_degree[v] == 0 {
+                    queue.push(v);
+                }
+            }
+            
+            self.nodes[u].dependents = deps;
+        }
 
-            for i in 0..self.nodes.capacity() {
-                if !self.nodes.contains(i) { continue; }
-                
-                let node_depth = self.nodes[i].depth;
-                let deps = self.nodes[i].dependents.clone();
-                
-                for dep_idx in deps {
-                    if let Some(dep_node) = self.nodes.get_mut(dep_idx) {
-                        if dep_node.depth < node_depth + 1 {
-                            dep_node.depth = node_depth + 1;
-                            changed = true;
-                        }
-                    }
+        if processed < self.nodes.len() {
+            max_depth += 1;
+            for i in 0..num_nodes {
+                if self.nodes.contains(i) && in_degree[i] > 0 {
+                    self.nodes[i].depth = max_depth;
                 }
             }
         }
     }
 
-    /// Evaluates the simulation across depth levels in parallel.
     pub fn propagate_events(&mut self, max_steps_multiplier: usize) -> Result<usize, String> {
         let mut steps = 0;
         let max_steps = self.nodes.capacity() * max_steps_multiplier.max(100);
-        let max_depth = self.event_queue.len();
-
-        for depth in 0..max_depth {
-            if self.event_queue[depth].is_empty() { continue; }
+        
+        let mut depth = 0;
+        while depth < self.event_queue.len() {
+            if self.event_queue[depth].is_empty() { 
+                depth += 1;
+                continue; 
+            }
             
             let current_queue = std::mem::take(&mut self.event_queue[depth]);
             for &idx in &current_queue {
@@ -221,50 +246,50 @@ impl Simulator {
                 }
             }
 
-            let updates: Vec<_> = current_queue
-                .par_iter()
-                .filter_map(|&idx| {
-                    let node = &self.nodes[idx];
-                    let val_a = node
-                        .gate
-                        .input_a_source
-                        .and_then(|s_idx| self.nodes.get(s_idx))
-                        .map(|s_node| s_node.state)
-                        .unwrap_or(0b00);
-                    let val_b = node
-                        .gate
-                        .input_b_source
-                        .and_then(|s_idx| self.nodes.get(s_idx))
-                        .map(|s_node| s_node.state)
-                        .unwrap_or(0b00);
+            let mut next_enqueues = Vec::new();
 
-                    let new_state = match node.gate.gate_type {
-                        GateType::Input => node.state,
-                        GateType::Output => val_a,
-                        GateType::Nand => {
-                            let a_bool = (val_a & 0b10) != 0;
-                            let b_bool = (val_b & 0b10) != 0;
-                            if !(a_bool && b_bool) { 0b10 } else { 0b01 }
-                        }
-                        GateType::TriStateBuffer => {
-                            let en_bool = (val_b & 0b10) != 0;
-                            if en_bool {
-                                let data_bool = (val_a & 0b10) != 0;
-                                if data_bool { 0b10 } else { 0b01 }
-                            } else {
-                                0b00
-                            }
-                        }
-                        GateType::BusResolver => val_a | val_b,
-                    };
+            for &idx in &current_queue {
+                if !self.nodes.contains(idx) { continue; }
+                
+                let val_a = self.nodes[idx]
+                    .gate
+                    .input_a_source
+                    .and_then(|s_idx| self.nodes.get(s_idx))
+                    .map(|s_node| s_node.state)
+                    .unwrap_or(0b00);
+                let val_b = self.nodes[idx]
+                    .gate
+                    .input_b_source
+                    .and_then(|s_idx| self.nodes.get(s_idx))
+                    .map(|s_node| s_node.state)
+                    .unwrap_or(0b00);
 
-                    if new_state != node.state {
-                        Some((idx, new_state, node.dependents.clone()))
-                    } else {
-                        None
+                let node = &mut self.nodes[idx];
+                let new_state = match node.gate.gate_type {
+                    GateType::Input => node.state,
+                    GateType::Output => val_a,
+                    GateType::Nand => {
+                        let a_bool = (val_a & 0b10) != 0;
+                        let b_bool = (val_b & 0b10) != 0;
+                        if !(a_bool && b_bool) { 0b10 } else { 0b01 }
                     }
-                })
-                .collect();
+                    GateType::TriStateBuffer => {
+                        let en_bool = (val_b & 0b10) != 0;
+                        if en_bool {
+                            let data_bool = (val_a & 0b10) != 0;
+                            if data_bool { 0b10 } else { 0b01 }
+                        } else {
+                            0b00
+                        }
+                    }
+                    GateType::BusResolver => val_a | val_b,
+                };
+
+                if new_state != node.state {
+                    node.state = new_state;
+                    next_enqueues.push(idx);
+                }
+            }
 
             steps += current_queue.len();
             if steps >= max_steps {
@@ -274,13 +299,22 @@ impl Simulator {
                 ));
             }
 
-            for (idx, new_state, deps) in updates {
-                if let Some(node) = self.nodes.get_mut(idx) {
-                    node.state = new_state;
-                }
-                for dep_idx in deps {
+            for idx in next_enqueues {
+                let deps = std::mem::take(&mut self.nodes[idx].dependents);
+                for &dep_idx in &deps {
                     self.enqueue(dep_idx);
                 }
+                self.nodes[idx].dependents = deps;
+            }
+            
+            // Loop condition: we want to process all depths up to current event_queue.len().
+            // Wait, if self.enqueue pushes events to the same depth (e.g. cycle within same depth layer?), 
+            // `self.event_queue[depth]` might become non-empty. 
+            // In the original, it used `for depth in 0..max_depth`. Let's just increment depth.
+            // But we changed to a while loop, so if something is enqueued at the current depth, 
+            // it will be processed in the next iteration of the while loop before moving to depth+1.
+            if self.event_queue[depth].is_empty() {
+                depth += 1;
             }
         }
 

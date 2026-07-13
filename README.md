@@ -63,6 +63,7 @@ The goal, stated plainly: **run a real 8-bit (eventually 16-bit) CPU, built enti
 
 | | |
 |---|---|
+| 🚀 **Massive Scale Engine** | Uses Kahn's Topological Sort for O(V+E) zero-clone depth scheduling, and Spatial Hashing for O(1) wire deduplication. Engineered to crunch 100,000+ gate CPUs in real-time at 60 FPS without breaking a sweat. |
 | 🔌 **Event-Driven Simulation** | Gates only re-evaluate when their inputs actually change — not every frame. Oscillation detection stops runaway feedback loops (e.g. an inverter wired to itself) from freezing the app. |
 | 🎮 **App Mode Routing** | Navigate seamlessly through a dedicated Main Menu, Project Manager, Settings Overlay, and Credits, keeping the Editor clean and focused. |
 | 🧩 **Custom Chips (Sub-Chips)** | Package any circuit into a named, reusable chip with custom input/output labels. Drop it into future circuits like any primitive. |

@@ -20,27 +20,32 @@ impl Editor {
         self.get_component_ports_count_with_width(comp_type, None)
     }
 
+    pub fn get_wire_state(&self, src_comp_id: usize, src_port: usize) -> bool {
+        if let Some(&gate_idx) = self.engine.port_to_sim_gate_map.get(&(src_comp_id, src_port)) {
+            self.engine.simulator.get_state(gate_idx)
+        } else if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&src_comp_id) {
+            self.engine.simulator.get_state(gate_idx)
+        } else {
+            false
+        }
+    }
+
+    pub fn get_raw_wire_state(&self, src_comp_id: usize, src_port: usize) -> u8 {
+        if let Some(&gate_idx) = self.engine.port_to_sim_gate_map.get(&(src_comp_id, src_port)) {
+            self.engine.simulator.get_raw_state(gate_idx)
+        } else if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&src_comp_id) {
+            self.engine.simulator.get_raw_state(gate_idx)
+        } else {
+            0b00
+        }
+    }
+
     pub fn get_component_ports_count_with_width(
         &self,
         comp_type: ComponentType,
         bus_width: Option<usize>,
     ) -> (usize, usize) {
-        match comp_type {
-            ComponentType::Nand => (2, 1),
-            ComponentType::Input => (0, 1),
-            ComponentType::Output => (1, 0),
-            ComponentType::Clock => (0, 1),
-            ComponentType::SevenSegment => (8, 0),
-            ComponentType::TriStateBuffer => (2, 1),
-            ComponentType::Junction => (1, 1),
-            ComponentType::BusJoiner => (bus_width.unwrap_or(4), 1),
-            ComponentType::BusSplitter => (1, bus_width.unwrap_or(4)),
-            ComponentType::SubChip(idx) => self
-                .engine
-                .library
-                .get(idx)
-                .map_or((0, 0), |bp| (bp.inputs, bp.outputs)),
-        }
+        comp_type.get_port_counts(bus_width, &self.engine.library)
     }
 
     pub fn get_component_label(&self, comp_type: ComponentType) -> String {
@@ -62,12 +67,12 @@ impl Editor {
         }
     }
 
-    pub fn expand_connections(&self) -> Vec<VisualConnection> {
-        let mut expanded = Vec::new();
+    pub fn update_expanded_connections(&mut self) {
+        self.engine.expanded_connections.clear();
         let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
-            self.components.iter().map(|c| (c.id, c)).collect();
+            self.circuit.components.iter().map(|c| (c.id, c)).collect();
 
-        for conn in &self.connections {
+        for conn in &self.circuit.connections {
             let src_comp = comp_by_id.get(&conn.src_comp_id);
             let tgt_comp = comp_by_id.get(&conn.tgt_comp_id);
 
@@ -79,7 +84,7 @@ impl Editor {
                 let w_tgt = tgt_comp.map_or(4, |c| c.bus_width());
                 let w = w_src.min(w_tgt);
                 for i in 0..w {
-                    expanded.push(VisualConnection {
+                    self.engine.expanded_connections.push(VisualConnection {
                         src_comp_id: conn.src_comp_id,
                         src_port: i,
                         tgt_comp_id: conn.tgt_comp_id,
@@ -87,27 +92,26 @@ impl Editor {
                     });
                 }
             } else {
-                expanded.push(conn.clone());
+                self.engine.expanded_connections.push(*conn);
             }
         }
-        expanded
     }
 
     pub fn compile(&mut self) {
+        self.rebuild_comp_map();
         // Fix up sub-chip dimensions so existing projects get the new dynamic widths
-        for i in 0..self.components.len() {
-            if matches!(self.components[i].comp_type, ComponentType::SubChip(_)) {
-                let (w, h) = self.get_component_dimensions(self.components[i].comp_type);
-                self.components[i].width = w;
-                self.components[i].height = h;
+        for i in 0..self.circuit.components.len() {
+            if matches!(self.circuit.components[i].comp_type, ComponentType::SubChip(_)) {
+                let (w, h) = self.get_component_dimensions(self.circuit.components[i].comp_type);
+                self.circuit.components[i].width = w;
+                self.circuit.components[i].height = h;
             }
         }
 
         let mut sim = Simulator::new();
         let mut visual_to_sim_map = HashMap::new();
         let mut component_ports = HashMap::new(); // visual_id -> (inputs_aliases, outputs_drivers)
-        let mut instance_to_sim_map = HashMap::new();
-        let mut instance_outputs = HashMap::new();
+        let mut instance_tree = crate::engine::types::InstanceTree::default();
         let mut active_clocks = Vec::new();
 
         // 1. Allocate all visual components in the simulator
@@ -115,20 +119,25 @@ impl Editor {
             &mut sim,
             &mut visual_to_sim_map,
             &mut component_ports,
-            &mut instance_to_sim_map,
-            &mut instance_outputs,
+            &mut instance_tree,
             &mut active_clocks,
         );
 
-        let expanded_connections = self.expand_connections();
+        self.update_expanded_connections();
+
+        // Build conn_map to eliminate O(N) scans in trace_canvas_node
+        let mut conn_map: HashMap<(usize, usize), Vec<&VisualConnection>> = HashMap::new();
+        for conn in &self.engine.expanded_connections {
+            conn_map.entry((conn.tgt_comp_id, conn.tgt_port)).or_default().push(conn);
+        }
 
         // 2. Wire up all component inputs on the canvas in the simulator
         let mut net_cache = HashMap::new();
-        self.wire_up_component_inputs(&mut sim, &expanded_connections, &component_ports, &mut net_cache);
+        self.wire_up_component_inputs(&mut sim, &conn_map, &component_ports, &mut net_cache);
 
         // 3. Resolve the visual output port states map
         let port_to_sim_gate_map =
-            self.resolve_port_to_sim_gate_map(&mut sim, &expanded_connections, &component_ports, &mut net_cache);
+            self.resolve_port_to_sim_gate_map(&mut sim, &conn_map, &component_ports, &mut net_cache);
 
         // Pre-compute Depth for Multi-Threaded Simulation
         sim.calculate_depths();
@@ -143,12 +152,11 @@ impl Editor {
         self.engine.simulator = sim;
         self.engine.visual_to_sim_map = visual_to_sim_map;
         self.engine.port_to_sim_gate_map = port_to_sim_gate_map;
-        self.engine.instance_to_sim_map = instance_to_sim_map;
-        self.engine.instance_outputs = instance_outputs;
+        self.engine.instance_tree = instance_tree;
         self.engine.active_clocks = active_clocks;
 
-        if self.connections.len() < 5000 {
-            self.recompute_wire_offsets();
+        if self.circuit.connections.len() < 5000 {
+            self.recompute_wire_offsets(None);
         }
         
         self.rebuild_spatial_grid();
@@ -159,11 +167,10 @@ impl Editor {
         sim: &mut Simulator,
         visual_to_sim_map: &mut HashMap<usize, usize>,
         component_ports: &mut HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
-        instance_to_sim_map: &mut HashMap<(Vec<usize>, usize), usize>,
-        instance_outputs: &mut HashMap<(Vec<usize>, usize), Vec<OutputSource>>,
+        instance_tree: &mut crate::engine::types::InstanceTree,
         active_clocks: &mut Vec<CompiledClock>,
     ) {
-        for comp in &self.components {
+        for comp in &self.circuit.components {
             match comp.comp_type {
                 ComponentType::Nand => {
                     let sim_idx = sim.add_gate(GateType::Nand);
@@ -175,6 +182,11 @@ impl Editor {
                             vec![OutputSource::DrivenByGate(sim_idx)],
                         ),
                     );
+                    instance_tree.sub_instances.insert(comp.id, crate::engine::types::InstanceTree {
+                        gate_idx: Some(sim_idx),
+                        sub_instances: Default::default(),
+                        outputs: vec![OutputSource::DrivenByGate(sim_idx)],
+                    });
                 }
                 ComponentType::Input => {
                     let sim_idx = sim.add_gate(GateType::Input);
@@ -201,6 +213,11 @@ impl Editor {
 
                     component_ports
                         .insert(comp.id, (vec![], vec![OutputSource::DrivenByGate(sim_idx)]));
+                    instance_tree.sub_instances.insert(comp.id, crate::engine::types::InstanceTree {
+                        gate_idx: Some(sim_idx),
+                        sub_instances: Default::default(),
+                        outputs: vec![OutputSource::DrivenByGate(sim_idx)],
+                    });
                 }
                 ComponentType::TriStateBuffer => {
                     let sim_idx = sim.add_gate(GateType::TriStateBuffer);
@@ -212,6 +229,11 @@ impl Editor {
                             vec![OutputSource::DrivenByGate(sim_idx)],
                         ),
                     );
+                    instance_tree.sub_instances.insert(comp.id, crate::engine::types::InstanceTree {
+                        gate_idx: Some(sim_idx),
+                        sub_instances: Default::default(),
+                        outputs: vec![OutputSource::DrivenByGate(sim_idx)],
+                    });
                 }
                 ComponentType::Junction => {
                     component_ports.insert(
@@ -253,19 +275,16 @@ impl Editor {
                     component_ports.insert(comp.id, (inputs, vec![]));
                 }
                 ComponentType::SubChip(sub_idx) => {
-                    let path = vec![comp.id];
                     let mut blueprint_stack = Vec::new();
-                    if let Ok(sub_interface) = sim.instantiate_chip_with_mapping(
+                    if let Ok((sub_interface, sub_tree)) = sim.instantiate_chip_with_mapping(
                         sub_idx,
                         &self.engine.library,
-                        &path,
-                        instance_to_sim_map,
-                        instance_outputs,
                         active_clocks,
                         &mut blueprint_stack,
                     ) {
                         component_ports
                             .insert(comp.id, (sub_interface.inputs, sub_interface.outputs));
+                        instance_tree.sub_instances.insert(comp.id, sub_tree);
                     }
                 }
             }
@@ -275,11 +294,11 @@ impl Editor {
     fn wire_up_component_inputs(
         &self,
         sim: &mut Simulator,
-        connections: &[VisualConnection],
+        conn_map: &HashMap<(usize, usize), Vec<&VisualConnection>>,
         component_ports: &HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
         net_cache: &mut HashMap<Vec<usize>, OutputSource>,
     ) {
-        for comp in &self.components {
+        for comp in &self.circuit.components {
             let (inputs_count, _) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
 
             for port_idx in 0..inputs_count {
@@ -287,7 +306,7 @@ impl Editor {
                     comp_id: comp.id,
                     port_idx,
                 };
-                let driver = self.trace_canvas_node(start_node, sim, connections, component_ports, net_cache);
+                let driver = self.trace_canvas_node(start_node, sim, conn_map, component_ports, net_cache);
 
                 if let OutputSource::DrivenByGate(src_g_idx) = driver
                     && let Some((inputs, _)) = component_ports.get(&comp.id)
@@ -305,12 +324,12 @@ impl Editor {
     fn resolve_port_to_sim_gate_map(
         &self,
         sim: &mut Simulator,
-        connections: &[VisualConnection],
+        conn_map: &HashMap<(usize, usize), Vec<&VisualConnection>>,
         component_ports: &HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
         net_cache: &mut HashMap<Vec<usize>, OutputSource>,
     ) -> HashMap<(usize, usize), usize> {
         let mut port_to_sim_gate_map = HashMap::new();
-        for comp in &self.components {
+        for comp in &self.circuit.components {
             let (_, outputs_count) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
 
             for port_idx in 0..outputs_count {
@@ -318,7 +337,7 @@ impl Editor {
                     comp_id: comp.id,
                     port_idx,
                 };
-                let driver = self.trace_canvas_node(start_node, sim, connections, component_ports, net_cache);
+                let driver = self.trace_canvas_node(start_node, sim, conn_map, component_ports, net_cache);
                 if let OutputSource::DrivenByGate(g_idx) = driver {
                     port_to_sim_gate_map.insert((comp.id, port_idx), g_idx);
                 }
@@ -331,7 +350,7 @@ impl Editor {
         &self,
         start_node: CanvasNode,
         sim: &mut Simulator,
-        connections: &[VisualConnection],
+        conn_map: &HashMap<(usize, usize), Vec<&VisualConnection>>,
         component_ports: &HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
         net_cache: &mut HashMap<Vec<usize>, OutputSource>,
     ) -> OutputSource {
@@ -366,8 +385,8 @@ impl Editor {
                     }
                 }
                 CanvasNode::CompInput { comp_id, port_idx } => {
-                    for conn in connections {
-                        if conn.tgt_comp_id == comp_id && conn.tgt_port == port_idx {
+                    if let Some(conns) = conn_map.get(&(comp_id, port_idx)) {
+                        for conn in conns {
                             queue.push(CanvasNode::CompOutput {
                                 comp_id: conn.src_comp_id,
                                 port_idx: conn.src_port,
@@ -405,19 +424,17 @@ impl Editor {
     /// Translates the current canvas components and connections into a reusable ChipBlueprint
     pub(crate) fn package_current_canvas(&self) -> Option<ChipBlueprint> {
         // Collect Inputs and Outputs from canvas, sorted by Y position to preserve order
-        let mut visual_inputs: Vec<VisualComponent> = self
-            .components
+        let mut visual_inputs: Vec<&VisualComponent> = self
+            .circuit.components
             .iter()
             .filter(|c| c.comp_type == ComponentType::Input)
-            .cloned()
             .collect();
         visual_inputs.sort_by(|a, b| a.pos.y.total_cmp(&b.pos.y));
 
-        let mut visual_outputs: Vec<VisualComponent> = self
-            .components
+        let mut visual_outputs: Vec<&VisualComponent> = self
+            .circuit.components
             .iter()
             .filter(|c| c.comp_type == ComponentType::Output)
-            .cloned()
             .collect();
         visual_outputs.sort_by(|a, b| a.pos.y.total_cmp(&b.pos.y));
 
@@ -469,11 +486,10 @@ impl Editor {
         }
 
         // Collect internal components
-        let visual_internals: Vec<VisualComponent> = self
-            .components
+        let visual_internals: Vec<&VisualComponent> = self
+            .circuit.components
             .iter()
             .filter(|c| c.comp_type != ComponentType::Input && c.comp_type != ComponentType::Output)
-            .cloned()
             .collect();
 
         // Create blueprint components
@@ -485,6 +501,7 @@ impl Editor {
                 component_type: comp.comp_type,
                 pos: (comp.pos.x, comp.pos.y),
                 clock_period: comp.clock_period,
+                bus_width: comp.bus_width,
             });
             comp_id_to_bp_idx.insert(comp.id, idx);
         }
@@ -492,7 +509,7 @@ impl Editor {
         // Translate connections
         let mut connections = Vec::new();
 
-        for conn in &self.connections {
+        for conn in &self.circuit.connections {
             // 1. Resolve source
             let source_port =
                 if let Some(in_idx) = visual_inputs.iter().position(|c| c.id == conn.src_comp_id) {
@@ -600,18 +617,18 @@ impl Editor {
         };
 
         self.canvas.stashed_main_canvas = Some(CanvasSnapshot {
-            components: self.components.clone(),
-            connections: self.connections.clone(),
-            annotations: self.annotations.clone(),
-            next_component_id: self.next_component_id,
+            components: self.circuit.components.clone(),
+            connections: self.circuit.connections.clone(),
+            annotations: self.circuit.annotations.clone(),
+            next_component_id: self.circuit.next_component_id,
             pan: self.canvas.pan,
             zoom: self.canvas.zoom,
         });
 
-        self.components.clear();
-        self.connections.clear();
-        self.annotations.clear();
-        self.next_component_id = 1;
+        self.circuit.components.clear();
+        self.circuit.connections.clear();
+        self.circuit.annotations.clear();
+        self.circuit.next_component_id = 1;
         self.canvas.selected_comp_id = None;
         self.canvas.selected_comp_ids.clear();
         self.canvas.inspection_path.clear();
@@ -640,13 +657,13 @@ impl Editor {
         let mut bp_comp_idx_to_visual_id = HashMap::new();
 
         for (i, comp) in bp.components.iter().enumerate() {
-            let vis_id = self.next_component_id;
-            self.next_component_id += 1;
+            let vis_id = self.circuit.next_component_id;
+            self.circuit.next_component_id += 1;
 
             let label = self.get_component_label(comp.component_type);
             let (width, height) = self.get_component_dimensions(comp.component_type);
 
-            self.components.push(VisualComponent {
+            self.circuit.components.push(VisualComponent {
                 id: vis_id,
                 comp_type: comp.component_type,
                 pos: Vec2::new(comp.pos.0, comp.pos.1),
@@ -654,6 +671,7 @@ impl Editor {
                 height,
                 label,
                 clock_period: comp.clock_period,
+                bus_width: comp.bus_width,
                 color: None,
             });
             bp_comp_idx_to_visual_id.insert(i, vis_id);
@@ -666,14 +684,14 @@ impl Editor {
         let input_y_start = center_y - (inputs_height / 2.0);
 
         for i in 0..bp.inputs {
-            let vis_id = self.next_component_id;
-            self.next_component_id += 1;
+            let vis_id = self.circuit.next_component_id;
+            self.circuit.next_component_id += 1;
             let label = bp
                 .input_names
                 .get(i)
                 .cloned()
                 .unwrap_or_else(|| "IN".to_string());
-            self.components.push(VisualComponent {
+            self.circuit.components.push(VisualComponent {
                 id: vis_id,
                 comp_type: ComponentType::Input,
                 pos: Vec2::new(min_x - 150.0, input_y_start + i as f32 * spacing_y),
@@ -681,6 +699,7 @@ impl Editor {
                 height: 40.0,
                 label,
                 clock_period: None,
+                bus_width: None,
                 color: None,
             });
             bp_in_to_visual_id.insert(i, vis_id);
@@ -691,14 +710,14 @@ impl Editor {
         let output_y_start = center_y - (outputs_height / 2.0);
 
         for i in 0..bp.outputs {
-            let vis_id = self.next_component_id;
-            self.next_component_id += 1;
+            let vis_id = self.circuit.next_component_id;
+            self.circuit.next_component_id += 1;
             let label = bp
                 .output_names
                 .get(i)
                 .cloned()
                 .unwrap_or_else(|| "OUT".to_string());
-            self.components.push(VisualComponent {
+            self.circuit.components.push(VisualComponent {
                 id: vis_id,
                 comp_type: ComponentType::Output,
                 pos: Vec2::new(max_x + 150.0, output_y_start + i as f32 * spacing_y),
@@ -706,6 +725,7 @@ impl Editor {
                 height: 40.0,
                 label,
                 clock_period: None,
+                bus_width: None,
                 color: None,
             });
             bp_out_to_visual_id.insert(i, vis_id);
@@ -713,11 +733,11 @@ impl Editor {
 
         for conn in bp.connections {
             let src_comp_id = match conn.source {
-                SourcePort::ChipInput(idx) => *bp_in_to_visual_id.get(&idx).unwrap(),
+                SourcePort::ChipInput(idx) => bp_in_to_visual_id.get(&idx).copied(),
                 SourcePort::ComponentOutput {
                     component_idx,
                     port_idx: _,
-                } => *bp_comp_idx_to_visual_id.get(&component_idx).unwrap(),
+                } => bp_comp_idx_to_visual_id.get(&component_idx).copied(),
             };
             let src_port = match conn.source {
                 SourcePort::ChipInput(_) => 0,
@@ -728,11 +748,11 @@ impl Editor {
             };
 
             let tgt_comp_id = match conn.target {
-                TargetPort::ChipOutput(idx) => *bp_out_to_visual_id.get(&idx).unwrap(),
+                TargetPort::ChipOutput(idx) => bp_out_to_visual_id.get(&idx).copied(),
                 TargetPort::ComponentInput {
                     component_idx,
                     port_idx: _,
-                } => *bp_comp_idx_to_visual_id.get(&component_idx).unwrap(),
+                } => bp_comp_idx_to_visual_id.get(&component_idx).copied(),
             };
             let tgt_port = match conn.target {
                 TargetPort::ChipOutput(_) => 0,
@@ -742,12 +762,14 @@ impl Editor {
                 } => port_idx,
             };
 
-            self.connections.push(VisualConnection {
-                src_comp_id,
-                src_port,
-                tgt_comp_id,
-                tgt_port,
-            });
+            if let (Some(src_id), Some(tgt_id)) = (src_comp_id, tgt_comp_id) {
+                self.circuit.connections.push(VisualConnection {
+                    src_comp_id: src_id,
+                    src_port,
+                    tgt_comp_id: tgt_id,
+                    tgt_port,
+                });
+            }
         }
 
         self.canvas.pan = Vec2::new(0.0, 0.0);
@@ -756,7 +778,7 @@ impl Editor {
     }
 
     pub fn center_camera_on_components(&mut self) {
-        if self.components.is_empty() {
+        if self.circuit.components.is_empty() {
             self.canvas.pan = Vec2::ZERO;
             self.canvas.zoom = 1.0;
             return;
@@ -767,7 +789,7 @@ impl Editor {
         let mut min_y = f32::MAX;
         let mut max_y = f32::MIN;
 
-        for comp in &self.components {
+        for comp in &self.circuit.components {
             min_x = min_x.min(comp.pos.x);
             max_x = max_x.max(comp.pos.x + comp.width);
             min_y = min_y.min(comp.pos.y);
@@ -857,10 +879,10 @@ impl Editor {
             }
 
             if let Some(stashed) = self.canvas.stashed_main_canvas.take() {
-                self.components = stashed.components;
-                self.connections = stashed.connections;
-                self.annotations = stashed.annotations;
-                self.next_component_id = stashed.next_component_id;
+                self.circuit.components = stashed.components;
+                self.circuit.connections = stashed.connections;
+                self.circuit.annotations = stashed.annotations;
+                self.circuit.next_component_id = stashed.next_component_id;
                 self.canvas.pan = stashed.pan;
                 self.canvas.zoom = stashed.zoom;
             }
@@ -873,10 +895,10 @@ impl Editor {
     pub fn cancel_and_return(&mut self) {
         if let EditingTarget::LibraryChip(_) = self.canvas.editing_target {
             if let Some(stashed) = self.canvas.stashed_main_canvas.take() {
-                self.components = stashed.components;
-                self.connections = stashed.connections;
-                self.annotations = stashed.annotations;
-                self.next_component_id = stashed.next_component_id;
+                self.circuit.components = stashed.components;
+                self.circuit.connections = stashed.connections;
+                self.circuit.annotations = stashed.annotations;
+                self.circuit.next_component_id = stashed.next_component_id;
                 self.canvas.pan = stashed.pan;
                 self.canvas.zoom = stashed.zoom;
             }

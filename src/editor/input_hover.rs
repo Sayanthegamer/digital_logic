@@ -12,7 +12,7 @@ impl Editor {
         self.canvas.hovered_port = None;
         if !egui_wants_pointer && self.canvas.inspection_path.is_empty() {
             let mut hovered_chip = false;
-            for comp in &self.components {
+            for comp in &self.circuit.components {
                 // Junctions are connectable across their whole body; don't block snapping when hovering them.
                 if comp.comp_type == ComponentType::Junction {
                     continue;
@@ -31,7 +31,7 @@ impl Editor {
 
             if !hovered_chip {
                 let mut closest_dist = 25.0; // Reduced screen radius for snapping
-                for comp in &self.components {
+                for comp in &self.circuit.components {
                     // Special-case Junction: allow hovering anywhere along the bar.
                     if comp.comp_type == ComponentType::Junction {
                         let a = self.to_screen_space(comp.input_port_pos(0, 1));

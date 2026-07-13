@@ -8,7 +8,7 @@ fn test_custom_port_naming_collision() {
     let mut editor = Editor::new();
     editor.engine.library.clear();
 
-    editor.components.push(VisualComponent {
+    editor.circuit.components.push(VisualComponent {
         id: 1,
         comp_type: ComponentType::Input,
         pos: Vec2::new(0.0, 0.0),
@@ -17,8 +17,9 @@ fn test_custom_port_naming_collision() {
         label: "X".to_string(),
         clock_period: None,
         color: None,
+        bus_width: None,
     });
-    editor.components.push(VisualComponent {
+    editor.circuit.components.push(VisualComponent {
         id: 2,
         comp_type: ComponentType::Input,
         pos: Vec2::new(0.0, 50.0),
@@ -27,8 +28,9 @@ fn test_custom_port_naming_collision() {
         label: "X".to_string(),
         clock_period: None,
         color: None,
+        bus_width: None,
     });
-    editor.components.push(VisualComponent {
+    editor.circuit.components.push(VisualComponent {
         id: 3,
         comp_type: ComponentType::Input,
         pos: Vec2::new(0.0, 100.0),
@@ -37,9 +39,10 @@ fn test_custom_port_naming_collision() {
         label: "IN".to_string(),
         clock_period: None,
         color: None,
+        bus_width: None,
     });
 
-    editor.components.push(VisualComponent {
+    editor.circuit.components.push(VisualComponent {
         id: 4,
         comp_type: ComponentType::Output,
         pos: Vec2::new(200.0, 0.0),
@@ -48,8 +51,9 @@ fn test_custom_port_naming_collision() {
         label: "Y".to_string(),
         clock_period: None,
         color: None,
+        bus_width: None,
     });
-    editor.components.push(VisualComponent {
+    editor.circuit.components.push(VisualComponent {
         id: 5,
         comp_type: ComponentType::Output,
         pos: Vec2::new(200.0, 50.0),
@@ -58,9 +62,10 @@ fn test_custom_port_naming_collision() {
         label: "Y".to_string(),
         clock_period: None,
         color: None,
+        bus_width: None,
     });
 
-    editor.components.push(VisualComponent {
+    editor.circuit.components.push(VisualComponent {
         id: 6,
         comp_type: ComponentType::Nand,
         pos: Vec2::new(100.0, 25.0),
@@ -69,6 +74,7 @@ fn test_custom_port_naming_collision() {
         label: "NAND".to_string(),
         clock_period: None,
         color: None,
+        bus_width: None,
     });
 
     let bp = editor
@@ -98,6 +104,7 @@ fn make_comp(x: f32, y: f32, w: f32, h: f32) -> VisualComponent {
         label: "TEST".to_string(),
         clock_period: None,
         color: None,
+        bus_width: None,
     }
 }
 
@@ -111,6 +118,7 @@ fn make_junction(x: f32, y: f32, w: f32, h: f32) -> VisualComponent {
         label: "".to_string(),
         clock_period: None,
         color: None,
+        bus_width: None,
     }
 }
 
@@ -284,13 +292,13 @@ fn test_get_component_ports_count() {
 fn test_save_load_project() {
     let mut editor = Editor::new();
     editor.engine.library.clear();
-    editor.components.clear();
-    editor.connections.clear();
-    editor.annotations.clear();
+    editor.circuit.components.clear();
+    editor.circuit.connections.clear();
+    editor.circuit.annotations.clear();
 
     // Populate with some data
-    editor.next_component_id = 42;
-    editor.components.push(VisualComponent {
+    editor.circuit.next_component_id = 42;
+    editor.circuit.components.push(VisualComponent {
         id: 1,
         comp_type: ComponentType::Nand,
         pos: Vec2::new(10.0, 20.0),
@@ -299,14 +307,15 @@ fn test_save_load_project() {
         label: "NAND_G".to_string(),
         clock_period: None,
         color: None,
+        bus_width: None,
     });
-    editor.connections.push(VisualConnection {
+    editor.circuit.connections.push(VisualConnection {
         src_comp_id: 1,
         src_port: 0,
         tgt_comp_id: 2,
         tgt_port: 1,
     });
-    editor.annotations.push(TextAnnotation {
+    editor.circuit.annotations.push(TextAnnotation {
         text: "Testing save load".to_string(),
         pos: Vec2::new(50.0, 60.0),
     });
@@ -333,26 +342,26 @@ fn test_save_load_project() {
     // Clear the global library to ensure predictable state for the test
     loaded_editor.global_library = crate::editor::global_library::GlobalLibrary::default();
     loaded_editor.engine.library.clear();
-    loaded_editor.components.clear();
-    loaded_editor.connections.clear();
-    loaded_editor.annotations.clear();
+    loaded_editor.circuit.components.clear();
+    loaded_editor.circuit.connections.clear();
+    loaded_editor.circuit.annotations.clear();
 
     let load_success = loaded_editor.load_from_path(&temp_path);
     assert!(load_success);
 
     // Verify properties
-    assert_eq!(loaded_editor.next_component_id, editor.next_component_id);
-    assert_eq!(loaded_editor.components.len(), 1);
-    assert_eq!(loaded_editor.components[0].id, 1);
-    assert_eq!(loaded_editor.components[0].label, "NAND_G");
-    assert_eq!(loaded_editor.components[0].pos, Vec2::new(10.0, 20.0));
+    assert_eq!(loaded_editor.circuit.next_component_id, editor.circuit.next_component_id);
+    assert_eq!(loaded_editor.circuit.components.len(), 1);
+    assert_eq!(loaded_editor.circuit.components[0].id, 1);
+    assert_eq!(loaded_editor.circuit.components[0].label, "NAND_G");
+    assert_eq!(loaded_editor.circuit.components[0].pos, Vec2::new(10.0, 20.0));
 
-    assert_eq!(loaded_editor.connections.len(), 1);
-    assert_eq!(loaded_editor.connections[0].src_comp_id, 1);
-    assert_eq!(loaded_editor.connections[0].tgt_comp_id, 2);
+    assert_eq!(loaded_editor.circuit.connections.len(), 1);
+    assert_eq!(loaded_editor.circuit.connections[0].src_comp_id, 1);
+    assert_eq!(loaded_editor.circuit.connections[0].tgt_comp_id, 2);
 
-    assert_eq!(loaded_editor.annotations.len(), 1);
-    assert_eq!(loaded_editor.annotations[0].text, "Testing save load");
+    assert_eq!(loaded_editor.circuit.annotations.len(), 1);
+    assert_eq!(loaded_editor.circuit.annotations[0].text, "Testing save load");
 
     // After import, the global library should contain the custom chip
     assert!(loaded_editor.engine.library.iter().any(|bp| bp.name == "CustomChip"));
@@ -367,9 +376,9 @@ fn test_save_load_nested_project() {
     // Start with a clean library and editor state
     editor.global_library = crate::editor::global_library::GlobalLibrary::default();
     editor.engine.library.clear();
-    editor.components.clear();
-    editor.connections.clear();
-    editor.annotations.clear();
+    editor.circuit.components.clear();
+    editor.circuit.connections.clear();
+    editor.circuit.annotations.clear();
 
     // 1. Add "InnerChip"
     editor.engine.library.push(crate::engine::ChipBlueprint {
@@ -394,13 +403,14 @@ fn test_save_load_nested_project() {
                 component_type: ComponentType::SubChip(0), // References InnerChip
                 pos: (0.0, 0.0),
                 clock_period: None,
+                bus_width: None,
             }
         ],
         connections: vec![],
     });
 
     // 3. Add a canvas component of type "OuterChip" (SubChip(1))
-    editor.components.push(VisualComponent {
+    editor.circuit.components.push(VisualComponent {
         id: 1,
         comp_type: ComponentType::SubChip(1), // OuterChip
         pos: Vec2::new(10.0, 20.0),
@@ -409,6 +419,7 @@ fn test_save_load_nested_project() {
         label: "Outer".to_string(),
         clock_period: None,
         color: None,
+        bus_width: None,
     });
 
     let mut temp_path = std::env::temp_dir();
@@ -431,9 +442,9 @@ fn test_save_load_nested_project() {
         connections: vec![],
     });
     loaded_editor.engine.library.clear();
-    loaded_editor.components.clear();
-    loaded_editor.connections.clear();
-    loaded_editor.annotations.clear();
+    loaded_editor.circuit.components.clear();
+    loaded_editor.circuit.connections.clear();
+    loaded_editor.circuit.annotations.clear();
 
     // Load project
     let load_success = loaded_editor.load_from_path(&temp_path);
@@ -454,8 +465,8 @@ fn test_save_load_nested_project() {
     assert_eq!(second_len, 3, "Global library should not duplicate chips on multiple loads when pre-populated!");
 
     // Verify canvas components
-    assert_eq!(loaded_editor.components.len(), 1);
-    if let ComponentType::SubChip(new_idx) = loaded_editor.components[0].comp_type {
+    assert_eq!(loaded_editor.circuit.components.len(), 1);
+    if let ComponentType::SubChip(new_idx) = loaded_editor.circuit.components[0].comp_type {
         // Find OuterChip index in the loaded flat library
         let outer_idx = flat_lib.iter().position(|bp| bp.name == "OuterChip").unwrap();
         assert_eq!(new_idx, outer_idx);
@@ -502,13 +513,13 @@ fn test_hit_test_manhattan_wire_zoom() {
 #[test]
 fn test_bus_compilation_and_propagation() {
     let mut editor = Editor::new();
-    editor.components.clear();
-    editor.connections.clear();
+    editor.circuit.components.clear();
+    editor.circuit.connections.clear();
 
     // 1. Create components
     // Inputs (comp IDs 0..4)
     for i in 0..4 {
-        editor.components.push(VisualComponent {
+        editor.circuit.components.push(VisualComponent {
             id: i,
             comp_type: ComponentType::Input,
             pos: Vec2::new(0.0, i as f32 * 50.0),
@@ -517,11 +528,12 @@ fn test_bus_compilation_and_propagation() {
             label: format!("IN_{}", i),
             clock_period: None,
             color: None,
+        bus_width: None,
         });
     }
 
     // BusJoiner (comp ID 4)
-    editor.components.push(VisualComponent {
+    editor.circuit.components.push(VisualComponent {
         id: 4,
         comp_type: ComponentType::BusJoiner,
         pos: Vec2::new(150.0, 100.0),
@@ -530,10 +542,11 @@ fn test_bus_compilation_and_propagation() {
         label: "JOIN".to_string(),
         clock_period: Some(4), // width = 4
         color: None,
+        bus_width: None,
     });
 
     // BusSplitter (comp ID 5)
-    editor.components.push(VisualComponent {
+    editor.circuit.components.push(VisualComponent {
         id: 5,
         comp_type: ComponentType::BusSplitter,
         pos: Vec2::new(300.0, 100.0),
@@ -542,11 +555,12 @@ fn test_bus_compilation_and_propagation() {
         label: "SPLIT".to_string(),
         clock_period: Some(4), // width = 4
         color: None,
+        bus_width: None,
     });
 
     // Outputs (comp IDs 6..10)
     for i in 0..4 {
-        editor.components.push(VisualComponent {
+        editor.circuit.components.push(VisualComponent {
             id: 6 + i,
             comp_type: ComponentType::Output,
             pos: Vec2::new(450.0, i as f32 * 50.0),
@@ -555,13 +569,14 @@ fn test_bus_compilation_and_propagation() {
             label: format!("OUT_{}", i),
             clock_period: None,
             color: None,
+        bus_width: None,
         });
     }
 
     // 2. Add connections
     // Connect Inputs to BusJoiner
     for i in 0..4 {
-        editor.connections.push(VisualConnection {
+        editor.circuit.connections.push(VisualConnection {
             src_comp_id: i,
             src_port: 0,
             tgt_comp_id: 4,
@@ -570,7 +585,7 @@ fn test_bus_compilation_and_propagation() {
     }
 
     // Connect BusJoiner to BusSplitter (The Bus wire)
-    editor.connections.push(VisualConnection {
+    editor.circuit.connections.push(VisualConnection {
         src_comp_id: 4,
         src_port: 0,
         tgt_comp_id: 5,
@@ -579,7 +594,7 @@ fn test_bus_compilation_and_propagation() {
 
     // Connect BusSplitter to Outputs
     for i in 0..4 {
-        editor.connections.push(VisualConnection {
+        editor.circuit.connections.push(VisualConnection {
             src_comp_id: 5,
             src_port: i,
             tgt_comp_id: 6 + i,
@@ -621,11 +636,11 @@ fn test_bus_compilation_and_propagation() {
 #[test]
 fn test_seven_segment_top_level_port_allocation() {
     let mut editor = Editor::new();
-    editor.components.clear();
-    editor.connections.clear();
+    editor.circuit.components.clear();
+    editor.circuit.connections.clear();
 
     // SevenSegment (comp ID 0)
-    editor.components.push(VisualComponent {
+    editor.circuit.components.push(VisualComponent {
         id: 0,
         comp_type: ComponentType::SevenSegment,
         pos: Vec2::new(100.0, 100.0),
@@ -634,11 +649,12 @@ fn test_seven_segment_top_level_port_allocation() {
         label: "7SEG".to_string(),
         clock_period: None,
         color: None,
+        bus_width: None,
     });
 
     // 8 Inputs (comp IDs 1..=8)
     for i in 1..=8 {
-        editor.components.push(VisualComponent {
+        editor.circuit.components.push(VisualComponent {
             id: i,
             comp_type: ComponentType::Input,
             pos: Vec2::new(0.0, (i - 1) as f32 * 50.0),
@@ -647,12 +663,13 @@ fn test_seven_segment_top_level_port_allocation() {
             label: format!("IN_{}", i - 1),
             clock_period: None,
             color: None,
+        bus_width: None,
         });
     }
 
     // Connect Inputs 1..=8 to SevenSegment ports 0..7
     for i in 1..=8 {
-        editor.connections.push(VisualConnection {
+        editor.circuit.connections.push(VisualConnection {
             src_comp_id: i,
             src_port: 0,
             tgt_comp_id: 0,
@@ -687,11 +704,11 @@ fn test_seven_segment_top_level_port_allocation() {
 #[test]
 fn test_svg_export() {
     let mut editor = Editor::new();
-    editor.components.clear();
-    editor.connections.clear();
+    editor.circuit.components.clear();
+    editor.circuit.connections.clear();
 
     // Add Nand Gate (comp ID 0)
-    editor.components.push(VisualComponent {
+    editor.circuit.components.push(VisualComponent {
         id: 0,
         comp_type: ComponentType::Nand,
         pos: Vec2::new(100.0, 100.0),
@@ -700,10 +717,11 @@ fn test_svg_export() {
         label: "NAND".to_string(),
         clock_period: None,
         color: None,
+        bus_width: None,
     });
 
     // Add Input (comp ID 1)
-    editor.components.push(VisualComponent {
+    editor.circuit.components.push(VisualComponent {
         id: 1,
         comp_type: ComponentType::Input,
         pos: Vec2::new(0.0, 100.0),
@@ -712,10 +730,11 @@ fn test_svg_export() {
         label: "IN".to_string(),
         clock_period: None,
         color: None,
+        bus_width: None,
     });
 
     // Wire them up
-    editor.connections.push(VisualConnection {
+    editor.circuit.connections.push(VisualConnection {
         src_comp_id: 1,
         src_port: 0,
         tgt_comp_id: 0,

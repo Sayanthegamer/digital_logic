@@ -6,19 +6,19 @@ impl Editor {
     /// This should be called *before* any destructive action.
     pub fn push_history_snapshot(&mut self) {
         let snapshot = CanvasSnapshot {
-            components: self.components.clone(),
-            connections: self.connections.clone(),
-            annotations: self.annotations.clone(),
-            next_component_id: self.next_component_id,
+            components: self.circuit.components.clone(),
+            connections: self.circuit.connections.clone(),
+            annotations: self.circuit.annotations.clone(),
+            next_component_id: self.circuit.next_component_id,
             pan: self.canvas.pan,
             zoom: self.canvas.zoom,
         };
 
-        self.history.undo_stack.push(snapshot);
+        self.history.undo_stack.push_back(snapshot);
 
         // Truncate if we exceed max_steps
         if self.history.undo_stack.len() > self.history.max_steps {
-            self.history.undo_stack.remove(0);
+            self.history.undo_stack.pop_front();
         }
 
         // Whenever a new action is performed, the redo stack is invalidated
@@ -27,23 +27,23 @@ impl Editor {
 
     /// Reverts the canvas to the previous state.
     pub fn undo(&mut self) {
-        if let Some(prev_state) = self.history.undo_stack.pop() {
+        if let Some(prev_state) = self.history.undo_stack.pop_back() {
             // Save current state to redo stack
             let current_snapshot = CanvasSnapshot {
-                components: self.components.clone(),
-                connections: self.connections.clone(),
-                annotations: self.annotations.clone(),
-                next_component_id: self.next_component_id,
+                components: self.circuit.components.clone(),
+                connections: self.circuit.connections.clone(),
+                annotations: self.circuit.annotations.clone(),
+                next_component_id: self.circuit.next_component_id,
                 pan: self.canvas.pan,
                 zoom: self.canvas.zoom,
             };
-            self.history.redo_stack.push(current_snapshot);
+            self.history.redo_stack.push_back(current_snapshot);
 
             // Apply previous state
-            self.components = prev_state.components;
-            self.connections = prev_state.connections;
-            self.annotations = prev_state.annotations;
-            self.next_component_id = prev_state.next_component_id;
+            self.circuit.components = prev_state.components;
+            self.circuit.connections = prev_state.connections;
+            self.circuit.annotations = prev_state.annotations;
+            self.circuit.next_component_id = prev_state.next_component_id;
             self.canvas.pan = prev_state.pan;
             self.canvas.zoom = prev_state.zoom;
 
@@ -63,23 +63,23 @@ impl Editor {
 
     /// Re-applies a previously undone state.
     pub fn redo(&mut self) {
-        if let Some(next_state) = self.history.redo_stack.pop() {
+        if let Some(next_state) = self.history.redo_stack.pop_back() {
             // Save current state to undo stack
             let current_snapshot = CanvasSnapshot {
-                components: self.components.clone(),
-                connections: self.connections.clone(),
-                annotations: self.annotations.clone(),
-                next_component_id: self.next_component_id,
+                components: self.circuit.components.clone(),
+                connections: self.circuit.connections.clone(),
+                annotations: self.circuit.annotations.clone(),
+                next_component_id: self.circuit.next_component_id,
                 pan: self.canvas.pan,
                 zoom: self.canvas.zoom,
             };
-            self.history.undo_stack.push(current_snapshot);
+            self.history.undo_stack.push_back(current_snapshot);
 
             // Apply next state
-            self.components = next_state.components;
-            self.connections = next_state.connections;
-            self.annotations = next_state.annotations;
-            self.next_component_id = next_state.next_component_id;
+            self.circuit.components = next_state.components;
+            self.circuit.connections = next_state.connections;
+            self.circuit.annotations = next_state.annotations;
+            self.circuit.next_component_id = next_state.next_component_id;
             self.canvas.pan = next_state.pan;
             self.canvas.zoom = next_state.zoom;
 

@@ -238,7 +238,7 @@ impl Editor {
                             if let Some(idx) = to_delete {
                                 self.engine.library.remove(idx);
                                 // Shift all SubChip indices down by 1 if they are > idx
-                                for c in &mut self.components {
+                                for c in &mut self.circuit.components {
                                     if let ComponentType::SubChip(ref mut i) = c.comp_type {
                                         if *i > idx {
                                             *i -= 1;
@@ -246,15 +246,15 @@ impl Editor {
                                     }
                                 }
                                 // Drop any components of this exact type
-                                let to_remove: Vec<_> = self
-                                    .components
+                                let to_remove: Vec<_> = self.circuit.components
                                     .iter()
+                                    .filter(|c| c.comp_type == ComponentType::SubChip(idx))
                                     .filter(|c| c.comp_type == ComponentType::SubChip(idx))
                                     .map(|c| c.id)
                                     .collect();
-                                self.components
+                                self.circuit.components
                                     .retain(|c| c.comp_type != ComponentType::SubChip(idx));
-                                self.connections.retain(|w| {
+                                self.circuit.connections.retain(|w| {
                                     !to_remove.contains(&w.src_comp_id)
                                         && !to_remove.contains(&w.tgt_comp_id)
                                 });

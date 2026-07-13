@@ -8,9 +8,10 @@ The simulation backend is completely decoupled from the UI. It operates on a fla
 
 ### Event-Driven Simulation
 Instead of a naive tick-based evaluation where every gate is processed every frame, the `Simulator` uses an event-driven queue (`event_queue`).
-1. When an input changes, only the gates directly dependent on that input are queued for re-evaluation.
-2. The `propagate_events` loop processes this queue, propagating state changes forward.
-3. This prevents unnecessary calculations, allowing the simulator to handle massive circuits smoothly.
+1. **Topological Depth Sorting**: Using Kahn's algorithm, the simulator guarantees deterministic execution by scheduling gates according to their logical depth in the circuit.
+2. When an input changes, only the gates directly dependent on that input are queued for re-evaluation.
+3. The `propagate_events` loop processes this queue sequentially based on depth, propagating state changes forward.
+4. This prevents unnecessary calculations and data-races, allowing the simulator to handle massive circuits smoothly.
 
 ### Flat Compilation
 The most critical architectural decision for performance is how custom chips (sub-chips) are handled.

@@ -109,7 +109,7 @@ impl SpatialHashGrid {
 impl super::Editor {
     pub fn rebuild_spatial_grid(&mut self) {
         self.canvas.spatial_grid.clear();
-        for comp in &self.components {
+        for comp in &self.circuit.components {
             let rect = Rect::new(comp.pos.x, comp.pos.y, comp.width, comp.height);
             self.canvas.spatial_grid.insert(comp.id, rect);
         }

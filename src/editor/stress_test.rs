@@ -7,12 +7,12 @@ impl Editor {
     /// Generates a massive recursively packaged synthetic circuit
     /// to stress test the Compiler, Chip Packaging, and Sub-Chip Hot-Reloading.
     pub fn generate_stress_test(&mut self) {
-        self.components.clear();
-        self.connections.clear();
-        self.next_component_id = 1;
-        self.wire_offsets.clear();
-        self.wire_nudges.clear();
-        self.annotations.clear();
+        self.circuit.components.clear();
+        self.circuit.connections.clear();
+        self.circuit.next_component_id = 1;
+        self.circuit.wire_offsets.clear();
+        self.circuit.wire_nudges.clear();
+        self.circuit.annotations.clear();
         
         // Clear previous test library
         self.engine.library.clear();
@@ -25,10 +25,10 @@ impl Editor {
             input_names: vec!["A".to_string(), "B".to_string()],
             output_names: vec!["Out".to_string()],
             components: vec![
-                crate::engine::Component { component_type: ComponentType::Nand, pos: (0.0, 0.0), clock_period: None },
-                crate::engine::Component { component_type: ComponentType::Nand, pos: (0.0, 0.0), clock_period: None },
-                crate::engine::Component { component_type: ComponentType::Nand, pos: (0.0, 0.0), clock_period: None },
-                crate::engine::Component { component_type: ComponentType::Nand, pos: (0.0, 0.0), clock_period: None },
+                crate::engine::Component { component_type: ComponentType::Nand, pos: (0.0, 0.0), clock_period: None, bus_width: None },
+                crate::engine::Component { component_type: ComponentType::Nand, pos: (0.0, 0.0), clock_period: None, bus_width: None },
+                crate::engine::Component { component_type: ComponentType::Nand, pos: (0.0, 0.0), clock_period: None, bus_width: None },
+                crate::engine::Component { component_type: ComponentType::Nand, pos: (0.0, 0.0), clock_period: None, bus_width: None },
             ],
             connections: vec![
                 // A -> Nand0, B -> Nand0
@@ -74,6 +74,7 @@ impl Editor {
                     component_type: ComponentType::SubChip(prev_idx),
                     pos: (0.0, 0.0),
                     clock_period: None,
+            bus_width: None,
                 });
                 
                 // Chain them together: ChipInput(0) -> Sub0(0), Sub0(Out) -> Sub1(0) ...
@@ -120,53 +121,56 @@ impl Editor {
         let final_gates_count = 4_usize.pow(target_depth as u32 + 1);
 
         // 3. Place ONE massive packaged subchip on the canvas
-        self.components.push(VisualComponent {
-            id: self.next_component_id,
+        self.circuit.components.push(VisualComponent {
+            id: self.circuit.next_component_id,
             comp_type: ComponentType::SubChip(final_subchip_idx),
             pos: Vec2::new(300.0, 300.0),
             width: 100.0,
             height: 100.0,
             label: format!("Massive 16k Chip"),
             clock_period: None,
+            bus_width: None,
             color: None,
         });
-        let package_id = self.next_component_id;
-        self.next_component_id += 1;
+        let package_id = self.circuit.next_component_id;
+        self.circuit.next_component_id += 1;
         
         // Add inputs and outputs to interact with it
-        self.components.push(VisualComponent {
-            id: self.next_component_id,
+        self.circuit.components.push(VisualComponent {
+            id: self.circuit.next_component_id,
             comp_type: ComponentType::Clock,
             pos: Vec2::new(100.0, 300.0),
             width: 60.0,
             height: 40.0,
             label: format!("Clock A"),
             clock_period: Some(2),
+            bus_width: None,
             color: None,
         });
-        let clock1_id = self.next_component_id;
-        self.next_component_id += 1;
+        let clock1_id = self.circuit.next_component_id;
+        self.circuit.next_component_id += 1;
         
-        self.components.push(VisualComponent {
-            id: self.next_component_id,
+        self.circuit.components.push(VisualComponent {
+            id: self.circuit.next_component_id,
             comp_type: ComponentType::Clock,
             pos: Vec2::new(100.0, 400.0),
             width: 60.0,
             height: 40.0,
             label: format!("Clock B"),
             clock_period: Some(3),
+            bus_width: None,
             color: None,
         });
-        let clock2_id = self.next_component_id;
-        self.next_component_id += 1;
+        let clock2_id = self.circuit.next_component_id;
+        self.circuit.next_component_id += 1;
 
-        self.connections.push(VisualConnection {
+        self.circuit.connections.push(VisualConnection {
             src_comp_id: clock1_id,
             src_port: 0,
             tgt_comp_id: package_id,
             tgt_port: 0,
         });
-        self.connections.push(VisualConnection {
+        self.circuit.connections.push(VisualConnection {
             src_comp_id: clock2_id,
             src_port: 0,
             tgt_comp_id: package_id,

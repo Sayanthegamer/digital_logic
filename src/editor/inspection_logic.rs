@@ -22,7 +22,7 @@ impl Editor {
             return None;
         }
         let first_comp_id = path[0];
-        let curr_comp = self.components.iter().find(|c| c.id == first_comp_id)?;
+        let curr_comp = self.get_component(first_comp_id)?;
         let mut curr_bp_idx = match curr_comp.comp_type {
             ComponentType::SubChip(idx) => idx,
             _ => return None,
@@ -48,7 +48,7 @@ impl Editor {
             match node {
                 TraceNode::ChipInput(idx) => {
                     let inputs: Vec<&super::types::VisualComponent> = self
-                        .components
+                        .circuit.components
                         .iter()
                         .filter(|c| c.comp_type == ComponentType::Input)
                         .collect();
@@ -75,7 +75,7 @@ impl Editor {
                     port_idx,
                 } => {
                     if let Some(conn) = self
-                        .connections
+                        .circuit.connections
                         .iter()
                         .find(|c| c.tgt_comp_id == *component_idx && c.tgt_port == *port_idx)
                     {
@@ -120,7 +120,7 @@ impl Editor {
             match node {
                 TraceNode::ChipInput(idx) => {
                     let inputs: Vec<&super::types::VisualComponent> = self
-                        .components
+                        .circuit.components
                         .iter()
                         .filter(|c| c.comp_type == ComponentType::Input)
                         .collect();
@@ -147,7 +147,7 @@ impl Editor {
                     port_idx,
                 } => {
                     if let Some(conn) = self
-                        .connections
+                        .circuit.connections
                         .iter()
                         .find(|c| c.tgt_comp_id == *component_idx && c.tgt_port == *port_idx)
                     {
@@ -201,10 +201,11 @@ impl Editor {
                 let component = &blueprint.components[*component_idx];
                 match component.component_type {
                     ComponentType::Nand | ComponentType::Clock | ComponentType::TriStateBuffer => {
-                        if let Some(&gate_idx) = self
+                        if let Some(gate_idx) = self
                             .engine
-                            .instance_to_sim_map
-                            .get(&(path.to_vec(), *component_idx))
+                            .instance_tree
+                            .get_instance(path, *component_idx)
+                            .and_then(|node| node.gate_idx)
                         {
                             OutputSource::DrivenByGate(gate_idx)
                         } else {
@@ -214,8 +215,9 @@ impl Editor {
                     ComponentType::SubChip(_) => {
                         if let Some(outputs) = self
                             .engine
-                            .instance_outputs
-                            .get(&(path.to_vec(), *component_idx))
+                            .instance_tree
+                            .get_instance(path, *component_idx)
+                            .map(|node| &node.outputs)
                         {
                             if *port_idx < outputs.len() {
                                 outputs[*port_idx]

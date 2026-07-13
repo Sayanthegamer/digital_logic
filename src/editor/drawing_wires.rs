@@ -47,11 +47,15 @@ impl Editor {
             let glow_thickness =
                 thickness + (if is_selected { 6.0 } else { 4.0 }) * self.canvas.zoom;
             for &(a, b) in &segments {
+                draw_circle(a.x, a.y, glow_thickness / 2.0, glow_color);
+                draw_circle(b.x, b.y, glow_thickness / 2.0, glow_color);
                 draw_line(a.x, a.y, b.x, b.y, glow_thickness, glow_color);
             }
         }
 
         for &(a, b) in &segments {
+            draw_circle(a.x, a.y, thickness / 2.0, color);
+            draw_circle(b.x, b.y, thickness / 2.0, color);
             draw_line(a.x, a.y, b.x, b.y, thickness, color);
         }
 

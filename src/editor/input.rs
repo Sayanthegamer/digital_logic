@@ -53,9 +53,16 @@ impl Editor {
         // 8. Resolution Change Revert Timer
         self.update_resolution_revert_timer();
 
-        if self.canvas.dragging_comp_id.is_some() || self.canvas.dragging_wire.is_some() {
+        if self.canvas.dragging_comp_id.is_some() || !self.canvas.drag_start_positions.is_empty() {
             if mouse_delta.length_squared() > 0.0 {
-                self.recompute_wire_offsets();
+                let mut affected = std::collections::HashSet::new();
+                if let Some(id) = self.canvas.dragging_comp_id {
+                    affected.insert(id);
+                }
+                for &id in self.canvas.drag_start_positions.keys() {
+                    affected.insert(id);
+                }
+                self.recompute_wire_offsets(Some(&affected));
             }
         }
 

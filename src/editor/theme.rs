@@ -31,6 +31,15 @@ impl ThemeColor {
             (self.a * 255.0) as u8,
         )
     }
+
+    pub fn to_hex(&self) -> String {
+        format!(
+            "#{:02X}{:02X}{:02X}",
+            (self.r * 255.0).round() as u8,
+            (self.g * 255.0).round() as u8,
+            (self.b * 255.0).round() as u8
+        )
+    }
 }
 
 // Backgrounds

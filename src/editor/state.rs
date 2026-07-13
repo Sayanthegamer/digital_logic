@@ -1,8 +1,8 @@
 use crate::editor::color_coding::ContextMenuTarget;
 use crate::editor::types::{ActiveTool, VisualConnection};
-use crate::engine::{ChipBlueprint, CompiledClock, OutputSource, Simulator};
+use crate::engine::{ChipBlueprint, CompiledClock, Simulator};
 use macroquad::prelude::Vec2;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::editor::types::{TextAnnotation, VisualComponent};
 
@@ -17,17 +17,17 @@ pub struct CanvasSnapshot {
 }
 
 pub struct HistoryManager {
-    pub undo_stack: Vec<CanvasSnapshot>,
-    pub redo_stack: Vec<CanvasSnapshot>,
+    pub undo_stack: VecDeque<CanvasSnapshot>,
+    pub redo_stack: VecDeque<CanvasSnapshot>,
     pub max_steps: usize,
 }
 
 impl Default for HistoryManager {
     fn default() -> Self {
         Self {
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
-            max_steps: 50,
+            undo_stack: VecDeque::new(),
+            redo_stack: VecDeque::new(),
+            max_steps: 30,
         }
     }
 }
@@ -37,8 +37,8 @@ pub struct EngineState {
     pub simulator: Simulator,
     pub visual_to_sim_map: HashMap<usize, usize>, // Visual ID -> Sim gate index
     pub port_to_sim_gate_map: HashMap<(usize, usize), usize>, // (Visual ID, port_idx) -> Sim gate index
-    pub instance_to_sim_map: HashMap<(Vec<usize>, usize), usize>,
-    pub instance_outputs: HashMap<(Vec<usize>, usize), Vec<OutputSource>>,
+    pub expanded_connections: Vec<VisualConnection>,
+    pub instance_tree: crate::engine::types::InstanceTree,
     pub active_clocks: Vec<CompiledClock>,
     pub is_playing: bool,
     pub ticks_per_frame: usize,
@@ -54,8 +54,8 @@ impl Default for EngineState {
             simulator: Simulator::new(),
             visual_to_sim_map: HashMap::new(),
             port_to_sim_gate_map: HashMap::new(),
-            instance_to_sim_map: HashMap::new(),
-            instance_outputs: HashMap::new(),
+            expanded_connections: Vec::new(),
+            instance_tree: crate::engine::types::InstanceTree::default(),
             active_clocks: Vec::new(),
             is_playing: true,
             ticks_per_frame: 1,

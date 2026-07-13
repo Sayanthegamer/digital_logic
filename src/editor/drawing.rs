@@ -7,10 +7,19 @@ use super::Editor;
 
 use crate::editor::drawing_shapes::*;
 
+#[inline]
+fn get_seg_color(active: bool) -> Color {
+    if active {
+        theme::COMP_SEVENSEG.mq()
+    } else {
+        theme::COMP_SEVENSEG.mq_with_alpha(0.1)
+    }
+}
+
 impl Editor {
     pub fn is_bus_connection(&self, conn: &VisualConnection) -> bool {
-        let src_comp = self.components.iter().find(|c| c.id == conn.src_comp_id);
-        let tgt_comp = self.components.iter().find(|c| c.id == conn.tgt_comp_id);
+        let src_comp = self.get_component(conn.src_comp_id);
+        let tgt_comp = self.get_component(conn.tgt_comp_id);
         src_comp.map_or(false, |c| c.comp_type == ComponentType::BusJoiner && conn.src_port == 0)
             || tgt_comp.map_or(false, |c| c.comp_type == ComponentType::BusSplitter && conn.tgt_port == 0)
     }
@@ -51,13 +60,13 @@ impl Editor {
         }
 
         // 0. Build O(1) lookup map for components to avoid O(N^2) rendering bottleneck
-        let mut comp_map = std::collections::HashMap::with_capacity(self.components.len());
-        for comp in &self.components {
+        let mut comp_map = std::collections::HashMap::with_capacity(self.circuit.components.len());
+        for comp in &self.circuit.components {
             comp_map.insert(comp.id, comp);
         }
 
         // 1. Draw Wires / Connections
-        for wire in &self.connections {
+        for wire in &self.circuit.connections {
             let src_comp = comp_map.get(&wire.src_comp_id).copied();
             let tgt_comp = comp_map.get(&wire.tgt_comp_id).copied();
 
@@ -95,7 +104,7 @@ impl Editor {
                 };
 
                 let is_selected = self.canvas.selected_connections.contains(wire);
-                let wire_color_override = self.color_overrides.get_wire_color(wire);
+                let wire_color_override = self.circuit.color_overrides.get_wire_color(wire);
                 let offset = self.get_connection_routing_offset(wire);
                 let is_bus = self.is_bus_connection(wire);
                 self.draw_manhattan_wire(
@@ -112,14 +121,14 @@ impl Editor {
         }
 
         // 1.1 Draw Wire Junction/Crossing Indicators
-        if self.connections.len() < 5000 {
+        if self.circuit.connections.len() < 5000 {
             let intersections = self.find_wire_intersections();
             self.draw_wire_junctions(&intersections);
         }
 
         // Draw active wire drag preview
         if let Some((src_id, src_port, src_is_input)) = self.canvas.active_wire_drag
-            && let Some(src) = self.components.iter().find(|c| c.id == src_id)
+            && let Some(src) = self.get_component(src_id)
         {
             let (src_inputs, src_outputs) = self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
             let start_pos = if src_is_input {
@@ -133,7 +142,7 @@ impl Editor {
             if let Some((tgt_id, tgt_port, tgt_is_input)) = self.canvas.hovered_port
                 && tgt_is_input != src_is_input
                 && tgt_id != src_id
-                && let Some(tgt_comp) = self.components.iter().find(|c| c.id == tgt_id)
+                && let Some(tgt_comp) = self.get_component(tgt_id)
             {
                 let (tgt_inputs, tgt_outputs) = self.get_component_ports_count_with_width(tgt_comp.comp_type, Some(tgt_comp.bus_width()));
                 end_pos = if tgt_is_input {
@@ -162,7 +171,7 @@ impl Editor {
         }
 
         // 1.5. Draw Text Annotations
-        for (idx, ann) in self.annotations.iter().enumerate() {
+        for (idx, ann) in self.circuit.annotations.iter().enumerate() {
             let screen_pos = self.to_screen_space(ann.pos);
             let target_font_size = (15.0 * self.canvas.zoom).max(8.0);
             let base_font_size = 32.0;
@@ -217,22 +226,14 @@ impl Editor {
         }
 
         // 1.9 Pre-calculate input port states to avoid catastrophic O(N^2 * E) rendering loop
-        let mut input_port_states = std::collections::HashMap::with_capacity(self.connections.len());
-        for wire in &self.connections {
-            let state = if let Some(&gate_idx) = self.engine.port_to_sim_gate_map.get(&(wire.src_comp_id, wire.src_port)) {
-                self.engine.simulator.get_state(gate_idx)
-            } else if let Some(src) = comp_map.get(&wire.src_comp_id) {
-                if src.comp_type == ComponentType::Input {
-                    if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&src.id) {
-                        self.engine.simulator.get_state(gate_idx)
-                    } else { false }
-                } else { false }
-            } else { false };
+        let mut input_port_states = std::collections::HashMap::with_capacity(self.circuit.connections.len());
+        for wire in &self.circuit.connections {
+            let state = self.get_wire_state(wire.src_comp_id, wire.src_port);
             input_port_states.insert((wire.tgt_comp_id, wire.tgt_port), state);
         }
 
         // 2. Draw Components
-        for comp in &self.components {
+        for comp in &self.circuit.components {
             let screen_pos = self.to_screen_space(comp.pos);
             let comp_width = comp.width * self.canvas.zoom;
             let comp_height = comp.height * self.canvas.zoom;
@@ -315,7 +316,7 @@ impl Editor {
             // Draw component box with rounded corners and drop shadow
             // Drop shadow removed for performance / Blueprint style
 
-            let accent_color = if let Some(color_override) = comp.color.map(|c| Color::new(c[0], c[1], c[2], c[3])).or_else(|| self.color_overrides.get_component_color(comp.id)) {
+            let accent_color = if let Some(color_override) = comp.color.map(|c| Color::new(c[0], c[1], c[2], c[3])).or_else(|| self.circuit.color_overrides.get_component_color(comp.id)) {
                 color_override
             } else {
                 match comp.comp_type {
@@ -556,13 +557,6 @@ impl Editor {
             }
 
             if comp.comp_type == ComponentType::SevenSegment {
-                let seg_color = |active| {
-                    if active {
-                        theme::COMP_SEVENSEG.mq()
-                    } else {
-                        theme::COMP_SEVENSEG.mq_with_alpha(0.1)
-                    }
-                };
                 let cx = screen_pos.x + comp_width / 2.0;
                 let cy = screen_pos.y + comp_height / 2.0;
                 let w = 15.0 * self.canvas.zoom;
@@ -576,7 +570,7 @@ impl Editor {
                     cx + w,
                     cy - 2.0 * h,
                     thick,
-                    seg_color(seg_states[0]),
+                    get_seg_color(seg_states[0]),
                 );
                 // Segment B (top right)
                 draw_line(
@@ -585,7 +579,7 @@ impl Editor {
                     cx + w,
                     cy,
                     thick,
-                    seg_color(seg_states[1]),
+                    get_seg_color(seg_states[1]),
                 );
                 // Segment C (bottom right)
                 draw_line(
@@ -594,7 +588,7 @@ impl Editor {
                     cx + w,
                     cy + 2.0 * h,
                     thick,
-                    seg_color(seg_states[2]),
+                    get_seg_color(seg_states[2]),
                 );
                 // Segment D (bottom)
                 draw_line(
@@ -603,7 +597,7 @@ impl Editor {
                     cx + w,
                     cy + 2.0 * h,
                     thick,
-                    seg_color(seg_states[3]),
+                    get_seg_color(seg_states[3]),
                 );
                 // Segment E (bottom left)
                 draw_line(
@@ -612,7 +606,7 @@ impl Editor {
                     cx - w,
                     cy + 2.0 * h,
                     thick,
-                    seg_color(seg_states[4]),
+                    get_seg_color(seg_states[4]),
                 );
                 // Segment F (top left)
                 draw_line(
@@ -621,10 +615,10 @@ impl Editor {
                     cx - w,
                     cy,
                     thick,
-                    seg_color(seg_states[5]),
+                    get_seg_color(seg_states[5]),
                 );
                 // Segment G (middle)
-                draw_line(cx - w, cy, cx + w, cy, thick, seg_color(seg_states[6]));
+                draw_line(cx - w, cy, cx + w, cy, thick, get_seg_color(seg_states[6]));
 
                 // Segment "minus" (port 7)
                 // Port ordering: A, B, C, D, E, F, G, minus
@@ -635,7 +629,7 @@ impl Editor {
                     cx - w - 10.0 * self.canvas.zoom,
                     cy,
                     thick,
-                    seg_color(seg_states[7]),
+                    get_seg_color(seg_states[7]),
                 );
             }
         }
@@ -687,7 +681,7 @@ impl Editor {
         }
         // Draw magnetic hover ring
         if let Some((comp_id, port_idx, is_input)) = self.canvas.hovered_port
-            && let Some(comp) = self.components.iter().find(|c| c.id == comp_id)
+            && let Some(comp) = self.get_component(comp_id)
         {
             let (inputs_count, outputs_count) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
             let pos = if is_input {
@@ -717,7 +711,7 @@ impl Editor {
         }
         // Draw keyboard tab focus indicator
         if let Some((comp_id, port_opt)) = self.canvas.tab_focus {
-            if let Some(comp) = self.components.iter().find(|c| c.id == comp_id) {
+            if let Some(comp) = self.get_component(comp_id) {
                 if let Some((port_idx, is_input)) = port_opt {
                     // Draw a square bracket around the port
                     let (in_count, out_count) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));

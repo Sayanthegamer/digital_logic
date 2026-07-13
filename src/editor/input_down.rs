@@ -15,7 +15,7 @@ impl Editor {
             // Magnetic Alignment Snapping override
             if let Some(&first_drag_id) = self.canvas.drag_start_positions.keys().next() {
                 if let Some(start_pos) = self.canvas.drag_start_positions.get(&first_drag_id) {
-                    if let Some(c) = self.components.iter().find(|x| x.id == first_drag_id) {
+                    if let Some(c) = self.get_component(first_drag_id) {
                         let raw_x = start_pos.x + translation.x;
                         let raw_y = start_pos.y + translation.y;
                         
@@ -33,7 +33,7 @@ impl Editor {
                         let mut best_dy = 0.0;
                         let mut min_dy_dist = 10.0;
 
-                        for other in &self.components {
+                        for other in &self.circuit.components {
                             if self.canvas.selected_comp_ids.contains(&other.id) { continue; }
                             
                             let o_left = other.pos.x;
@@ -87,7 +87,7 @@ impl Editor {
             let mut needs_snapshot = false;
             if shift_pressed && !self.canvas.drag_snapshot_pushed {
                 for &id in self.canvas.drag_start_positions.keys() {
-                    if self.components.iter().any(|c| {
+                    if self.circuit.components.iter().any(|c| {
                         c.id == id && c.comp_type == crate::engine::ComponentType::Junction
                     }) {
                         needs_snapshot = true;
@@ -100,21 +100,21 @@ impl Editor {
                 self.canvas.drag_snapshot_pushed = true;
             }
 
+            let drag_offset = self.canvas.drag_offset;
+            let updates: Vec<_> = self.canvas.drag_start_positions.iter().map(|(&id, &start_pos)| {
+                let start_size = self.canvas.drag_start_sizes.get(&id).copied().unwrap_or(Vec2::new(12.0, 12.0));
+                (id, start_pos, start_size)
+            }).collect();
+
             let mut grid_updates = Vec::new();
-            for (&id, &start_pos) in &self.canvas.drag_start_positions {
-                if let Some(c) = self.components.iter_mut().find(|x| x.id == id) {
+            for (id, start_pos, start_size) in updates {
+                if let Some(c) = self.get_component_mut(id) {
                     if c.comp_type == crate::engine::ComponentType::Junction
                         && shift_pressed
                     {
-                        let start_size = self
-                            .canvas
-                            .drag_start_sizes
-                            .get(&id)
-                            .copied()
-                            .unwrap_or(Vec2::new(12.0, 12.0));
                         let center = start_pos + start_size / 2.0;
-                        let is_right = self.canvas.drag_offset.x > center.x;
-                        let is_bottom = self.canvas.drag_offset.y > center.y;
+                        let is_right = drag_offset.x > center.x;
+                        let is_bottom = drag_offset.y > center.y;
 
                         let old_rect = Rect::new(c.pos.x, c.pos.y, c.width, c.height);
 
@@ -169,7 +169,7 @@ impl Editor {
             let mut x_guides = 0;
             let mut y_guides = 0;
             if let Some(&first_drag_id) = self.canvas.drag_start_positions.keys().next() {
-                if let Some(c) = self.components.iter().find(|x| x.id == first_drag_id) {
+                if let Some(c) = self.get_component(first_drag_id) {
                     let c_left = c.pos.x;
                     let c_right = c.pos.x + c.width;
                     let c_cx = c.pos.x + c.width / 2.0;
@@ -178,7 +178,7 @@ impl Editor {
                     let c_bottom = c.pos.y + c.height;
                     let c_cy = c.pos.y + c.height / 2.0;
 
-                    for other in &self.components {
+                    for other in &self.circuit.components {
                         if self.canvas.selected_comp_ids.contains(&other.id) { continue; }
                         
                         let o_left = other.pos.x;
@@ -228,10 +228,10 @@ impl Editor {
         }
         // Drag annotation
         if let Some(idx) = self.canvas.dragging_annotation_idx
-            && idx < self.annotations.len()
+            && idx < self.circuit.annotations.len()
         {
             let target_pos = mouse_pos_world + self.canvas.drag_offset;
-            self.annotations[idx].pos = Vec2::new(
+            self.circuit.annotations[idx].pos = Vec2::new(
                 (target_pos.x / 20.0).round() * 20.0,
                 (target_pos.y / 20.0).round() * 20.0,
             );
@@ -245,9 +245,8 @@ impl Editor {
                 mouse_delta.y
             };
             if delta.abs() > 0.0 {
-                let key = wire.color_key();
-                let current = self.wire_nudges.get(&key).copied().unwrap_or(0.0);
-                self.wire_nudges.insert(key, current + delta / self.canvas.zoom);
+                let current = self.circuit.wire_nudges.get(&wire).copied().unwrap_or(0.0);
+                self.circuit.wire_nudges.insert(wire, current + delta / self.canvas.zoom);
             }
         }
     }

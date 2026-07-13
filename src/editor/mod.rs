@@ -1,3 +1,4 @@
+pub mod circuit_model;
 mod canvas;
 pub mod color_coding;
 mod drawing;
@@ -7,6 +8,7 @@ pub mod global_library;
 pub mod gui;
 mod history;
 mod input;
+pub mod constants;
 mod input_context_menu;
 mod input_hover;
 mod input_interactions;
@@ -31,6 +33,7 @@ mod ui_properties;
 mod wire_junctions;
 mod stress_test;
 mod spatial_hash;
+pub mod svg_exporter;
 
 #[cfg(test)]
 mod tests;
@@ -44,10 +47,7 @@ use crate::engine::{ChipBlueprint, Component, ComponentType, Connection, SourceP
 use macroquad::prelude::*;
 
 pub struct Editor {
-    pub components: Vec<VisualComponent>,
-    pub connections: Vec<VisualConnection>,
-    pub next_component_id: usize,
-    pub annotations: Vec<TextAnnotation>,
+    pub circuit: circuit_model::CircuitModel,
 
     // Crisp Vector Font
     pub font: Option<Font>,
@@ -60,11 +60,6 @@ pub struct Editor {
 
     // Global chip library (persisted across projects)
     pub global_library: global_library::GlobalLibrary,
-    // Per-component and per-wire colour overrides
-    pub color_overrides: color_coding::ColorOverrides,
-    // Manual routing nudges per wire
-    pub wire_nudges: std::collections::HashMap<String, f32>,
-    pub wire_offsets: std::collections::HashMap<VisualConnection, f32>,
 }
 
 impl Default for Editor {
@@ -84,19 +79,13 @@ impl Editor {
         let font = None;
 
         let mut editor = Self {
-            components: Vec::new(),
-            connections: Vec::new(),
-            next_component_id: 1,
-            annotations: Vec::new(),
+            circuit: circuit_model::CircuitModel::default(),
             font,
             engine: EngineState::default(),
             ui: UiState::default(),
             canvas: CanvasState::default(),
             history: state::HistoryManager::default(),
             global_library: global_library::load_global_library(),
-            color_overrides: color_coding::ColorOverrides::default(),
-            wire_nudges: std::collections::HashMap::new(),
-            wire_offsets: std::collections::HashMap::new(),
         };
 
         // If global library has chips, use them; otherwise set up defaults and save
@@ -108,18 +97,40 @@ impl Editor {
         } else {
             editor.engine.library = editor.global_library.to_flat_list();
         }
+        editor.rebuild_comp_map();
         editor.compile();
         editor
     }
 
+    pub fn rebuild_comp_map(&mut self) {
+        self.circuit.comp_map.clear();
+        for (idx, comp) in self.circuit.components.iter().enumerate() {
+            self.circuit.comp_map.insert(comp.id, idx);
+        }
+    }
+
+    pub fn get_component_idx(&self, id: usize) -> Option<usize> {
+        self.circuit.comp_map.get(&id).copied()
+    }
+
+    pub fn get_component(&self, id: usize) -> Option<&VisualComponent> {
+        let idx = self.get_component_idx(id)?;
+        self.circuit.components.get(idx)
+    }
+
+    pub fn get_component_mut(&mut self, id: usize) -> Option<&mut VisualComponent> {
+        let idx = self.get_component_idx(id)?;
+        self.circuit.components.get_mut(idx)
+    }
+
     pub fn auto_arrange_components(&mut self) {
-        if self.components.is_empty() {
+        if self.circuit.components.is_empty() {
             return;
         }
         self.push_history_snapshot();
-        layout::auto_arrange(&mut self.components, &self.connections);
-        self.wire_offsets.clear();
-        self.wire_nudges.clear();
+        layout::auto_arrange(&mut self.circuit.components, &self.circuit.connections);
+        self.circuit.wire_offsets.clear();
+        self.circuit.wire_nudges.clear();
     }
 
     fn setup_default_library(&mut self) {
@@ -143,11 +154,13 @@ impl Editor {
                     component_type: ComponentType::Nand,
                     pos: (200.0, 150.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // Comp 0
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (400.0, 150.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // Comp 1
             ],
             connections: vec![
@@ -208,16 +221,19 @@ impl Editor {
                     component_type: ComponentType::Nand,
                     pos: (200.0, 100.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // A inverter
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (200.0, 250.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // B inverter
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (400.0, 175.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // final NAND
             ],
             connections: vec![
@@ -292,21 +308,25 @@ impl Editor {
                     component_type: ComponentType::Nand,
                     pos: (200.0, 175.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // NAND 0: Shared inputs
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (350.0, 100.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // NAND 1: Top branch
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (350.0, 250.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // NAND 2: Bottom branch
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (500.0, 175.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // NAND 3: Combiner
             ],
             connections: vec![
@@ -407,6 +427,7 @@ impl Editor {
                     component_type: ComponentType::Nand,
                     pos: (200.0, 150.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // NAND 0
             ],
             connections: vec![
@@ -447,21 +468,25 @@ impl Editor {
                     component_type: ComponentType::Nand,
                     pos: (200.0, 100.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // NAND 0 (NOT A)
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (200.0, 250.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // NAND 1 (NOT B)
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (400.0, 175.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // NAND 2 (OR)
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (550.0, 175.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // NAND 3 (NOT)
             ],
             connections: vec![
@@ -556,26 +581,31 @@ impl Editor {
                     component_type: ComponentType::Nand,
                     pos: (200.0, 175.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // NAND 0
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (350.0, 100.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // NAND 1
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (350.0, 250.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // NAND 2
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (500.0, 175.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // NAND 3 (XOR)
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (650.0, 175.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // NAND 4 (NOT)
             ],
             connections: vec![
@@ -700,9 +730,11 @@ impl Editor {
         self.engine.library = new_library;
 
         // Remap in main canvas
-        for comp in &mut self.components {
+        for comp in &mut self.circuit.components {
             if let ComponentType::SubChip(ref mut idx) = comp.comp_type {
-                *idx = map[*idx];
+                if let Some(&new_idx) = map.get(*idx) {
+                    *idx = new_idx;
+                }
             }
         }
 
@@ -710,7 +742,9 @@ impl Editor {
         for bp in &mut self.engine.library {
             for comp in &mut bp.components {
                 if let ComponentType::SubChip(ref mut idx) = comp.component_type {
-                    *idx = map[*idx];
+                    if let Some(&new_idx) = map.get(*idx) {
+                        *idx = new_idx;
+                    }
                 }
             }
         }

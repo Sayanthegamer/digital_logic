@@ -1,19 +1,139 @@
 use super::simulator::Simulator;
 use super::types::*;
+use std::collections::{HashMap, HashSet};
+
+struct CompilerContext<'a> {
+    blueprint: &'a ChipBlueprint,
+    component_ports: &'a [(Vec<Vec<(usize, u8)>>, Vec<OutputSource>)],
+    connections_map: HashMap<TargetPort, SourcePort>,
+}
+
+impl<'a> CompilerContext<'a> {
+    fn get_immediate_source(&self, node: &TraceNode) -> Option<TraceNode> {
+        let target_port = match node {
+            TraceNode::ChipOutput(out_idx) => TargetPort::ChipOutput(*out_idx),
+            TraceNode::CompInput { component_idx, port_idx } => TargetPort::ComponentInput {
+                component_idx: *component_idx,
+                port_idx: *port_idx,
+            },
+            TraceNode::CompOutput { component_idx, port_idx } => {
+                let component = &self.blueprint.components[*component_idx];
+                match &component.component_type {
+                    ComponentType::SevenSegment
+                    | ComponentType::Nand
+                    | ComponentType::TriStateBuffer
+                    | ComponentType::Input
+                    | ComponentType::Output
+                    | ComponentType::Clock => return None,
+                    ComponentType::SubChip(_)
+                    | ComponentType::Junction
+                    | ComponentType::BusJoiner
+                    | ComponentType::BusSplitter => {
+                        let (_, ref outputs) = self.component_ports[*component_idx];
+                        match outputs[*port_idx] {
+                            OutputSource::PassedThrough(in_idx) => return Some(TraceNode::CompInput {
+                                component_idx: *component_idx,
+                                port_idx: in_idx,
+                            }),
+                            _ => return None,
+                        }
+                    }
+                }
+            }
+            TraceNode::ChipInput(_) => return None,
+        };
+
+        self.connections_map.get(&target_port).map(|src| match src {
+            SourcePort::ChipInput(i) => TraceNode::ChipInput(*i),
+            SourcePort::ComponentOutput { component_idx, port_idx } => TraceNode::CompOutput {
+                component_idx: *component_idx,
+                port_idx: *port_idx,
+            },
+        })
+    }
+
+    fn trace_root(
+        &self,
+        start_node: TraceNode,
+        trace_cache: &mut HashMap<TraceNode, OutputSource>,
+    ) -> OutputSource {
+        if let Some(&cached) = trace_cache.get(&start_node) {
+            return cached;
+        }
+
+        let mut current = start_node;
+        let mut visited = HashSet::new();
+        let mut path_nodes = Vec::new();
+
+        let result = loop {
+            if let Some(&cached) = trace_cache.get(&current) {
+                break cached;
+            }
+            if !visited.insert(current) {
+                break OutputSource::Floating;
+            }
+            path_nodes.push(current);
+
+            match current {
+                TraceNode::ChipInput(idx) => {
+                    break OutputSource::PassedThrough(idx);
+                }
+                TraceNode::CompOutput { component_idx, port_idx } => {
+                    let component = &self.blueprint.components[component_idx];
+                    match &component.component_type {
+                        ComponentType::SevenSegment => break OutputSource::Floating,
+                        ComponentType::Nand | ComponentType::Clock | ComponentType::TriStateBuffer => {
+                            let (_, ref outputs) = self.component_ports[component_idx];
+                            match outputs.first() {
+                                Some(OutputSource::DrivenByGate(g_idx)) => break OutputSource::DrivenByGate(*g_idx),
+                                _ => break OutputSource::Floating,
+                            }
+                        }
+                        ComponentType::SubChip(_)
+                        | ComponentType::Junction
+                        | ComponentType::BusJoiner
+                        | ComponentType::BusSplitter => {
+                            let (_, ref outputs) = self.component_ports[component_idx];
+                            match outputs[port_idx] {
+                                OutputSource::DrivenByGate(g_idx) => break OutputSource::DrivenByGate(g_idx),
+                                OutputSource::Floating => break OutputSource::Floating,
+                                OutputSource::PassedThrough(in_idx) => {
+                                    current = TraceNode::CompInput {
+                                        component_idx,
+                                        port_idx: in_idx,
+                                    };
+                                }
+                            }
+                        }
+                        ComponentType::Input | ComponentType::Output => break OutputSource::Floating,
+                    }
+                }
+                _ => {
+                    if let Some(next_node) = self.get_immediate_source(&current) {
+                        current = next_node;
+                    } else {
+                        break OutputSource::Floating;
+                    }
+                }
+            }
+        };
+
+        for node in path_nodes {
+            trace_cache.insert(node, result);
+        }
+
+        result
+    }
+}
 
 impl Simulator {
-    /// Instantiates a custom chip from the blueprint library and records mapping of instances to compiled gate indices.
-    #[allow(clippy::too_many_arguments)]
     pub fn instantiate_chip_with_mapping(
         &mut self,
         blueprint_idx: usize,
         library: &[ChipBlueprint],
-        path: &[usize],
-        instance_map: &mut std::collections::HashMap<(Vec<usize>, usize), usize>,
-        instance_outputs: &mut std::collections::HashMap<(Vec<usize>, usize), Vec<OutputSource>>,
         active_clocks: &mut Vec<CompiledClock>,
         blueprint_stack: &mut Vec<usize>,
-    ) -> Result<InstantiatedInterface, String> {
+    ) -> Result<(InstantiatedInterface, InstanceTree), String> {
         if blueprint_stack.contains(&blueprint_idx) {
             return Err("Recursion cycle detected in custom chip blueprints".to_string());
         }
@@ -23,16 +143,16 @@ impl Simulator {
             .get(blueprint_idx)
             .ok_or_else(|| format!("Blueprint not found at index {}", blueprint_idx))?;
 
-        // 1. Instantiate all internal components
-        let mut component_ports: Vec<(Vec<Vec<(usize, u8)>>, Vec<OutputSource>)> = Vec::new();
+        let mut component_ports = Vec::new();
+        let mut tree = InstanceTree::default();
 
         for (comp_idx, component) in blueprint.components.iter().enumerate() {
+            let mut sub_node = InstanceTree::default();
             match &component.component_type {
                 ComponentType::Nand => {
                     let nand_idx = self.add_gate(GateType::Nand);
-                    // Record visual component instance mapping
-                    instance_map.insert((path.to_vec(), comp_idx), nand_idx);
-
+                    sub_node.gate_idx = Some(nand_idx);
+                    sub_node.outputs = vec![OutputSource::DrivenByGate(nand_idx)];
                     component_ports.push((
                         vec![vec![(nand_idx, 0)], vec![(nand_idx, 1)]],
                         vec![OutputSource::DrivenByGate(nand_idx)],
@@ -40,46 +160,46 @@ impl Simulator {
                 }
                 ComponentType::TriStateBuffer => {
                     let sim_idx = self.add_gate(GateType::TriStateBuffer);
-                    instance_map.insert((path.to_vec(), comp_idx), sim_idx);
+                    sub_node.gate_idx = Some(sim_idx);
+                    sub_node.outputs = vec![OutputSource::DrivenByGate(sim_idx)];
                     component_ports.push((
                         vec![vec![(sim_idx, 0)], vec![(sim_idx, 1)]],
                         vec![OutputSource::DrivenByGate(sim_idx)],
                     ));
                 }
                 ComponentType::Junction => {
+                    sub_node.outputs = vec![OutputSource::PassedThrough(0)];
                     component_ports.push((vec![vec![]], vec![OutputSource::PassedThrough(0)]));
                 }
                 ComponentType::BusJoiner | ComponentType::BusSplitter => {
                     let w = component.bus_width();
-                    // NOTE: Officially BusJoiner has (w, 1) ports and BusSplitter has (1, w) ports,
-                    // but internally they are both compiled with w inputs and w outputs (PassedThrough)
-                    // to trace each channel independently during compilation.
+                    let outputs: Vec<OutputSource> = (0..w).map(|i| OutputSource::PassedThrough(i)).collect();
+                    sub_node.outputs = outputs.clone();
                     component_ports.push((
                         vec![vec![]; w],
-                        (0..w).map(|i| OutputSource::PassedThrough(i)).collect(),
+                        outputs,
                     ));
                 }
                 ComponentType::Clock => {
                     let clock_idx = self.add_gate(GateType::Input);
-                    // Record visual component instance mapping
-                    instance_map.insert((path.to_vec(), comp_idx), clock_idx);
-
+                    sub_node.gate_idx = Some(clock_idx);
+                    sub_node.outputs = vec![OutputSource::DrivenByGate(clock_idx)];
+                    
                     let period = component.clock_period.unwrap_or(20);
                     active_clocks.push(CompiledClock {
                         gate_idx: clock_idx,
                         period,
                         counter: 0,
-                        visual_id: None, // Will be linked at the top-level compile
+                        visual_id: None, 
                     });
 
                     component_ports.push((
-                        vec![], // Clocks have no input ports
+                        vec![],
                         vec![OutputSource::DrivenByGate(clock_idx)],
                     ));
                 }
                 ComponentType::SevenSegment => {
                     let mut inputs = Vec::new();
-                    // Port ordering: A, B, C, D, E, F, G, minus
                     for _ in 0..8 {
                         let sim_idx = self.add_gate(GateType::Output);
                         inputs.push(vec![(sim_idx, 0)]);
@@ -87,20 +207,13 @@ impl Simulator {
                     component_ports.push((inputs, vec![]));
                 }
                 ComponentType::SubChip(sub_idx) => {
-                    // Recursively compile sub-chip with sub-path
-                    let mut sub_path = path.to_vec();
-                    sub_path.push(comp_idx);
-                    let sub_interface = self.instantiate_chip_with_mapping(
+                    let (sub_interface, sub_tree) = self.instantiate_chip_with_mapping(
                         *sub_idx,
                         library,
-                        &sub_path,
-                        instance_map,
-                        instance_outputs,
                         active_clocks,
                         blueprint_stack,
                     )?;
-                    instance_outputs
-                        .insert((path.to_vec(), comp_idx), sub_interface.outputs.clone());
+                    sub_node = sub_tree;
                     component_ports.push((sub_interface.inputs, sub_interface.outputs));
                 }
                 ComponentType::Input | ComponentType::Output => {
@@ -110,8 +223,10 @@ impl Simulator {
                     );
                 }
             }
+            tree.sub_instances.insert(comp_idx, sub_node);
         }
-        let mut expanded_connections = Vec::new();
+
+        let mut connections_map = HashMap::new();
         for conn in &blueprint.connections {
             let is_bus = match (conn.source, conn.target) {
                 (
@@ -133,198 +248,35 @@ impl Simulator {
                 };
                 let w = blueprint.components[src_idx].bus_width();
                 for i in 0..w {
-                    expanded_connections.push(Connection {
-                        source: SourcePort::ComponentOutput { component_idx: src_idx, port_idx: i },
-                        target: TargetPort::ComponentInput { component_idx: tgt_idx, port_idx: i },
-                    });
+                    connections_map.insert(
+                        TargetPort::ComponentInput { component_idx: tgt_idx, port_idx: i },
+                        SourcePort::ComponentOutput { component_idx: src_idx, port_idx: i },
+                    );
                 }
             } else {
-                expanded_connections.push(conn.clone());
+                connections_map.insert(conn.target, conn.source);
             }
         }
 
-        // Helper closures to avoid duplicate recursive functions and cleanly capture state.
-        let get_immediate_source = |node: &TraceNode| -> Option<TraceNode> {
-            match node {
-                TraceNode::ChipOutput(out_idx) => expanded_connections
-                    .iter()
-                    .find(|conn| conn.target == TargetPort::ChipOutput(*out_idx))
-                    .map(|conn| match conn.source {
-                        SourcePort::ChipInput(i) => TraceNode::ChipInput(i),
-                        SourcePort::ComponentOutput {
-                            component_idx,
-                            port_idx,
-                        } => TraceNode::CompOutput {
-                            component_idx,
-                            port_idx,
-                        },
-                    }),
-                TraceNode::CompInput {
-                    component_idx,
-                    port_idx,
-                } => expanded_connections
-                    .iter()
-                    .find(|conn| {
-                        conn.target
-                            == TargetPort::ComponentInput {
-                                component_idx: *component_idx,
-                                port_idx: *port_idx,
-                            }
-                    })
-                    .map(|conn| match conn.source {
-                        SourcePort::ChipInput(i) => TraceNode::ChipInput(i),
-                        SourcePort::ComponentOutput {
-                            component_idx,
-                            port_idx,
-                        } => TraceNode::CompOutput {
-                            component_idx,
-                            port_idx,
-                        },
-                    }),
-                TraceNode::CompOutput {
-                    component_idx,
-                    port_idx,
-                } => {
-                    let component = &blueprint.components[*component_idx];
-                    match &component.component_type {
-                        ComponentType::SevenSegment
-                        | ComponentType::Nand
-                        | ComponentType::TriStateBuffer
-                        | ComponentType::Input
-                        | ComponentType::Output
-                        | ComponentType::Clock => None,
-                        ComponentType::SubChip(_)
-                        | ComponentType::Junction
-                        | ComponentType::BusJoiner
-                        | ComponentType::BusSplitter => {
-                            let (_, ref outputs) = component_ports[*component_idx];
-                            match outputs[*port_idx] {
-                                OutputSource::PassedThrough(in_idx) => Some(TraceNode::CompInput {
-                                    component_idx: *component_idx,
-                                    port_idx: in_idx,
-                                }),
-                                _ => None,
-                            }
-                        }
-                    }
-                }
-                TraceNode::ChipInput(_) => None,
-            }
+        let context = CompilerContext {
+            blueprint,
+            component_ports: &component_ports,
+            connections_map,
         };
 
-        let mut trace_cache: std::collections::HashMap<TraceNode, OutputSource> =
-            std::collections::HashMap::new();
+        let mut trace_cache: HashMap<TraceNode, OutputSource> = HashMap::new();
 
-        let trace_root = |start_node: TraceNode,
-                          trace_cache: &mut std::collections::HashMap<TraceNode, OutputSource>|
-         -> OutputSource {
-            if let Some(&cached) = trace_cache.get(&start_node) {
-                return cached;
-            }
-
-            let mut current = start_node;
-            let mut visited = std::collections::HashSet::new();
-            let mut path_nodes = Vec::new();
-
-            let result = loop {
-                if let Some(&cached) = trace_cache.get(&current) {
-                    break cached;
-                }
-                if !visited.insert(current) {
-                    break OutputSource::Floating;
-                }
-                path_nodes.push(current);
-
-                match current {
-                    TraceNode::ChipInput(idx) => {
-                        break OutputSource::PassedThrough(idx);
-                    }
-                    TraceNode::CompOutput {
-                        component_idx,
-                        port_idx,
-                    } => {
-                        let component = &blueprint.components[component_idx];
-                        match &component.component_type {
-                            ComponentType::SevenSegment => {
-                                // Seven-segment display has inputs only (no outputs). If a malformed blueprint
-                                // attempts to trace a ComponentOutput, treat it as floating.
-                                break OutputSource::Floating;
-                            }
-                            ComponentType::Nand
-                            | ComponentType::Clock
-                            | ComponentType::TriStateBuffer => {
-                                let (_, ref outputs) = component_ports[component_idx];
-                                match outputs.first() {
-                                    Some(OutputSource::DrivenByGate(g_idx)) => {
-                                        break OutputSource::DrivenByGate(*g_idx);
-                                    }
-                                    _ => break OutputSource::Floating,
-                                }
-                            }
-                            ComponentType::SubChip(_)
-                            | ComponentType::Junction
-                            | ComponentType::BusJoiner
-                            | ComponentType::BusSplitter => {
-                                let (_, ref outputs) = component_ports[component_idx];
-                                match outputs[port_idx] {
-                                    OutputSource::DrivenByGate(g_idx) => {
-                                        break OutputSource::DrivenByGate(g_idx);
-                                    }
-                                    OutputSource::Floating => break OutputSource::Floating,
-                                    OutputSource::PassedThrough(in_idx) => {
-                                        current = TraceNode::CompInput {
-                                            component_idx,
-                                            port_idx: in_idx,
-                                        };
-                                    }
-                                }
-                            }
-                            ComponentType::Input | ComponentType::Output => {
-                                break OutputSource::Floating;
-                            }
-                        }
-                    }
-                    _ => {
-                        if let Some(next_node) = get_immediate_source(&current) {
-                            current = next_node;
-                        } else {
-                            break OutputSource::Floating;
-                        }
-                    }
-                }
-            };
-
-            for node in path_nodes {
-                trace_cache.insert(node, result);
-            }
-
-            result
-        };
-
-        // 2. Wire up all component inputs by tracing their root drivers
         for (comp_idx, component) in blueprint.components.iter().enumerate() {
-            let input_ports_count = match &component.component_type {
-                ComponentType::Nand => 2,
-                ComponentType::Input => 0,
-                ComponentType::Output => 1,
-                ComponentType::Clock => 0,
-                ComponentType::SevenSegment => 8,
-                ComponentType::TriStateBuffer => 2,
-                ComponentType::Junction => 1,
-                ComponentType::BusJoiner => component.bus_width(),
-                ComponentType::BusSplitter => 1,
-                ComponentType::SubChip(sub_idx) => library[*sub_idx].inputs,
-            };
+            let (input_ports_count, _) = component.component_type.get_port_counts(component.bus_width, library);
 
             for port_idx in 0..input_ports_count {
                 let start_node = TraceNode::CompInput {
                     component_idx: comp_idx,
                     port_idx,
                 };
-                let driver = trace_root(start_node, &mut trace_cache);
+                let driver = context.trace_root(start_node, &mut trace_cache);
 
                 if let OutputSource::DrivenByGate(src_g_idx) = driver {
-                    // Get all primitive targets of this input port
                     let targets = &component_ports[comp_idx].0[port_idx];
                     for &(tgt_g_idx, tgt_port) in targets {
                         self.connect(src_g_idx, tgt_g_idx, tgt_port);
@@ -333,29 +285,17 @@ impl Simulator {
             }
         }
 
-        // 3. Resolve the inputs interface for the parent chip
         let mut inputs = vec![Vec::new(); blueprint.inputs];
         for i in 0..blueprint.inputs {
             for (comp_idx, component) in blueprint.components.iter().enumerate() {
-                let input_ports_count = match &component.component_type {
-                    ComponentType::Nand => 2,
-                    ComponentType::Input => 0,
-                    ComponentType::Output => 1,
-                    ComponentType::Clock => 0,
-                    ComponentType::SevenSegment => 8,
-                    ComponentType::TriStateBuffer => 2,
-                    ComponentType::Junction => 1,
-                    ComponentType::BusJoiner => component.bus_width(),
-                    ComponentType::BusSplitter => 1,
-                    ComponentType::SubChip(sub_idx) => library[*sub_idx].inputs,
-                };
+                let (input_ports_count, _) = component.component_type.get_port_counts(component.bus_width, library);
 
                 for port_idx in 0..input_ports_count {
                     let comp_in_node = TraceNode::CompInput {
                         component_idx: comp_idx,
                         port_idx,
                     };
-                    let driver = trace_root(comp_in_node, &mut trace_cache);
+                    let driver = context.trace_root(comp_in_node, &mut trace_cache);
                     if driver == OutputSource::PassedThrough(i) {
                         let targets = &component_ports[comp_idx].0[port_idx];
                         inputs[i].extend(targets.iter().copied());
@@ -364,37 +304,34 @@ impl Simulator {
             }
         }
 
-        // 4. Resolve the outputs interface for the parent chip
         let mut outputs = Vec::new();
         for j in 0..blueprint.outputs {
             let start_node = TraceNode::ChipOutput(j);
-            let driver = trace_root(start_node, &mut trace_cache);
+            let driver = context.trace_root(start_node, &mut trace_cache);
             outputs.push(driver);
         }
 
+        tree.outputs = outputs.clone();
+
         blueprint_stack.pop();
-        Ok(InstantiatedInterface { inputs, outputs })
+        Ok((
+            InstantiatedInterface { inputs, outputs },
+            tree
+        ))
     }
 
-    /// Instantiates a custom chip from the blueprint library using compile-time wire aliasing.
-    /// Bypasses string lookups and physical buffer gates, resolving inputs/outputs to their root sources.
     pub fn instantiate_chip(
         &mut self,
         blueprint_idx: usize,
         library: &[ChipBlueprint],
     ) -> Result<InstantiatedInterface, String> {
-        let mut dummy_map = std::collections::HashMap::new();
-        let mut dummy_outputs = std::collections::HashMap::new();
         let mut dummy_clocks = Vec::new();
         let mut dummy_stack = Vec::new();
         self.instantiate_chip_with_mapping(
             blueprint_idx,
             library,
-            &[],
-            &mut dummy_map,
-            &mut dummy_outputs,
             &mut dummy_clocks,
             &mut dummy_stack,
-        )
+        ).map(|(interface, _)| interface)
     }
 }

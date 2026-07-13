@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0-alpha.1] - 2026-07-13 (Pre-release)
+
+### Optimized (Phase 8: Performance & Scaling Overhaul)
+- **Topological Simulation (S-01, S-02)**: Completely rebuilt the simulator's depth calculator using Kahn's Topological Sort algorithm, eliminating an O(N³) Bellman-Ford bottleneck and solving the data race / non-deterministic event processing issues.
+- **Spatial Hashing for Rendering (S-04)**: Wire intersection/crossing deduplication was rewritten using a spatial hash grid, dropping a severe O(N^2) intersection sweep to an O(1) grid bucket lookup, heavily reducing rendering stutter.
+- **O(1) Drag Path Culling (S-05)**: Modified `recompute_wire_offsets` to only recalculate lane allocations for the subset of wires attached to currently dragged components, bypassing millions of collision checks across the static circuit.
+- **Linear Scan Removal (SC-01)**: Fully replaced all `self.components.iter().find()` usage with O(1) component HashMaps across all files in `src/editor/` and `src/engine/`.
+- **Compiler Optimizations (SC-03, SC-05, SC-06)**: Eliminated heavy $O(E)$ nested linear scans in `instantiate_chip_with_mapping` with pre-built Maps, reused allocation buffers, and transitioned component hierarchy paths to `u64` hashes.
+- **History Memory Limits (S-06)**: Capped the undo/redo stack to 30 elements and restricted deep cloning to action-release points rather than every drag frame to prevent RAM leaking.
+
 ## [3.0.0-alpha.1] - 2026-07-10
 
 ### Added

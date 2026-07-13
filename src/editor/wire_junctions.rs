@@ -36,25 +36,7 @@ pub struct IdentifiedSegment {
 
 impl Editor {
     pub fn get_connection_style(&self, conn: &VisualConnection) -> (Color, f32) {
-        let wire_state = if let Some(&gate_idx) = self
-            .engine
-            .port_to_sim_gate_map
-            .get(&(conn.src_comp_id, conn.src_port))
-        {
-            self.engine.simulator.get_raw_state(gate_idx)
-        } else if let Some(src) = self.components.iter().find(|c| c.id == conn.src_comp_id) {
-            if src.comp_type == crate::engine::ComponentType::Input {
-                if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&src.id) {
-                    self.engine.simulator.get_raw_state(gate_idx)
-                } else {
-                    0b00
-                }
-            } else {
-                0b00
-            }
-        } else {
-            0b00
-        };
+        let wire_state = self.get_raw_wire_state(conn.src_comp_id, conn.src_port);
 
         let (base_color, thickness, _) = match wire_state {
             0b00 => (theme::ACCENT_GENERIC.mq(), 1.3 * self.canvas.zoom, false),
@@ -62,19 +44,23 @@ impl Editor {
             0b10 => (theme::ACCENT_PRIMARY.mq(), 2.2 * self.canvas.zoom, true),
             _ => (theme::COMP_NAND.mq(), 2.8 * self.canvas.zoom, true),
         };
-        let color = self.color_overrides.get_wire_color(conn).unwrap_or(base_color);
+        let color = self.circuit.color_overrides.get_wire_color(conn).unwrap_or(base_color);
         (color, thickness)
     }
 
     pub fn get_connection_routing_offset(&self, conn: &VisualConnection) -> f32 {
-        let base_offset = self.wire_offsets.get(conn).copied().unwrap_or(0.0);
-        let manual_nudge = self.wire_nudges.get(&conn.color_key()).copied().unwrap_or(0.0);
+        let base_offset = self.circuit.wire_offsets.get(conn).copied().unwrap_or(0.0);
+        let manual_nudge = self.circuit.wire_nudges.get(conn).copied().unwrap_or(0.0);
         base_offset + manual_nudge
     }
 
-    pub fn recompute_wire_offsets(&mut self) {
-        if self.connections.len() > 5000 { return; }
-        let mut wire_offsets = std::collections::HashMap::new();
+    pub fn recompute_wire_offsets(&mut self, affected_comps: Option<&std::collections::HashSet<usize>>) {
+        if self.circuit.connections.len() > 5000 { return; }
+        let mut wire_offsets = if affected_comps.is_some() {
+            self.circuit.wire_offsets.clone()
+        } else {
+            std::collections::HashMap::new()
+        };
 
         struct ConnectionSegments {
             conn: VisualConnection,
@@ -89,9 +75,15 @@ impl Editor {
 
         let mut conn_data = Vec::new();
 
-        for conn in &self.connections {
-            let src_comp = self.components.iter().find(|c| c.id == conn.src_comp_id);
-            let tgt_comp = self.components.iter().find(|c| c.id == conn.tgt_comp_id);
+        for conn in &self.circuit.connections {
+            if let Some(affected) = affected_comps {
+                if !affected.contains(&conn.src_comp_id) && !affected.contains(&conn.tgt_comp_id) {
+                    continue;
+                }
+            }
+
+            let src_comp = self.get_component(conn.src_comp_id);
+            let tgt_comp = self.get_component(conn.tgt_comp_id);
 
             if let (Some(src), Some(tgt)) = (src_comp, tgt_comp) {
                 let (src_pos, tgt_pos) = self.get_connection_ports(conn, src, tgt);
@@ -181,23 +173,19 @@ impl Editor {
                 lane += 1;
             }
             assigned_lanes[i] = lane;
-        }
-
-        // Map lanes to alternating offsets (0, +12, -12, +24, -24, ...) and apply nudges
-        for (i, data) in conn_data.iter().enumerate() {
-            let lane = assigned_lanes[i];
-            let lane_offset = if lane == 0 {
-                0.0
-            } else if lane % 2 == 1 {
-                ((lane + 1) / 2) as f32 * 12.0
+            
+            // Convert lane number to pixel offset
+            // Alternating pattern: 0, 6, -6, 12, -12...
+            let pixel_offset = if lane % 2 == 0 {
+                (lane / 2) as f32 * 6.0
             } else {
-                -(lane / 2) as f32 * 12.0
+                -(((lane + 1) / 2) as f32) * 6.0
             };
-
-            wire_offsets.insert(data.conn, lane_offset);
+            
+            wire_offsets.insert(conn_data[i].conn, pixel_offset);
         }
 
-        self.wire_offsets = wire_offsets;
+        self.circuit.wire_offsets = wire_offsets;
     }
 
     pub fn get_blueprint_connection_routing_offset(
@@ -346,9 +334,9 @@ impl Editor {
         let sh = macroquad::window::screen_height();
         let screen_rect = Rect::new(-20.0, -20.0, sw + 40.0, sh + 40.0);
 
-        for (conn_idx, wire) in self.connections.iter().enumerate() {
-            let src_comp = self.components.iter().find(|c| c.id == wire.src_comp_id);
-            let tgt_comp = self.components.iter().find(|c| c.id == wire.tgt_comp_id);
+        for (conn_idx, wire) in self.circuit.connections.iter().enumerate() {
+            let src_comp = self.get_component(wire.src_comp_id);
+            let tgt_comp = self.get_component(wire.tgt_comp_id);
 
             if let (Some(src), Some(tgt)) = (src_comp, tgt_comp) {
                 let (src_p, tgt_p) = self.get_connection_ports(wire, src, tgt);
@@ -389,7 +377,7 @@ impl Editor {
         });
 
         let mut intersections = Vec::new();
-        let mut seen_points: Vec<Vec2> = Vec::new();
+        let mut seen_points: std::collections::HashSet<(i32, i32)> = std::collections::HashSet::new();
         let epsilon = 2.0 * self.canvas.zoom;
 
         for i in 0..all_segments.len() {
@@ -414,14 +402,24 @@ impl Editor {
                     s2.a, s2.b,
                     epsilon,
                 ) {
-                    let already_seen = seen_points.iter().any(|p| p.distance(point) < epsilon * 2.0);
+                    let bucket_x = (point.x / epsilon).round() as i32;
+                    let bucket_y = (point.y / epsilon).round() as i32;
+                    let mut already_seen = false;
+                    for dx in -1..=1 {
+                        for dy in -1..=1 {
+                            if seen_points.contains(&(bucket_x + dx, bucket_y + dy)) {
+                                already_seen = true;
+                                break;
+                            }
+                        }
+                    }
                     if already_seen {
                         continue;
                     }
-                    seen_points.push(point);
+                    seen_points.insert((bucket_x, bucket_y));
 
-                    let conn_i = &self.connections[s1.conn_idx];
-                    let conn_j = &self.connections[s2.conn_idx];
+                    let conn_i = &self.circuit.connections[s1.conn_idx];
+                    let conn_j = &self.circuit.connections[s2.conn_idx];
 
                     let connected = wires_share_endpoint(conn_i, conn_j);
                     if connected {
@@ -439,10 +437,10 @@ impl Editor {
                         (s2.conn_idx, s1.conn_idx, seg_i_horizontal)
                     };
 
-                    let lower_conn = &self.connections[lower_conn_idx];
+                    let lower_conn = &self.circuit.connections[lower_conn_idx];
                     let (lower_color, lower_thickness) = self.get_connection_style(lower_conn);
 
-                    let upper_conn = &self.connections[upper_conn_idx];
+                    let upper_conn = &self.circuit.connections[upper_conn_idx];
                     let (upper_color, upper_thickness) = self.get_connection_style(upper_conn);
 
                     intersections.push(WireIntersection {
@@ -599,6 +597,8 @@ fn draw_bridge_arc(
         let p0 = Vec2::new(center.x + radius * t0.cos(), center.y + radius * t0.sin());
         let p1 = Vec2::new(center.x + radius * t1.cos(), center.y + radius * t1.sin());
 
+        draw_circle(p0.x, p0.y, thickness / 2.0, wire_color);
+        draw_circle(p1.x, p1.y, thickness / 2.0, wire_color);
         draw_line(p0.x, p0.y, p1.x, p1.y, thickness, wire_color);
     }
 }

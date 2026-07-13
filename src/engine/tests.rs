@@ -253,11 +253,13 @@ fn test_compilation_and_nesting() {
                     component_type: ComponentType::Nand,
                     pos: (0.0, 0.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // Comp 0
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (0.0, 0.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // Comp 1
             ],
             connections: vec![
@@ -316,16 +318,19 @@ fn test_compilation_and_nesting() {
                     component_type: ComponentType::Nand,
                     pos: (0.0, 0.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // Comp 0: A inverter
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (0.0, 0.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // Comp 1: B inverter
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (0.0, 0.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // Comp 2: NAND combination
             ],
             connections: vec![
@@ -398,16 +403,19 @@ fn test_compilation_and_nesting() {
                     component_type: ComponentType::SubChip(1),
                     pos: (0.0, 0.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // Comp 0: OR
                 Component {
                     component_type: ComponentType::Nand,
                     pos: (0.0, 0.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // Comp 1: Nand
                 Component {
                     component_type: ComponentType::SubChip(0),
                     pos: (0.0, 0.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // Comp 2: AND
             ],
             connections: vec![
@@ -493,11 +501,13 @@ fn test_compilation_and_nesting() {
                     component_type: ComponentType::Nand,
                     pos: (0.0, 0.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // Comp 0: inverter
                 Component {
                     component_type: ComponentType::SubChip(3),
                     pos: (0.0, 0.0),
                     clock_period: None,
+                    bus_width: None,
                 }, // Comp 1: PassThrough
             ],
             connections: vec![
@@ -630,6 +640,7 @@ fn test_serialization() {
             component_type: ComponentType::Clock,
             pos: (10.0, 20.0),
             clock_period: Some(50),
+            bus_width: None,
         }],
         connections: vec![Connection {
             source: SourcePort::ComponentOutput {
@@ -661,6 +672,7 @@ fn test_multi_domain_clocks() {
             component_type: ComponentType::Clock,
             pos: (0.0, 0.0),
             clock_period: Some(10),
+            bus_width: None,
         }],
         connections: vec![Connection {
             source: SourcePort::ComponentOutput {
@@ -672,16 +684,12 @@ fn test_multi_domain_clocks() {
     }];
 
     let mut active_clocks = Vec::new();
-    let mut inst_map = std::collections::HashMap::new();
-    let mut inst_outs = std::collections::HashMap::new();
+
     let mut blueprint_stack = Vec::new();
-    let interface = sim
+    let (interface, _tree) = sim
         .instantiate_chip_with_mapping(
             0,
             &library,
-            &[],
-            &mut inst_map,
-            &mut inst_outs,
             &mut active_clocks,
             &mut blueprint_stack,
         )
@@ -735,6 +743,7 @@ fn test_invalid_nested_component_compile_error() {
                 component_type: ComponentType::Input, // Invalid nested component type
                 pos: (0.0, 0.0),
                 clock_period: None,
+                bus_width: None,
             }],
             connections: vec![],
         },
@@ -748,23 +757,20 @@ fn test_invalid_nested_component_compile_error() {
                 component_type: ComponentType::Output, // Invalid nested component type
                 pos: (0.0, 0.0),
                 clock_period: None,
+                bus_width: None,
             }],
             connections: vec![],
         },
     ];
 
     let mut active_clocks = Vec::new();
-    let mut inst_map = std::collections::HashMap::new();
-    let mut inst_outs = std::collections::HashMap::new();
+
     let mut blueprint_stack = Vec::new();
 
     // Compiling BadInputChip should fail with the exact error message
     let res_in = sim.instantiate_chip_with_mapping(
         0,
         &library,
-        &[],
-        &mut inst_map,
-        &mut inst_outs,
         &mut active_clocks,
         &mut blueprint_stack,
     );
@@ -779,9 +785,6 @@ fn test_invalid_nested_component_compile_error() {
     let res_out = sim.instantiate_chip_with_mapping(
         1,
         &library,
-        &[],
-        &mut inst_map,
-        &mut inst_outs,
         &mut active_clocks,
         &mut blueprint_stack_2,
     );
@@ -805,6 +808,7 @@ fn test_recursive_chip_compilation_cycle() {
             component_type: ComponentType::SubChip(0),
             pos: (0.0, 0.0),
             clock_period: None,
+            bus_width: None,
         }],
         connections: vec![],
     }];
@@ -833,6 +837,7 @@ fn test_nested_subchip_inspection_logic() {
             component_type: ComponentType::Nand,
             pos: (0.0, 0.0),
             clock_period: None,
+            bus_width: None,
         }],
         connections: vec![
             Connection {
@@ -871,6 +876,7 @@ fn test_nested_subchip_inspection_logic() {
             component_type: ComponentType::SubChip(0), // Inner chip
             pos: (50.0, 0.0),
             clock_period: None,
+            bus_width: None,
         }],
         connections: vec![
             Connection {
@@ -915,6 +921,7 @@ fn test_seven_segment_8th_input_port_compiles() {
             component_type: ComponentType::SevenSegment,
             pos: (0.0, 0.0),
             clock_period: None,
+            bus_width: None,
         }],
         connections: (0..8)
             .map(|i| Connection {

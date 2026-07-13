@@ -24,7 +24,7 @@ impl Editor {
         // Check clicking inside components (dragging, toggling)
         if !clicked_something {
             let mut found_comp = None;
-            for comp in self.components.iter().rev() {
+            for comp in self.circuit.components.iter().rev() {
                 if mouse_pos_world.x >= comp.pos.x
                     && mouse_pos_world.x <= comp.pos.x + comp.width
                     && mouse_pos_world.y >= comp.pos.y
@@ -63,18 +63,17 @@ impl Editor {
                 self.canvas.drag_start_positions.clear();
                 self.canvas.drag_start_sizes.clear();
                 for &id in &self.canvas.selected_comp_ids {
-                    if let Some(c) = self.components.iter().find(|x| x.id == id) {
-                        self.canvas.drag_start_positions.insert(id, c.pos);
-                        self.canvas
-                            .drag_start_sizes
-                            .insert(id, Vec2::new(c.width, c.height));
+                    let comp_data = self.get_component(id).map(|c| (c.pos, Vec2::new(c.width, c.height)));
+                    if let Some((pos, size)) = comp_data {
+                        self.canvas.drag_start_positions.insert(id, pos);
+                        self.canvas.drag_start_sizes.insert(id, size);
                     }
                 }
                 clicked_something = true;
             } else {
                 // Check if we clicked an annotation
                 let mut clicked_ann = None;
-                for (idx, ann) in self.annotations.iter().enumerate() {
+                for (idx, ann) in self.circuit.annotations.iter().enumerate() {
                     let text_w = measure_text(&ann.text, self.font.as_ref(), 15, 1.0).width;
                     let rect =
                         Rect::new(ann.pos.x - 5.0, ann.pos.y - 14.0, text_w + 10.0, 20.0);
@@ -99,7 +98,7 @@ impl Editor {
                     self.canvas.selected_comp_id = None;
                     self.canvas.selected_comp_ids.clear();
                     self.canvas.selected_connections.clear();
-                    self.canvas.drag_offset = self.annotations[idx].pos - mouse_pos_world;
+                    self.canvas.drag_offset = self.circuit.annotations[idx].pos - mouse_pos_world;
                     clicked_something = true;
                 } else {
                     // Clicked empty space
@@ -112,8 +111,8 @@ impl Editor {
                         // Check if a wire was clicked
                         let mut clicked_wire = None;
                         let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
-                            self.components.iter().map(|c| (c.id, c)).collect();
-                        for conn in &self.connections {
+                            self.circuit.components.iter().map(|c| (c.id, c)).collect();
+                        for conn in &self.circuit.connections {
                             let (src_comp_opt, tgt_comp_opt) = (
                                 comp_by_id.get(&conn.src_comp_id),
                                 comp_by_id.get(&conn.tgt_comp_id),
@@ -184,20 +183,22 @@ impl Editor {
 
                     let label = self.get_component_label(comp_type);
 
-                    let clock_period = match comp_type {
-                        ComponentType::Clock => Some(20),
-                        ComponentType::BusJoiner | ComponentType::BusSplitter => Some(4),
-                        _ => None,
-                    };
-
-                    let new_id = self.next_component_id;
+                    let new_id = self.circuit.next_component_id;
                     let target_pos = mouse_pos_world - Vec2::new(width / 2.0, height / 2.0);
                     let snapped_pos = Vec2::new(
                         (target_pos.x / 20.0).round() * 20.0,
                         (target_pos.y / 20.0).round() * 20.0,
                     );
+                    let clock_period = match comp_type {
+                        ComponentType::Clock => Some(20),
+                        _ => None,
+                    };
+                    let bus_width = match comp_type {
+                        ComponentType::BusJoiner | ComponentType::BusSplitter => Some(4),
+                        _ => None,
+                    };
 
-                    self.components.push(VisualComponent {
+                    self.circuit.components.push(VisualComponent {
                         id: new_id,
                         comp_type,
                         pos: snapped_pos,
@@ -205,25 +206,26 @@ impl Editor {
                         height,
                         label,
                         clock_period,
+                        bus_width,
                         color: None,
                     });
                     self.canvas.selected_comp_id = Some(new_id);
                     self.canvas.selected_comp_ids.clear();
                     self.canvas.selected_comp_ids.insert(new_id);
-                    self.next_component_id += 1;
+                    self.circuit.next_component_id += 1;
                     self.compile();
                 }
                 ActiveTool::PlaceAnnotation => {
                     self.push_history_snapshot();
-                    let snapped_pos = Vec2::new(
+                    let _snapped_pos = Vec2::new(
                         (mouse_pos_world.x / 20.0).round() * 20.0,
                         (mouse_pos_world.y / 20.0).round() * 20.0,
                     );
-                    self.annotations.push(TextAnnotation {
-                        text: "Double-click to edit".to_string(),
-                        pos: snapped_pos,
+                    self.circuit.annotations.push(TextAnnotation {
+                        text: "Text Note".to_string(),
+                        pos: mouse_pos_world,
                     });
-                    self.canvas.selected_annotation_idx = Some(self.annotations.len() - 1);
+                    self.canvas.selected_annotation_idx = Some(self.circuit.annotations.len() - 1);
                     self.canvas.selected_comp_id = None;
                 }
             }
