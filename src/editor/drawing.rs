@@ -50,10 +50,16 @@ impl Editor {
             return;
         }
 
+        // 0. Build O(1) lookup map for components to avoid O(N^2) rendering bottleneck
+        let mut comp_map = std::collections::HashMap::with_capacity(self.components.len());
+        for comp in &self.components {
+            comp_map.insert(comp.id, comp);
+        }
+
         // 1. Draw Wires / Connections
         for wire in &self.connections {
-            let src_comp = self.components.iter().find(|c| c.id == wire.src_comp_id);
-            let tgt_comp = self.components.iter().find(|c| c.id == wire.tgt_comp_id);
+            let src_comp = comp_map.get(&wire.src_comp_id).copied();
+            let tgt_comp = comp_map.get(&wire.tgt_comp_id).copied();
 
             if let (Some(src), Some(tgt)) = (src_comp, tgt_comp) {
                 let (src_p, tgt_p) = self.get_connection_ports(wire, src, tgt);
@@ -106,8 +112,10 @@ impl Editor {
         }
 
         // 1.1 Draw Wire Junction/Crossing Indicators
-        let intersections = self.find_wire_intersections();
-        self.draw_wire_junctions(&intersections);
+        if self.connections.len() < 5000 {
+            let intersections = self.find_wire_intersections();
+            self.draw_wire_junctions(&intersections);
+        }
 
         // Draw active wire drag preview
         if let Some((src_id, src_port, src_is_input)) = self.canvas.active_wire_drag
@@ -206,6 +214,21 @@ impl Editor {
                     theme::ACCENT_PRIMARY.mq_with_alpha(0.6),
                 );
             }
+        }
+
+        // 1.9 Pre-calculate input port states to avoid catastrophic O(N^2 * E) rendering loop
+        let mut input_port_states = std::collections::HashMap::with_capacity(self.connections.len());
+        for wire in &self.connections {
+            let state = if let Some(&gate_idx) = self.engine.port_to_sim_gate_map.get(&(wire.src_comp_id, wire.src_port)) {
+                self.engine.simulator.get_state(gate_idx)
+            } else if let Some(src) = comp_map.get(&wire.src_comp_id) {
+                if src.comp_type == ComponentType::Input {
+                    if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&src.id) {
+                        self.engine.simulator.get_state(gate_idx)
+                    } else { false }
+                } else { false }
+            } else { false };
+            input_port_states.insert((wire.tgt_comp_id, wire.tgt_port), state);
         }
 
         // 2. Draw Components
@@ -418,24 +441,7 @@ impl Editor {
             for i in 0..inputs_count {
                 let port_pos = self.to_screen_space(comp.input_port_pos(i, inputs_count));
 
-                let mut input_active = false;
-                for wire in &self.connections {
-                    if wire.tgt_comp_id == comp.id && wire.tgt_port == i {
-                        if let Some(&gate_idx) = self
-                            .engine
-                            .port_to_sim_gate_map
-                            .get(&(wire.src_comp_id, wire.src_port))
-                        {
-                            input_active = self.engine.simulator.get_state(gate_idx);
-                        } else if let Some(src_comp) =
-                            self.components.iter().find(|c| c.id == wire.src_comp_id)
-                            && src_comp.comp_type == ComponentType::Input
-                            && let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&src_comp.id)
-                        {
-                            input_active = self.engine.simulator.get_state(gate_idx);
-                        }
-                    }
-                }
+                let input_active = input_port_states.get(&(comp.id, i)).copied().unwrap_or(false);
 
                 if comp.comp_type == ComponentType::SevenSegment && i < 8 {
                     seg_states[i] = input_active;
@@ -700,6 +706,27 @@ impl Editor {
                 radius,
                 theme::ACCENT_PRIMARY.mq_with_alpha(0.2 - pulse * 0.1),
             );
+        }
+        // Draw keyboard tab focus indicator
+        if let Some((comp_id, port_opt)) = self.canvas.tab_focus {
+            if let Some(comp) = self.components.iter().find(|c| c.id == comp_id) {
+                if let Some((port_idx, is_input)) = port_opt {
+                    // Draw a square bracket around the port
+                    let (in_count, out_count) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
+                    let pos = if is_input {
+                        self.to_screen_space(comp.input_port_pos(port_idx, in_count))
+                    } else {
+                        self.to_screen_space(comp.output_port_pos(port_idx, out_count))
+                    };
+                    draw_rectangle_lines(pos.x - 6.0, pos.y - 6.0, 12.0, 12.0, 2.0, theme::ACCENT_ACTIVE.mq());
+                } else {
+                    // Draw a dashed highlight around the component
+                    let screen_pos = self.to_screen_space(comp.pos);
+                    let w = comp.width * self.canvas.zoom;
+                    let h = comp.height * self.canvas.zoom;
+                    draw_rectangle_lines(screen_pos.x - 4.0, screen_pos.y - 4.0, w + 8.0, h + 8.0, 2.0, theme::ACCENT_ACTIVE.mq());
+                }
+            }
         }
 
         // Draw instructions at top-left

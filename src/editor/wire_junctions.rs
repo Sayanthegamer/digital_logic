@@ -73,6 +73,7 @@ impl Editor {
     }
 
     pub fn recompute_wire_offsets(&mut self) {
+        if self.connections.len() > 5000 { return; }
         let mut wire_offsets = std::collections::HashMap::new();
 
         struct ConnectionSegments {

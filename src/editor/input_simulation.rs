@@ -4,7 +4,25 @@ use super::Editor;
 impl Editor {
     pub fn run_simulation_ticks(&mut self) {
         if self.engine.is_playing {
-            for _ in 0..self.engine.ticks_per_frame {
+            let dt = get_frame_time() as f64;
+            self.engine.time_accumulator += dt;
+
+            // Target 60 TPS
+            let tick_rate = 1.0 / 60.0;
+            let mut ticks_processed = 0;
+            let max_catchup_ticks = 5; // Spiral of death cap
+
+            while self.engine.time_accumulator >= tick_rate {
+                if ticks_processed >= max_catchup_ticks {
+                    // We are falling behind, silently discard the accumulator backlog
+                    // to prevent a spiral of death
+                    self.engine.time_accumulator = 0.0;
+                    break;
+                }
+
+                self.engine.time_accumulator -= tick_rate;
+                ticks_processed += 1;
+                
                 self.engine.sim_tick_counter = self.engine.sim_tick_counter.wrapping_add(1);
 
                 for clock in &mut self.engine.active_clocks {
@@ -19,7 +37,7 @@ impl Editor {
                     }
                 }
 
-                let max_steps = (self.engine.simulator.gates.len() * 10).max(1000);
+                let max_steps = (self.engine.simulator.nodes.len() * 10).max(1000);
                 match self.engine.simulator.propagate_events(max_steps) {
                     Ok(_) => self.engine.propagation_error = None,
                     Err(e) => {

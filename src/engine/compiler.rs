@@ -111,12 +111,42 @@ impl Simulator {
                 }
             }
         }
+        let mut expanded_connections = Vec::new();
+        for conn in &blueprint.connections {
+            let is_bus = match (conn.source, conn.target) {
+                (
+                    SourcePort::ComponentOutput { component_idx: src_idx, port_idx: src_port },
+                    TargetPort::ComponentInput { component_idx: tgt_idx, port_idx: tgt_port }
+                ) => {
+                    let src_comp = &blueprint.components[src_idx];
+                    let tgt_comp = &blueprint.components[tgt_idx];
+                    src_comp.component_type == ComponentType::BusJoiner && src_port == 0
+                    && tgt_comp.component_type == ComponentType::BusSplitter && tgt_port == 0
+                }
+                _ => false,
+            };
+
+            if is_bus {
+                let (src_idx, tgt_idx) = match (conn.source, conn.target) {
+                    (SourcePort::ComponentOutput { component_idx: src_idx, .. }, TargetPort::ComponentInput { component_idx: tgt_idx, .. }) => (src_idx, tgt_idx),
+                    _ => unreachable!(),
+                };
+                let w = blueprint.components[src_idx].bus_width();
+                for i in 0..w {
+                    expanded_connections.push(Connection {
+                        source: SourcePort::ComponentOutput { component_idx: src_idx, port_idx: i },
+                        target: TargetPort::ComponentInput { component_idx: tgt_idx, port_idx: i },
+                    });
+                }
+            } else {
+                expanded_connections.push(conn.clone());
+            }
+        }
 
         // Helper closures to avoid duplicate recursive functions and cleanly capture state.
         let get_immediate_source = |node: &TraceNode| -> Option<TraceNode> {
             match node {
-                TraceNode::ChipOutput(out_idx) => blueprint
-                    .connections
+                TraceNode::ChipOutput(out_idx) => expanded_connections
                     .iter()
                     .find(|conn| conn.target == TargetPort::ChipOutput(*out_idx))
                     .map(|conn| match conn.source {
@@ -132,8 +162,7 @@ impl Simulator {
                 TraceNode::CompInput {
                     component_idx,
                     port_idx,
-                } => blueprint
-                    .connections
+                } => expanded_connections
                     .iter()
                     .find(|conn| {
                         conn.target

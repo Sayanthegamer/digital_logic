@@ -131,7 +131,7 @@ impl Editor {
             self.resolve_port_to_sim_gate_map(&mut sim, &expanded_connections, &component_ports, &mut net_cache);
 
         // Settle initial states
-        let max_steps = (sim.gates.len() * 10).max(1000);
+        let max_steps = (sim.nodes.len() * 10).max(1000);
         match sim.propagate_events(max_steps) {
             Ok(_) => self.engine.propagation_error = None,
             Err(e) => self.engine.propagation_error = Some(e),
@@ -144,7 +144,11 @@ impl Editor {
         self.engine.instance_outputs = instance_outputs;
         self.engine.active_clocks = active_clocks;
 
-        self.recompute_wire_offsets();
+        if self.connections.len() < 5000 {
+            self.recompute_wire_offsets();
+        }
+        
+        self.rebuild_spatial_grid();
     }
 
     fn allocate_visual_components(
@@ -584,7 +588,7 @@ impl Editor {
 
     pub fn unpack_blueprint_to_canvas(&mut self, bp_idx: usize) {
         if self.canvas.editing_target != EditingTarget::MainCanvas {
-            return;
+            self.save_and_repack_blueprint();
         }
         let bp = if let Some(bp) = self.engine.library.get(bp_idx) {
             bp.clone()

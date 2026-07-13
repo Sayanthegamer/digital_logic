@@ -43,6 +43,7 @@ pub struct EngineState {
     pub is_playing: bool,
     pub ticks_per_frame: usize,
     pub sim_tick_counter: usize,
+    pub time_accumulator: f64,
     pub propagation_error: Option<String>,
 }
 
@@ -59,6 +60,7 @@ impl Default for EngineState {
             is_playing: true,
             ticks_per_frame: 1,
             sim_tick_counter: 0,
+            time_accumulator: 0.0,
             propagation_error: None,
         }
     }
@@ -153,11 +155,13 @@ pub enum EditingTarget {
 pub struct CanvasState {
     pub pan: Vec2,
     pub zoom: f32,
+    pub spatial_grid: crate::editor::spatial_hash::SpatialHashGrid,
     pub last_mouse_pos: Vec2,
     pub selected_tool: Option<ActiveTool>,
     pub active_wire_drag: Option<(usize, usize, bool)>,
     pub dragging_wire: Option<VisualConnection>,
     pub hovered_port: Option<(usize, usize, bool)>,
+    pub tab_focus: Option<(usize, Option<(usize, bool)>)>,
     pub dragging_comp_id: Option<usize>,
     pub drag_offset: Vec2,
     pub drag_dist_pixels: f32,
@@ -198,11 +202,13 @@ impl Default for CanvasState {
         Self {
             pan: Vec2::new(200.0, 100.0),
             zoom: 1.0,
+            spatial_grid: crate::editor::spatial_hash::SpatialHashGrid::new(),
             last_mouse_pos: Vec2::ZERO,
             selected_tool: None,
             active_wire_drag: None,
             dragging_wire: None,
             hovered_port: None,
+            tab_focus: None,
             dragging_comp_id: None,
             drag_offset: Vec2::ZERO,
             drag_dist_pixels: 0.0,

@@ -24,14 +24,17 @@ impl Editor {
         // Check clicking inside components (dragging, toggling)
         if !clicked_something {
             let mut found_comp = None;
-            for comp in &self.components {
-                if mouse_pos_world.x >= comp.pos.x
-                    && mouse_pos_world.x <= comp.pos.x + comp.width
-                    && mouse_pos_world.y >= comp.pos.y
-                    && mouse_pos_world.y <= comp.pos.y + comp.height
-                {
-                    found_comp = Some(comp.clone());
-                    break;
+            let candidates = self.canvas.spatial_grid.query_point(mouse_pos_world);
+            for &id in &candidates {
+                if let Some(comp) = self.components.iter().find(|c| c.id == id) {
+                    if mouse_pos_world.x >= comp.pos.x
+                        && mouse_pos_world.x <= comp.pos.x + comp.width
+                        && mouse_pos_world.y >= comp.pos.y
+                        && mouse_pos_world.y <= comp.pos.y + comp.height
+                    {
+                        found_comp = Some(comp.clone());
+                        break;
+                    }
                 }
             }
 

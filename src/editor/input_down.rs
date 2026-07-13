@@ -31,6 +31,7 @@ impl Editor {
                 self.canvas.drag_snapshot_pushed = true;
             }
 
+            let mut grid_updates = Vec::new();
             for (&id, &start_pos) in &self.canvas.drag_start_positions {
                 if let Some(c) = self.components.iter_mut().find(|x| x.id == id) {
                     if c.comp_type == crate::engine::ComponentType::Junction
@@ -45,6 +46,8 @@ impl Editor {
                         let center = start_pos + start_size / 2.0;
                         let is_right = self.canvas.drag_offset.x > center.x;
                         let is_bottom = self.canvas.drag_offset.y > center.y;
+
+                        let old_rect = Rect::new(c.pos.x, c.pos.y, c.width, c.height);
 
                         // Stretching logic instead of moving
                         // We stretch horizontally or vertically depending on dominant translation
@@ -77,10 +80,20 @@ impl Editor {
                             c.width = start_size.x;
                             c.pos.x = start_pos.x;
                         }
+                        
+                        let new_rect = Rect::new(c.pos.x, c.pos.y, c.width, c.height);
+                        grid_updates.push((id, old_rect, new_rect));
                     } else {
+                        let old_rect = Rect::new(c.pos.x, c.pos.y, c.width, c.height);
                         c.pos = start_pos + snapped_translation;
+                        let new_rect = Rect::new(c.pos.x, c.pos.y, c.width, c.height);
+                        grid_updates.push((id, old_rect, new_rect));
                     }
                 }
+            }
+            
+            for (id, old_rect, new_rect) in grid_updates {
+                self.canvas.spatial_grid.update(id, old_rect, new_rect);
             }
         }
         // Drag annotation

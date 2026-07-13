@@ -29,6 +29,8 @@ mod ui_global_library;
 mod ui_main_menu;
 mod ui_properties;
 mod wire_junctions;
+mod stress_test;
+mod spatial_hash;
 
 #[cfg(test)]
 mod tests;

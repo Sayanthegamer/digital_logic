@@ -22,11 +22,6 @@ impl Editor {
             {
                 let curr_val = self.engine.simulator.get_state(gate_idx);
                 self.engine.simulator.set_input(gate_idx, !curr_val);
-                let max_steps = (self.engine.simulator.gates.len() * 10).max(1000);
-                match self.engine.simulator.propagate_events(max_steps) {
-                    Ok(_) => self.engine.propagation_error = None,
-                    Err(e) => self.engine.propagation_error = Some(e),
-                }
             }
         }
 
