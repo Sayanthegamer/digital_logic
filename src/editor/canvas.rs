@@ -130,6 +130,9 @@ impl Editor {
         let port_to_sim_gate_map =
             self.resolve_port_to_sim_gate_map(&mut sim, &expanded_connections, &component_ports, &mut net_cache);
 
+        // Pre-compute Depth for Multi-Threaded Simulation
+        sim.calculate_depths();
+
         // Settle initial states
         let max_steps = (sim.nodes.len() * 10).max(1000);
         match sim.propagate_events(max_steps) {

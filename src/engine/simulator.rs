@@ -1,5 +1,5 @@
 use super::types::*;
-use std::collections::VecDeque;
+use rayon::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct GateNode {
@@ -7,11 +7,12 @@ pub struct GateNode {
     pub state: u8,
     pub dependents: Vec<usize>,
     pub in_queue: bool,
+    pub depth: usize,
 }
 
 pub struct Simulator {
     pub nodes: slab::Slab<GateNode>,
-    pub event_queue: VecDeque<usize>,
+    pub event_queue: Vec<Vec<usize>>,
 }
 
 impl Default for Simulator {
@@ -24,7 +25,7 @@ impl Simulator {
     pub fn new() -> Self {
         Self {
             nodes: slab::Slab::new(),
-            event_queue: VecDeque::new(),
+            event_queue: Vec::new(),
         }
     }
 
@@ -54,10 +55,14 @@ impl Simulator {
             state: initial_state,
             dependents: Vec::new(),
             in_queue: true,
+            depth: 0,
         };
 
         let index = self.nodes.insert(node);
-        self.event_queue.push_back(index);
+        if self.event_queue.is_empty() {
+            self.event_queue.push(Vec::new());
+        }
+        self.event_queue[0].push(index);
         
         index
     }
@@ -158,29 +163,110 @@ impl Simulator {
         if let Some(node) = self.nodes.get_mut(gate_idx) {
             if !node.in_queue {
                 node.in_queue = true;
-                self.event_queue.push_back(gate_idx);
+                let depth = node.depth;
+                if self.event_queue.len() <= depth {
+                    self.event_queue.resize(depth + 1, Vec::new());
+                }
+                self.event_queue[depth].push(gate_idx);
             }
         }
     }
 
-    fn dequeue(&mut self) -> Option<usize> {
-        if let Some(idx) = self.event_queue.pop_front() {
-            if let Some(node) = self.nodes.get_mut(idx) {
-                node.in_queue = false;
+    pub fn calculate_depths(&mut self) {
+        let num_nodes = self.nodes.capacity();
+        if num_nodes == 0 { return; }
+
+        for (_, node) in self.nodes.iter_mut() {
+            node.depth = 0;
+        }
+
+        let mut changed = true;
+        let mut iters = 0;
+
+        while changed && iters < num_nodes {
+            changed = false;
+            iters += 1;
+
+            for i in 0..self.nodes.capacity() {
+                if !self.nodes.contains(i) { continue; }
+                
+                let node_depth = self.nodes[i].depth;
+                let deps = self.nodes[i].dependents.clone();
+                
+                for dep_idx in deps {
+                    if let Some(dep_node) = self.nodes.get_mut(dep_idx) {
+                        if dep_node.depth < node_depth + 1 {
+                            dep_node.depth = node_depth + 1;
+                            changed = true;
+                        }
+                    }
+                }
             }
-            Some(idx)
-        } else {
-            None
         }
     }
 
-    /// Evaluates the simulation until the event queue is empty.
-    /// Returns the number of evaluation steps taken, or an error if it oscillates.
+    /// Evaluates the simulation across depth levels in parallel.
     pub fn propagate_events(&mut self, max_steps_multiplier: usize) -> Result<usize, String> {
         let mut steps = 0;
         let max_steps = self.nodes.capacity() * max_steps_multiplier.max(100);
+        let max_depth = self.event_queue.len();
 
-        while let Some(idx) = self.dequeue() {
+        for depth in 0..max_depth {
+            if self.event_queue[depth].is_empty() { continue; }
+            
+            let current_queue = std::mem::take(&mut self.event_queue[depth]);
+            for &idx in &current_queue {
+                if let Some(node) = self.nodes.get_mut(idx) {
+                    node.in_queue = false;
+                }
+            }
+
+            let updates: Vec<_> = current_queue
+                .par_iter()
+                .filter_map(|&idx| {
+                    let node = &self.nodes[idx];
+                    let val_a = node
+                        .gate
+                        .input_a_source
+                        .and_then(|s_idx| self.nodes.get(s_idx))
+                        .map(|s_node| s_node.state)
+                        .unwrap_or(0b00);
+                    let val_b = node
+                        .gate
+                        .input_b_source
+                        .and_then(|s_idx| self.nodes.get(s_idx))
+                        .map(|s_node| s_node.state)
+                        .unwrap_or(0b00);
+
+                    let new_state = match node.gate.gate_type {
+                        GateType::Input => node.state,
+                        GateType::Output => val_a,
+                        GateType::Nand => {
+                            let a_bool = (val_a & 0b10) != 0;
+                            let b_bool = (val_b & 0b10) != 0;
+                            if !(a_bool && b_bool) { 0b10 } else { 0b01 }
+                        }
+                        GateType::TriStateBuffer => {
+                            let en_bool = (val_b & 0b10) != 0;
+                            if en_bool {
+                                let data_bool = (val_a & 0b10) != 0;
+                                if data_bool { 0b10 } else { 0b01 }
+                            } else {
+                                0b00
+                            }
+                        }
+                        GateType::BusResolver => val_a | val_b,
+                    };
+
+                    if new_state != node.state {
+                        Some((idx, new_state, node.dependents.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            steps += current_queue.len();
             if steps >= max_steps {
                 return Err(format!(
                     "Oscillation detected: exceeded max_steps limit of {}",
@@ -188,53 +274,14 @@ impl Simulator {
                 ));
             }
 
-            let node = &self.nodes[idx];
-            let val_a = node
-                .gate
-                .input_a_source
-                .and_then(|s_idx| self.nodes.get(s_idx))
-                .map(|s_node| s_node.state)
-                .unwrap_or(0b00);
-            let val_b = node
-                .gate
-                .input_b_source
-                .and_then(|s_idx| self.nodes.get(s_idx))
-                .map(|s_node| s_node.state)
-                .unwrap_or(0b00);
-
-            let new_state = match node.gate.gate_type {
-                GateType::Input => node.state,
-                GateType::Output => val_a,
-                GateType::Nand => {
-                    let a_bool = (val_a & 0b10) != 0;
-                    let b_bool = (val_b & 0b10) != 0;
-                    if !(a_bool && b_bool) { 0b10 } else { 0b01 }
+            for (idx, new_state, deps) in updates {
+                if let Some(node) = self.nodes.get_mut(idx) {
+                    node.state = new_state;
                 }
-                GateType::TriStateBuffer => {
-                    // a = Data, b = Enable
-                    let en_bool = (val_b & 0b10) != 0;
-                    if en_bool {
-                        let data_bool = (val_a & 0b10) != 0;
-                        if data_bool { 0b10 } else { 0b01 }
-                    } else {
-                        0b00 // Floating
-                    }
-                }
-                GateType::BusResolver => {
-                    val_a | val_b // The bitwise magic!
-                }
-            };
-
-            if self.nodes[idx].state != new_state {
-                self.nodes[idx].state = new_state;
-
-                let deps = self.nodes[idx].dependents.clone();
                 for dep_idx in deps {
                     self.enqueue(dep_idx);
                 }
             }
-
-            steps += 1;
         }
 
         Ok(steps)
