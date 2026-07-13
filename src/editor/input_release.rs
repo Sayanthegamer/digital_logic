@@ -6,6 +6,7 @@ use super::Editor;
 impl Editor {
     pub fn handle_canvas_left_release(&mut self, mouse_pos_world: Vec2) {
         self.canvas.dragging_wire = None;
+        self.canvas.alignment_guides.clear();
         // If it was an Input component and it was clicked (not dragged far)
         if let Some(comp_id) = self.canvas.dragging_comp_id
             && self.canvas.drag_dist_pixels < 5.0

@@ -263,9 +263,6 @@ impl Editor {
                 false
             };
 
-            let bg_color = theme::BG_PANEL.mq_with_alpha(0.95);
-            let border_color = theme::BORDER.mq();
-
             if comp.comp_type == ComponentType::Junction {
                 // Render Junctions using their actual width/height so stretch visuals match hit area.
                 let center_x = screen_pos.x + comp_width / 2.0;
@@ -316,52 +313,22 @@ impl Editor {
             }
 
             // Draw component box with rounded corners and drop shadow
-            let corner_radius = 6.0 * self.canvas.zoom;
+            // Drop shadow removed for performance / Blueprint style
 
-            // Drop shadow
-            draw_rounded_rect(
-                screen_pos.x + 3.0 * self.canvas.zoom,
-                screen_pos.y + 3.0 * self.canvas.zoom,
-                comp_width,
-                comp_height,
-                corner_radius,
-                Color::new(0.0, 0.0, 0.0, 0.25),
-            );
-
-            // Background & Border
-            draw_rounded_rect(
-                screen_pos.x,
-                screen_pos.y,
-                comp_width,
-                comp_height,
-                corner_radius,
-                bg_color,
-            );
-            draw_rounded_rect_lines(
-                screen_pos.x,
-                screen_pos.y,
-                comp_width,
-                comp_height,
-                corner_radius,
-                1.5 * self.canvas.zoom,
-                border_color,
-            );
-
-            // Draw Top Accent Stripe
             let accent_color = if let Some(color_override) = comp.color.map(|c| Color::new(c[0], c[1], c[2], c[3])).or_else(|| self.color_overrides.get_component_color(comp.id)) {
                 color_override
             } else {
                 match comp.comp_type {
-                    ComponentType::Nand => theme::COMP_NAND.mq(), // Amber orange
-                    ComponentType::Clock => theme::ACCENT_PRIMARY.mq(), // Electric sky blue
+                    ComponentType::Nand => theme::COMP_NAND.mq(),
+                    ComponentType::Clock => theme::ACCENT_PRIMARY.mq(),
                     ComponentType::Input | ComponentType::Output => {
                         if is_input_active {
-                            theme::ACCENT_ACTIVE.mq() // Active green
+                            theme::ACCENT_ACTIVE.mq()
                         } else {
-                            theme::ACCENT_GENERIC.mq() // Muted gray
+                            theme::ACCENT_GENERIC.mq()
                         }
                     }
-                    ComponentType::SubChip(_) => theme::COMP_SUBCHIP.mq(), // Royal indigo
+                    ComponentType::SubChip(_) => theme::COMP_SUBCHIP.mq(),
                     ComponentType::SevenSegment => theme::COMP_SEVENSEG.mq(),
                     ComponentType::TriStateBuffer => theme::COMP_NAND.mq(),
                     ComponentType::Junction
@@ -369,21 +336,37 @@ impl Editor {
                     | ComponentType::BusSplitter => theme::ACCENT_GENERIC.mq(),
                 }
             };
-            let stripe_height = 4.0 * self.canvas.zoom;
+
+            let corner_radius = 6.0 * self.canvas.zoom;
+
+            // Ultra-Low LOD (Zoom < 0.1): Just draw flat solid rectangle
+            if self.canvas.zoom < 0.1 {
+                draw_rectangle(
+                    screen_pos.x,
+                    screen_pos.y,
+                    comp_width,
+                    comp_height,
+                    accent_color.clone(),
+                );
+                continue;
+            }
+
+            // Blueprint Style: Opaque background with thick colored borders
             draw_rounded_rect(
                 screen_pos.x,
                 screen_pos.y,
                 comp_width,
-                stripe_height,
+                comp_height,
                 corner_radius,
-                accent_color,
+                theme::BG_CANVAS.mq(),
             );
-            // Re-fill bottom half of accent to keep it a top bar
-            draw_rectangle(
+            draw_rounded_rect_lines(
                 screen_pos.x,
-                screen_pos.y + stripe_height / 2.0,
+                screen_pos.y,
                 comp_width,
-                stripe_height / 2.0,
+                comp_height,
+                corner_radius,
+                2.0 * self.canvas.zoom,
                 accent_color,
             );
 
@@ -403,31 +386,43 @@ impl Editor {
                 );
             }
 
-            // Draw text label
-            let base_font_size = 13.0;
-            let text_size = measure_text(
-                &comp.label,
-                self.font.as_ref(),
-                base_font_size as u16,
-                self.canvas.zoom,
-            );
-            let text_x = screen_pos.x + (comp_width - text_size.width) / 2.0;
-            let text_y = screen_pos.y + (comp_height + text_size.height) / 2.0;
-
-            let text_color = theme::TEXT_PRIMARY.mq();
+            // Draw text label / Semantic state
             if comp.comp_type != ComponentType::SevenSegment && self.canvas.zoom >= 0.35 {
+                let base_font_size = 13.0;
+                
+                let display_label = match comp.comp_type {
+                    ComponentType::Input | ComponentType::Output => {
+                        format!("{} [{}]", comp.label, if is_input_active { "1" } else { "0" })
+                    }
+                    _ => comp.label.clone(),
+                };
+
+                let text_size = measure_text(
+                    &display_label,
+                    self.font.as_ref(),
+                    base_font_size as u16,
+                    self.canvas.zoom,
+                );
+                let text_x = screen_pos.x + (comp_width - text_size.width) / 2.0;
+                let text_y = screen_pos.y + (comp_height + text_size.height) / 2.0;
+
                 draw_text_ex(
-                    &comp.label,
+                    &display_label,
                     text_x,
                     text_y,
                     TextParams {
                         font: self.font.as_ref(),
                         font_size: base_font_size as u16,
                         font_scale: self.canvas.zoom,
-                        color: text_color,
+                        color: theme::TEXT_PRIMARY.mq(),
                         ..Default::default()
                     },
                 );
+            }
+
+            // Low LOD (Zoom < 0.25): Skip drawing individual ports, just draw wire connections
+            if self.canvas.zoom < 0.25 {
+                continue;
             }
 
             // Draw port circles
@@ -677,6 +672,19 @@ impl Editor {
             );
         }
 
+        // Draw alignment guides
+        for &(start, end) in &self.canvas.alignment_guides {
+            let p1 = self.to_screen_space(start);
+            let p2 = self.to_screen_space(end);
+            draw_line(
+                p1.x,
+                p1.y,
+                p2.x,
+                p2.y,
+                1.5,
+                theme::ACCENT_PRIMARY.mq_with_alpha(0.8),
+            );
+        }
         // Draw magnetic hover ring
         if let Some((comp_id, port_idx, is_input)) = self.canvas.hovered_port
             && let Some(comp) = self.components.iter().find(|c| c.id == comp_id)

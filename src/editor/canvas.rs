@@ -866,4 +866,20 @@ impl Editor {
             self.compile();
         }
     }
+
+    pub fn cancel_and_return(&mut self) {
+        if let EditingTarget::LibraryChip(_) = self.canvas.editing_target {
+            if let Some(stashed) = self.canvas.stashed_main_canvas.take() {
+                self.components = stashed.components;
+                self.connections = stashed.connections;
+                self.annotations = stashed.annotations;
+                self.next_component_id = stashed.next_component_id;
+                self.canvas.pan = stashed.pan;
+                self.canvas.zoom = stashed.zoom;
+            }
+
+            self.canvas.editing_target = EditingTarget::MainCanvas;
+            self.compile();
+        }
+    }
 }

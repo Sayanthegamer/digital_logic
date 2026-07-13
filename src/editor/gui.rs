@@ -82,6 +82,7 @@ impl Editor {
                     self.canvas.editing_target
                 {
                     let mut requested_repack = false;
+                    let mut requested_cancel = false;
                     egui::TopBottomPanel::top("editing_chip_panel").show(ctx, |ui| {
                         ui.horizontal(|ui| {
                             let bp_name = self
@@ -101,11 +102,19 @@ impl Editor {
                             {
                                 requested_repack = true;
                             }
+                            if ui
+                                .button(format!("{} Cancel Changes & Return", theme::ICON_CLOSE))
+                                .clicked()
+                            {
+                                requested_cancel = true;
+                            }
                         });
                     });
 
                     if requested_repack {
                         self.save_and_repack_blueprint();
+                    } else if requested_cancel {
+                        self.cancel_and_return();
                     }
                 }
 

@@ -284,7 +284,48 @@ impl Editor {
             segments.push((Vec2::new(stub_tgt, mid_y), Vec2::new(stub_tgt, tgt_pos.y)));
             segments.push((Vec2::new(stub_tgt, tgt_pos.y), Vec2::new(tgt_pos.x, tgt_pos.y)));
         }
-        segments
+        Self::chamfer_segments(segments, 10.0 * zoom)
+    }
+
+    fn chamfer_segments(segments: Vec<(Vec2, Vec2)>, base_radius: f32) -> Vec<(Vec2, Vec2)> {
+        if segments.len() <= 1 {
+            return segments;
+        }
+
+        let mut out = Vec::new();
+        let mut prev_b_new = segments[0].0;
+
+        for i in 0..segments.len() - 1 {
+            let (a, b) = segments[i];
+            let (c, d) = segments[i + 1];
+            
+            let len_ab = a.distance(b);
+            let len_cd = c.distance(d);
+            
+            let r = base_radius.min(len_ab / 2.0).min(len_cd / 2.0);
+            
+            if r <= 0.1 {
+                out.push((prev_b_new, b));
+                prev_b_new = b;
+                continue;
+            }
+
+            let dir_ab = (b - a) / len_ab;
+            let dir_cd = (d - c) / len_cd;
+
+            let b_new = b - dir_ab * r;
+            let c_new = c + dir_cd * r;
+
+            out.push((prev_b_new, b_new));
+            out.push((b_new, c_new));
+            
+            prev_b_new = c_new;
+        }
+        
+        let last = segments.last().unwrap();
+        out.push((prev_b_new, last.1));
+        
+        out
     }
 
     /// Compute all Manhattan wire segments in world space (without zoom).

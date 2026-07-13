@@ -95,6 +95,37 @@ impl Editor {
             for (id, old_rect, new_rect) in grid_updates {
                 self.canvas.spatial_grid.update(id, old_rect, new_rect);
             }
+
+            self.canvas.alignment_guides.clear();
+            let mut x_guides = 0;
+            let mut y_guides = 0;
+            if let Some(&first_drag_id) = self.canvas.drag_start_positions.keys().next() {
+                if let Some(c) = self.components.iter().find(|x| x.id == first_drag_id) {
+                    let c_pos = c.pos;
+                    let c_right = c.pos.x + c.width;
+                    let c_bottom = c.pos.y + c.height;
+
+                    for other in &self.components {
+                        if self.canvas.selected_comp_ids.contains(&other.id) { continue; }
+                        
+                        if x_guides < 2 {
+                            if (c_pos.x - other.pos.x).abs() < 1.0 || (c_right - (other.pos.x + other.width)).abs() < 1.0 {
+                                self.canvas.alignment_guides.push((Vec2::new(c_pos.x, -10000.0), Vec2::new(c_pos.x, 10000.0)));
+                                x_guides += 1;
+                            }
+                        }
+                        if y_guides < 2 {
+                            if (c_pos.y - other.pos.y).abs() < 1.0 || (c_bottom - (other.pos.y + other.height)).abs() < 1.0 {
+                                self.canvas.alignment_guides.push((Vec2::new(-10000.0, c_pos.y), Vec2::new(10000.0, c_pos.y)));
+                                y_guides += 1;
+                            }
+                        }
+                        if x_guides >= 2 && y_guides >= 2 {
+                            break;
+                        }
+                    }
+                }
+            }
         }
         // Drag annotation
         if let Some(idx) = self.canvas.dragging_annotation_idx

@@ -195,6 +195,7 @@ pub struct CanvasState {
 
     // Right-click context menu detection
     pub right_drag_dist: f32,
+    pub alignment_guides: Vec<(Vec2, Vec2)>,
 }
 
 impl Default for CanvasState {
@@ -231,6 +232,7 @@ impl Default for CanvasState {
             editing_target: EditingTarget::MainCanvas,
             stashed_main_canvas: None,
             right_drag_dist: 0.0,
+            alignment_guides: Vec::new(),
         }
     }
 }
