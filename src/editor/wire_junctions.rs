@@ -340,9 +340,12 @@ impl Editor {
 
     /// Find all wire intersections (junctions and crossings) across all connections.
     pub fn find_wire_intersections(&self) -> Vec<WireIntersection> {
-        let mut all_segments: Vec<IdentifiedSegment> = Vec::new();
+        let mut all_segments = Vec::new();
+        
+        let sw = macroquad::window::screen_width();
+        let sh = macroquad::window::screen_height();
+        let screen_rect = Rect::new(-20.0, -20.0, sw + 40.0, sh + 40.0);
 
-        // Build all segments with their connection index
         for (conn_idx, wire) in self.connections.iter().enumerate() {
             let src_comp = self.components.iter().find(|c| c.id == wire.src_comp_id);
             let tgt_comp = self.components.iter().find(|c| c.id == wire.tgt_comp_id);
@@ -360,57 +363,80 @@ impl Editor {
                     wire.tgt_port,
                     self.canvas.zoom,
                 );
+                
                 for (a, b) in segments {
+                    let min_x = a.x.min(b.x);
+                    let max_x = a.x.max(b.x);
+                    let min_y = a.y.min(b.y);
+                    let max_y = a.y.max(b.y);
+                    
+                    // Frustum Culling
+                    if min_x > screen_rect.right() || max_x < screen_rect.left() || 
+                       min_y > screen_rect.bottom() || max_y < screen_rect.top() {
+                        continue;
+                    }
+
                     all_segments.push(IdentifiedSegment { a, b, conn_idx });
                 }
             }
         }
 
+        // 1D Sweep and Prune (Sort by minimum X coordinate)
+        all_segments.sort_by(|s1, s2| {
+            let min1 = s1.a.x.min(s1.b.x);
+            let min2 = s2.a.x.min(s2.b.x);
+            min1.partial_cmp(&min2).unwrap_or(std::cmp::Ordering::Equal)
+        });
+
         let mut intersections = Vec::new();
         let mut seen_points: Vec<Vec2> = Vec::new();
-
         let epsilon = 2.0 * self.canvas.zoom;
 
-        // Check every pair of segments from different connections
         for i in 0..all_segments.len() {
+            let s1 = &all_segments[i];
+            let max1_x = s1.a.x.max(s1.b.x) + epsilon * 2.0;
+            
             for j in (i + 1)..all_segments.len() {
-                if all_segments[i].conn_idx == all_segments[j].conn_idx {
-                    continue; // Same wire, skip
+                let s2 = &all_segments[j];
+                let min2_x = s2.a.x.min(s2.b.x);
+                
+                if min2_x > max1_x {
+                    // Since elements are sorted by min_x, all subsequent elements will also be > max1_x
+                    break;
+                }
+
+                if s1.conn_idx == s2.conn_idx {
+                    continue;
                 }
 
                 if let Some(point) = segment_intersection(
-                    all_segments[i].a, all_segments[i].b,
-                    all_segments[j].a, all_segments[j].b,
+                    s1.a, s1.b,
+                    s2.a, s2.b,
                     epsilon,
                 ) {
-                    // Check if we already have a nearby intersection point
                     let already_seen = seen_points.iter().any(|p| p.distance(point) < epsilon * 2.0);
                     if already_seen {
                         continue;
                     }
                     seen_points.push(point);
 
-                    // Classify: are these wires connected?
-                    let conn_i = &self.connections[all_segments[i].conn_idx];
-                    let conn_j = &self.connections[all_segments[j].conn_idx];
+                    let conn_i = &self.connections[s1.conn_idx];
+                    let conn_j = &self.connections[s2.conn_idx];
 
                     let connected = wires_share_endpoint(conn_i, conn_j);
                     if connected {
-                        continue; // Same electrical net, no crossings or junctions needed
+                        continue;
                     }
 
-                    // Determine which wire is "upper" for bridge arc direction
-                    let seg_i_horizontal = is_horizontal(all_segments[i].a, all_segments[i].b);
-                    let seg_j_horizontal = is_horizontal(all_segments[j].a, all_segments[j].b);
+                    let seg_i_horizontal = is_horizontal(s1.a, s1.b);
+                    let seg_j_horizontal = is_horizontal(s2.a, s2.b);
 
-                    // We always want the horizontal wire to jump (be the upper wire)
                     let (lower_conn_idx, upper_conn_idx, upper_is_horizontal) = if seg_i_horizontal {
-                        (all_segments[j].conn_idx, all_segments[i].conn_idx, true)
+                        (s2.conn_idx, s1.conn_idx, true)
                     } else if seg_j_horizontal {
-                        (all_segments[i].conn_idx, all_segments[j].conn_idx, true)
+                        (s1.conn_idx, s2.conn_idx, true)
                     } else {
-                        // Fallback if they somehow cross while both vertical/horizontal (shouldn't happen with orthogonal)
-                        (all_segments[j].conn_idx, all_segments[i].conn_idx, seg_i_horizontal)
+                        (s2.conn_idx, s1.conn_idx, seg_i_horizontal)
                     };
 
                     let lower_conn = &self.connections[lower_conn_idx];

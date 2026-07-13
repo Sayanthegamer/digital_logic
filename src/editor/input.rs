@@ -54,7 +54,9 @@ impl Editor {
         self.update_resolution_revert_timer();
 
         if self.canvas.dragging_comp_id.is_some() || self.canvas.dragging_wire.is_some() {
-            self.recompute_wire_offsets();
+            if mouse_delta.length_squared() > 0.0 {
+                self.recompute_wire_offsets();
+            }
         }
 
         self.canvas.last_mouse_pos = mouse_pos_screen;
