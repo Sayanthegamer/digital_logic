@@ -15,6 +15,13 @@ We have heavily optimized the compiler pipeline. While the engine still recompil
 
 ---
 
+## 2. Engine Bottlenecks: Single-Threaded Event Loop [SOLVED]
+
+### The Resolution
+The simulator historically suffered from thread-pool overhead and data race constraints which confined event propagation to a single core. This bottleneck has been completely bypassed:
+- **Intelligent Hardware Profiler**: A dynamic runtime calibrator tests the host machine on startup to calculate the exact Rayon crossover threshold where parallelization beats single-threaded execution. 
+- **Topological Map-Reduce**: Gates inside the same topological depth layer are safely evaluated concurrently via `rayon::par_iter()`. This provides extreme throughput for massive circuits without encountering data races or breaking memory safety (the ABA slab issue was also patched to clear the queue on topology changes).
+
 ## 2. Editor Bottlenecks: Wire Routing & Crossings [100% RESOLVED]
 
 ### The Resolution

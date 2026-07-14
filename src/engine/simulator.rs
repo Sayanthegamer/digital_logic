@@ -1,4 +1,6 @@
 use super::types::*;
+use rayon::prelude::*;
+
 #[derive(Debug, Clone)]
 pub struct GateNode {
     pub gate: PrimitiveGate,
@@ -11,6 +13,7 @@ pub struct GateNode {
 pub struct Simulator {
     pub nodes: slab::Slab<GateNode>,
     pub event_queue: Vec<Vec<usize>>,
+    pub dynamic_threshold: usize,
 }
 
 impl Default for Simulator {
@@ -24,6 +27,7 @@ impl Simulator {
         Self {
             nodes: slab::Slab::new(),
             event_queue: Vec::new(),
+            dynamic_threshold: crate::engine::profiler::detect_parallel_crossover_threshold(),
         }
     }
 
@@ -36,6 +40,9 @@ impl Simulator {
     /// Inputs are initially set to None (floating).
     /// Returns the unique index of the added gate.
     pub fn add_gate(&mut self, gate_type: GateType) -> usize {
+        // If the physical layout of the circuit changes, stale events are invalid.
+        self.event_queue.clear();
+
         // 0b00 = Floating, 0b01 = Low, 0b10 = High, 0b11 = Contention
         let initial_state = match gate_type {
             GateType::Nand => 0b10,
@@ -69,6 +76,8 @@ impl Simulator {
     pub fn remove_gate(&mut self, gate_idx: usize) {
         if !self.nodes.contains(gate_idx) { return; }
         
+        // If the physical layout of the circuit changes, stale events are invalid.
+        self.event_queue.clear();
         // 1. Tell all dependents to forget about us
         let deps = self.nodes[gate_idx].dependents.clone();
         for dep_idx in deps {
@@ -109,6 +118,9 @@ impl Simulator {
     /// Connects the output of source_idx to target_idx on the specified port.
     /// port is 0 for input_a_source, 1 for input_b_source.
     pub fn connect(&mut self, source_idx: usize, target_idx: usize, port: u8) {
+        // If the physical layout of the circuit changes, stale events are invalid.
+        self.event_queue.clear();
+
         assert!(
             self.nodes.contains(source_idx),
             "Source gate index out of bounds: {}",
@@ -274,25 +286,24 @@ impl Simulator {
                 }
             }
 
-            let mut next_enqueues = Vec::new();
-
-            for &idx in &current_queue {
-                if !self.nodes.contains(idx) { continue; }
+            let nodes = &self.nodes;
+            let compute_state = |&idx: &usize| -> Option<(usize, u8)> {
+                if !nodes.contains(idx) { return None; }
                 
-                let val_a = self.nodes[idx]
+                let val_a = nodes[idx]
                     .gate
                     .input_a_source
-                    .and_then(|s_idx| self.nodes.get(s_idx))
+                    .and_then(|s_idx| nodes.get(s_idx))
                     .map(|s_node| s_node.state)
                     .unwrap_or(0b00);
-                let val_b = self.nodes[idx]
+                let val_b = nodes[idx]
                     .gate
                     .input_b_source
-                    .and_then(|s_idx| self.nodes.get(s_idx))
+                    .and_then(|s_idx| nodes.get(s_idx))
                     .map(|s_node| s_node.state)
                     .unwrap_or(0b00);
 
-                let node = &mut self.nodes[idx];
+                let node = &nodes[idx];
                 let new_state = match node.gate.gate_type {
                     GateType::Input => node.state,
                     GateType::Output => val_a,
@@ -314,9 +325,22 @@ impl Simulator {
                 };
 
                 if new_state != node.state {
-                    node.state = new_state;
-                    next_enqueues.push(idx);
+                    Some((idx, new_state))
+                } else {
+                    None
                 }
+            };
+
+            let updates: Vec<(usize, u8)> = if current_queue.len() >= self.dynamic_threshold {
+                current_queue.par_iter().filter_map(compute_state).collect()
+            } else {
+                current_queue.iter().filter_map(compute_state).collect()
+            };
+
+            let mut next_enqueues = Vec::with_capacity(updates.len());
+            for (idx, new_state) in updates {
+                self.nodes[idx].state = new_state;
+                next_enqueues.push(idx);
             }
 
             depth_steps += current_queue.len();
