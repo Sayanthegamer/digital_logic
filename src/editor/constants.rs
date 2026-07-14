@@ -12,8 +12,5 @@ pub const WIRE_STATE_LOW: u8 = 0b01;
 pub const WIRE_STATE_HIGH: u8 = 0b10;
 pub const WIRE_STATE_CONTENTION: u8 = 0b11;
 
-// Performance limits
-pub const WIRE_DISABLE_THRESHOLD: usize = 5000;
-
 // Special IDs
 pub const FAKE_OUTPUT_COMP_ID: usize = 8888;

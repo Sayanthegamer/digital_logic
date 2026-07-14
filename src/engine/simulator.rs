@@ -255,13 +255,15 @@ impl Simulator {
     }
 
     pub fn propagate_events(&mut self, max_steps_multiplier: usize) -> Result<usize, String> {
-        let mut steps = 0;
+        let mut total_steps = 0;
         let max_steps = self.nodes.capacity() * max_steps_multiplier.max(100);
         
         let mut depth = 0;
+        let mut depth_steps = 0;
         while depth < self.event_queue.len() {
             if self.event_queue[depth].is_empty() { 
                 depth += 1;
+                depth_steps = 0;
                 continue; 
             }
             
@@ -317,8 +319,9 @@ impl Simulator {
                 }
             }
 
-            steps += current_queue.len();
-            if steps >= max_steps {
+            depth_steps += current_queue.len();
+            total_steps += current_queue.len();
+            if depth_steps >= max_steps {
                 return Err(format!(
                     "Oscillation detected: exceeded max_steps limit of {}",
                     max_steps
@@ -344,7 +347,7 @@ impl Simulator {
             }
         }
 
-        Ok(steps)
+        Ok(total_steps)
     }
 
     pub fn get_raw_state(&self, gate_idx: usize) -> u8 {
