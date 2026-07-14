@@ -40,7 +40,7 @@ All O(n²) bottlenecks related to wire rendering and routing have been eliminate
 - **Rendering Stutter (Wire Crossings):** Replaced the 1D sweep-and-prune worst-case O(N²) algorithm with a full O(N) 2D Spatial Hash Grid for the primary intersection search.
 - **Rendering Stutter (Wire Gaps/Arcs):** Replaced rigid, loop-heavy arc rendering and masking with a mathematically precise 1D interval hole merging algorithm ($O(K \log K)$) on individual wire segments, completely eliminating visual clipping, overlapping wavy artifacts, and heavy `Vec` allocations during the rendering cycle.
 - **Drag Lane Collisions:** Modified `recompute_wire_offsets` to check dragged dynamic wires directly against the untouched static wires via spatial hash bucketing (`(col, row)` keys), making conflict checking O(1) amortized per segment.
-- **Rendering Stutter (Viewport Culling):** Stripped out the mathematical AABB component rendering loop. It now performs an $O(K)$ query via the `SpatialHashGrid` to immediately isolate the visible components for rendering, dropping the rendering workload from $O(N)$ down to purely the on-screen element count.
+- **Rendering Stutter (Viewport Culling):** Stripped out the mathematical AABB rendering loop for both components and wires. The draw loop now performs $O(K)$ queries against independent `SpatialHashGrid`s to immediately isolate the visible components and wires. This completely drops the rendering workload from $O(V + E)$ down to purely the on-screen element count.
 
 ---
 

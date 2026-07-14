@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.2.0-alpha.1] - 2026-07-14 (Pre-release)
+## [3.2.0-alpha.2] - 2026-07-14 (Pre-release)
 
 ### Added
 - **Intelligent Hardware Profiler**: Introduced a runtime calibration module (`src/engine/profiler.rs`) that micro-benchmarks the host CPU on startup to dynamically determine the exact Rayon parallelization crossover threshold. This completely eliminates magic numbers and adapts scaling to any hardware profile.
@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Optimized
 - **Multi-Threaded Event Loop**: Upgraded the core simulator loop (`propagate_events`) to utilize a two-pass Map-Reduce pattern with `rayon::par_iter()`. Safe concurrent evaluation is guaranteed by isolating nodes into strict topological depth layers via Tarjan's SCC.
 - **L1/L2 Cache Defragmentation**: Implemented a topological sorting pass on the simulation `Slab` immediately after hierarchy flattening (`calculate_depths`). This guarantees that independent gates executing in parallel on the same clock phase are situated contiguously in memory, eliminating cache misses and maximizing hardware pre-fetcher efficiency.
-- **Viewport Culling (Spatial Hash)**: Purged the $O(N)$ AABB drawing loop for components. The editor now queries the `SpatialHashGrid` for the `viewport_rect` boundaries, isolating only the visible on-screen components. Sorting the resulting `HashSet` by ID restores deterministic Z-ordering to prevent visual flickering while achieving $O(K)$ rendering overhead.
+- **Viewport Culling (Spatial Hash)**: Purged the $O(N)$ AABB drawing loop for components and wires. The editor now queries independent `SpatialHashGrid`s for components and wires bounded by the `viewport_rect`, isolating only the visible on-screen elements. This completely drops the rendering workload from $O(V + E)$ down to purely the on-screen element count, restoring blazing fast framerates on massive circuits.
 
 ### Fixed
 - **Slab ABA Component Poisoning**: Fixed a critical memory safety/logic flaw where deleting a gate mid-tick and immediately placing a new component could cause the fresh component to inherit stale simulation events. The event queue is now safely purged on all topological circuit modifications.
