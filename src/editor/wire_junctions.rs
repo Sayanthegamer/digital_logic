@@ -73,7 +73,6 @@ impl Editor {
             y_max: f32,
         }
 
-        let mut static_data = Vec::new();
         let mut conn_data = Vec::new();
 
         for conn in &self.circuit.connections {
@@ -82,6 +81,9 @@ impl Editor {
             } else {
                 true
             };
+            if !is_affected {
+                continue;
+            }
 
             let src_comp = self.get_component(conn.src_comp_id);
             let tgt_comp = self.get_component(conn.tgt_comp_id);
@@ -127,11 +129,7 @@ impl Editor {
                     vertical_segs,
                     source_y: src_pos.y,
                 };
-                if is_affected {
-                    conn_data.push(seg_data);
-                } else {
-                    static_data.push(seg_data);
-                }
+                conn_data.push(seg_data);
             }
         }
 
@@ -148,26 +146,12 @@ impl Editor {
 
         let cell_size_y = 100.0;
         let cell_size_x = 20.0;
+        
+        // Note: This grid is NOT dead code. While static wires are checked brute-force below,
+        // this grid spatially hashes the dynamic wires (conn_data) against each other.
+        // During a full recompile (where conn_data contains ALL wires), this grid ensures
+        // the collision check remains O(N) instead of degrading to O(N^2).
         let mut grid: std::collections::HashMap<(i32, i32), Vec<(usize, VerticalSeg)>> = std::collections::HashMap::new();
-
-        for s_data in &static_data {
-            let offset = wire_offsets.get(&s_data.conn).copied().unwrap_or(0.0);
-            let offset_int = (offset / 6.0).round() as i32;
-            let lane = if offset_int >= 0 { (offset_int * 2) as usize } else { ((-offset_int * 2) - 1) as usize };
-            
-            for s in &s_data.vertical_segs {
-                let col = (s.ideal_x / cell_size_x).floor() as i32;
-                let start_row = (s.y_min / cell_size_y).floor() as i32;
-                let end_row = (s.y_max / cell_size_y).floor() as i32;
-                for r in start_row..=end_row {
-                    grid.entry((col, r)).or_default().push((lane, VerticalSeg {
-                        ideal_x: s.ideal_x,
-                        y_min: s.y_min,
-                        y_max: s.y_max,
-                    }));
-                }
-            }
-        }
 
         // Greedy interval coloring to assign non-overlapping lanes (Spatial Grid Optimized)
         for i in 0..conn_data.len() {
@@ -178,16 +162,63 @@ impl Editor {
                 let start_row = (s1.y_min / cell_size_y).floor() as i32;
                 let end_row = (s1.y_max / cell_size_y).floor() as i32;
 
+                // Query neighboring spatial buckets (col-1 to col+1, start_row to end_row)
+                // to avoid a plain nested O(N^2) scan over 0..i.
                 for c in (col - 1)..=(col + 1) {
                     for r in start_row..=end_row {
-                        if let Some(cell) = grid.get(&(c, r)) {
-                            for (lane, s2) in cell {
-                                if occupied_lanes.contains(lane) { continue; }
+                        if let Some(bucket) = grid.get(&(c, r)) {
+                            for (assigned_lane, s2) in bucket {
+                                if occupied_lanes.contains(assigned_lane) { continue; }
                                 
                                 let same_corridor = (s1.ideal_x - s2.ideal_x).abs() < 15.0;
                                 let y_overlap = s1.y_min - 4.0 < s2.y_max && s2.y_min - 4.0 < s1.y_max;
                                 if same_corridor && y_overlap {
-                                    occupied_lanes.insert(*lane);
+                                    occupied_lanes.insert(*assigned_lane);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Check against static wires in wire_offsets
+            if let Some(affected) = affected_comps {
+                for (s_conn, &offset) in &wire_offsets {
+                    if affected.contains(&s_conn.src_comp_id) || affected.contains(&s_conn.tgt_comp_id) {
+                        continue;
+                    }
+
+                    let offset_int = (offset / 6.0).round() as i32;
+                    let lane = if offset_int >= 0 { (offset_int * 2) as usize } else { ((-offset_int * 2) - 1) as usize };
+                    
+                    if occupied_lanes.contains(&lane) { continue; }
+
+                    let src_comp = self.get_component(s_conn.src_comp_id);
+                    let tgt_comp = self.get_component(s_conn.tgt_comp_id);
+                    if let (Some(src), Some(tgt)) = (src_comp, tgt_comp) {
+                        let (src_pos, tgt_pos) = self.get_connection_ports(s_conn, src, tgt);
+                        
+                        let mut s2_segs = Vec::new();
+                        if tgt_pos.x >= src_pos.x + 20.0 {
+                            let ideal_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0;
+                            s2_segs.push(VerticalSeg { ideal_x, y_min: src_pos.y.min(tgt_pos.y), y_max: src_pos.y.max(tgt_pos.y) });
+                        } else {
+                            let stub_src = src_pos.x + 20.0;
+                            let target_stagger = s_conn.tgt_port as f32 * 6.0;
+                            let stub_tgt = tgt_pos.x - 20.0 - target_stagger;
+                            let mut mid_y = src_pos.y + (tgt_pos.y - src_pos.y) / 2.0;
+                            if (tgt_pos.y - src_pos.y).abs() < 10.0 { mid_y += 35.0; }
+                            s2_segs.push(VerticalSeg { ideal_x: stub_src, y_min: src_pos.y.min(mid_y), y_max: src_pos.y.max(mid_y) });
+                            s2_segs.push(VerticalSeg { ideal_x: stub_tgt, y_min: mid_y.min(tgt_pos.y), y_max: mid_y.max(tgt_pos.y) });
+                        }
+
+                        'check: for s1 in &conn_data[i].vertical_segs {
+                            for s2 in &s2_segs {
+                                let same_corridor = (s1.ideal_x - s2.ideal_x).abs() < 15.0;
+                                let y_overlap = s1.y_min - 4.0 < s2.y_max && s2.y_min - 4.0 < s1.y_max;
+                                if same_corridor && y_overlap {
+                                    occupied_lanes.insert(lane);
+                                    break 'check;
                                 }
                             }
                         }
@@ -200,6 +231,7 @@ impl Editor {
                 lane += 1;
             }
 
+            // Actually bucket conn_data segments into grid by (col, row)
             for s in &conn_data[i].vertical_segs {
                 let col = (s.ideal_x / cell_size_x).floor() as i32;
                 let start_row = (s.y_min / cell_size_y).floor() as i32;

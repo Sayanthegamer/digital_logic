@@ -21,7 +21,7 @@ We have heavily optimized the compiler pipeline. While the engine still recompil
 All O(n²) bottlenecks related to wire rendering and routing have been eliminated:
 - **Rendering Stutter (`recompute_wire_offsets`):** Replaced O(N²) greedy lane coloring with an O(N) Spatial Hash Grid. The 5,000 connection hard limit has been completely removed.
 - **Rendering Stutter (Wire Crossings):** Replaced the 1D sweep-and-prune worst-case O(N²) algorithm with a full O(N) 2D Spatial Hash Grid for the primary intersection search.
-- **Drag Lane Collisions:** Modified `recompute_wire_offsets` to properly spatially hash the untouched static wires and check dragged dynamic wires against them, solving visual lane collisions without regressing to O(N²).
+- **Drag Lane Collisions:** Modified `recompute_wire_offsets` to check dragged dynamic wires directly against the untouched static wires in the `wire_offsets` map during a drag. *(Note: Static-lane conflict checking is currently a linear scan over all wires per dragged wire per frame; acceptable at moderate scale, but should be spatially indexed before circuits reach 10k+ wires).*
 
 ---
 
