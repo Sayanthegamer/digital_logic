@@ -108,6 +108,16 @@ pub enum OutputSource {
     Floating,             // Not connected internally
 }
 
+impl OutputSource {
+    pub fn apply_index_mapping(&mut self, mapping: &[usize]) {
+        if let OutputSource::DrivenByGate(idx) = self {
+            if *idx < mapping.len() {
+                *idx = mapping[*idx];
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InstantiatedInterface {
     pub inputs: Vec<Vec<(usize, u8)>>, // Outer chip input index -> primitive targets (gate_idx, port)
@@ -150,5 +160,19 @@ impl InstanceTree {
             curr = curr.sub_instances.get(&p)?;
         }
         curr.sub_instances.get(&comp_idx)
+    }
+
+    pub fn apply_index_mapping(&mut self, mapping: &[usize]) {
+        if let Some(ref mut idx) = self.gate_idx {
+            if *idx < mapping.len() {
+                *idx = mapping[*idx];
+            }
+        }
+        for output in &mut self.outputs {
+            output.apply_index_mapping(mapping);
+        }
+        for sub in self.sub_instances.values_mut() {
+            sub.apply_index_mapping(mapping);
+        }
     }
 }

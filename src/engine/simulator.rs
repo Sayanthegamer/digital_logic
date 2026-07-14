@@ -266,6 +266,47 @@ impl Simulator {
         }
     }
 
+    pub fn defragment_and_sort_by_depth(&mut self) -> Vec<usize> {
+        let capacity = self.nodes.capacity();
+        let mut old_to_new = vec![usize::MAX; capacity];
+
+        let mut valid_nodes: Vec<(usize, GateNode)> = self
+            .nodes
+            .iter()
+            .map(|(idx, node)| (idx, node.clone()))
+            .collect();
+
+        valid_nodes.sort_by_key(|(_, node)| node.depth);
+
+        let mut new_slab = slab::Slab::with_capacity(valid_nodes.len());
+        for (old_idx, node) in valid_nodes {
+            let new_idx = new_slab.insert(node);
+            old_to_new[old_idx] = new_idx;
+        }
+
+        for (_, node) in new_slab.iter_mut() {
+            if let Some(src) = node.gate.input_a_source {
+                node.gate.input_a_source = Some(old_to_new[src]);
+            }
+            if let Some(src) = node.gate.input_b_source {
+                node.gate.input_b_source = Some(old_to_new[src]);
+            }
+            for dep in &mut node.dependents {
+                *dep = old_to_new[*dep];
+            }
+        }
+
+        for depth_queue in &mut self.event_queue {
+            for idx in depth_queue.iter_mut() {
+                *idx = old_to_new[*idx];
+            }
+        }
+
+        self.nodes = new_slab;
+
+        old_to_new
+    }
+
     pub fn propagate_events(&mut self, max_steps_multiplier: usize) -> Result<usize, String> {
         let mut total_steps = 0;
         let max_steps = self.nodes.capacity() * max_steps_multiplier.max(100);

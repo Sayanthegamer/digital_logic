@@ -13,8 +13,9 @@ The core simulation understands only a limited set of primitive gate types (`Gat
 
 ## Event Propagation
 
-- The simulator uses a `VecDeque<usize>` to queue primitive indices that require evaluation.
+- The simulator uses a `Vec<usize>` layered structure to queue primitive indices that require evaluation, segregated strictly by their topological depth.
 - When an Input state changes (or a Clock ticks), its immediate dependents are pushed to the queue.
+- **Parallel Evaluation**: During `propagate_events`, the engine loops through each topological depth layer sequentially. Inside a single depth layer, all queued gates are evaluated concurrently via `rayon::par_iter()`. A runtime calibrator automatically determines if the queue size at that specific depth is large enough to warrant thread-pool overhead vs sequential execution.
 - **Oscillation Detection**: To prevent infinite loops caused by zero-delay feedback loops (e.g., an inverter connected to itself), the `propagate_events` function accepts a `max_steps` limit. If the queue processes more events than this limit in a single propagation phase, it throws an `Oscillation detected` error, halting the loop and displaying an error in the UI.
 
 ## Custom Chips (Sub-Chips)

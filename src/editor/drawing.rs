@@ -245,19 +245,37 @@ impl Editor {
         }
 
         // 2. Draw Components
-        for comp in &self.circuit.components {
+        let top_left = self.to_world_space(vec2(0.0, 0.0));
+        let bottom_right = self.to_world_space(vec2(screen_width(), screen_height()));
+        
+        // Pad the viewport in world space to account for ports, labels, and selection glows 
+        // Let's use a much larger padding to definitively rule out bounding box overflow
+        let pad = 500.0;
+        let viewport_rect = Rect::new(
+            top_left.x - pad,
+            top_left.y - pad,
+            (bottom_right.x - top_left.x) + pad * 2.0,
+            (bottom_right.y - top_left.y) + pad * 2.0,
+        );
+
+        let mut visible_comp_ids: Vec<usize> = self.canvas.spatial_grid.query_rect(viewport_rect).into_iter().collect();
+        visible_comp_ids.sort_unstable(); // Restore deterministic drawing Z-order
+        
+        // Debug counter to let the user see exactly how many components are being culled
+        draw_text(
+            &format!("Culling Debug: {}/{} components visible", visible_comp_ids.len(), self.circuit.components.len()),
+            screen_width() / 2.0 - 150.0,
+            60.0,
+            30.0,
+            RED,
+        );
+
+        for &comp_id in &visible_comp_ids {
+            let Some(comp) = comp_map.get(&comp_id) else { continue };
+            
             let screen_pos = self.to_screen_space(comp.pos);
             let comp_width = comp.width * self.canvas.zoom;
             let comp_height = comp.height * self.canvas.zoom;
-
-            // Frustum Culling for components
-            if screen_pos.x + comp_width < 0.0
-                || screen_pos.x > screen_width()
-                || screen_pos.y + comp_height < 0.0
-                || screen_pos.y > screen_height()
-            {
-                continue;
-            }
 
             // Determine body color based on component type and activity
             let is_input_active = if comp.comp_type == ComponentType::Input {

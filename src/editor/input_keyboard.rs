@@ -26,6 +26,11 @@ impl Editor {
             {
                 self.load_project();
             }
+            if is_key_pressed(KeyCode::G) {
+                println!("--- STARTING GRID VERIFICATION ---");
+                self.verify_grid();
+                println!("--- FINISHED GRID VERIFICATION ---");
+            }
             if is_key_pressed(KeyCode::F11) {
                 self.generate_hot_reload_test();
             }

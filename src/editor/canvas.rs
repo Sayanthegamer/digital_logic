@@ -136,11 +136,32 @@ impl Editor {
         self.wire_up_component_inputs(&mut sim, &conn_map, &component_ports, &mut net_cache);
 
         // 3. Resolve the visual output port states map
-        let port_to_sim_gate_map =
+        let mut port_to_sim_gate_map =
             self.resolve_port_to_sim_gate_map(&mut sim, &conn_map, &component_ports, &mut net_cache);
 
         // Pre-compute Depth for Multi-Threaded Simulation
         sim.calculate_depths();
+
+        // Perform L1/L2 Cache Defragmentation (Topological memory locality sorting)
+        let old_to_new = sim.defragment_and_sort_by_depth();
+
+        // Re-link Editor tracking structures
+        for sim_idx in visual_to_sim_map.values_mut() {
+            if *sim_idx < old_to_new.len() && old_to_new[*sim_idx] != usize::MAX {
+                *sim_idx = old_to_new[*sim_idx];
+            }
+        }
+        for sim_idx in port_to_sim_gate_map.values_mut() {
+            if *sim_idx < old_to_new.len() && old_to_new[*sim_idx] != usize::MAX {
+                *sim_idx = old_to_new[*sim_idx];
+            }
+        }
+        instance_tree.apply_index_mapping(&old_to_new);
+        for clock in &mut active_clocks {
+            if clock.gate_idx < old_to_new.len() && old_to_new[clock.gate_idx] != usize::MAX {
+                clock.gate_idx = old_to_new[clock.gate_idx];
+            }
+        }
 
         // Settle initial states
         let max_steps = (sim.nodes.len() * 10).max(1000);

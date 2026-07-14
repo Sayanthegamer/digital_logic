@@ -25,7 +25,7 @@ let val_a = states[gate.input_a];
 let val_b = states[gate.input_b];
 states[idx] = !(val_a && val_b);
 ```
-This data layout is extremely friendly to CPU caches.
+This data layout is extremely friendly to CPU caches. Furthermore, the `Simulator` strictly sorts these arrays topologically immediately after compilation. When a Rayon thread picks up a chunk of the `event_queue` for parallel evaluation, it naturally reads from and writes to a densely packed block of memory with zero cache misses.
 
 ### 3. Flat Compilation Hierarchy
 When a user builds a complex chip (like an ALU) from smaller sub-chips (like Adders), and then places that ALU inside a CPU, the simulator *does not retain this nested hierarchy at runtime*.

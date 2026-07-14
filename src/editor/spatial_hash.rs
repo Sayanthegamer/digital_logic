@@ -109,9 +109,29 @@ impl SpatialHashGrid {
 impl super::Editor {
     pub fn rebuild_spatial_grid(&mut self) {
         self.canvas.spatial_grid.clear();
+        let mut count = 0;
         for comp in &self.circuit.components {
             let rect = Rect::new(comp.pos.x, comp.pos.y, comp.width, comp.height);
             self.canvas.spatial_grid.insert(comp.id, rect);
+            count += 1;
+        }
+        println!("rebuild_spatial_grid: inserted {} components into {} cells", count, self.canvas.spatial_grid.cells.len());
+    }
+
+    pub fn verify_grid(&self) {
+        let mut missing = 0;
+        for comp in &self.circuit.components {
+            let rect = Rect::new(comp.pos.x, comp.pos.y, comp.width, comp.height);
+            let cells = SpatialHashGrid::get_cells_for_rect(rect);
+            for cell in cells {
+                if !self.canvas.spatial_grid.cells.get(&cell).map_or(false, |set| set.contains(&comp.id)) {
+                    missing += 1;
+                }
+            }
+        }
+        if missing > 0 {
+            // Note: `#![windows_subsystem = "windows"]` hides stdout, so this won't print in release mode.
+            println!("Total missing from expected cells: {}", missing);
         }
     }
 }

@@ -131,6 +131,7 @@ impl Editor {
         layout::auto_arrange(&mut self.circuit.components, &self.circuit.connections);
         self.circuit.wire_offsets.clear();
         self.circuit.wire_nudges.clear();
+        self.rebuild_spatial_grid();
     }
 
     fn setup_default_library(&mut self) {
