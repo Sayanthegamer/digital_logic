@@ -155,7 +155,8 @@ pub enum EditingTarget {
 pub struct CanvasState {
     pub pan: Vec2,
     pub zoom: f32,
-    pub spatial_grid: crate::editor::spatial_hash::SpatialHashGrid,
+    pub spatial_grid: crate::editor::spatial_hash::SpatialHashGrid<usize>,
+    pub wire_spatial_grid: crate::editor::spatial_hash::SpatialHashGrid<crate::editor::types::VisualConnection>,
     pub last_mouse_pos: Vec2,
     pub selected_tool: Option<ActiveTool>,
     pub active_wire_drag: Option<(usize, usize, bool)>,
@@ -201,10 +202,11 @@ pub struct CanvasState {
 impl Default for CanvasState {
     fn default() -> Self {
         Self {
-            pan: Vec2::new(200.0, 100.0),
+            pan: Vec2::new(0.0, 0.0),
             zoom: 1.0,
             spatial_grid: crate::editor::spatial_hash::SpatialHashGrid::new(),
-            last_mouse_pos: Vec2::ZERO,
+            wire_spatial_grid: crate::editor::spatial_hash::SpatialHashGrid::new(),
+            last_mouse_pos: Vec2::new(0.0, 0.0),
             selected_tool: None,
             active_wire_drag: None,
             dragging_wire: None,

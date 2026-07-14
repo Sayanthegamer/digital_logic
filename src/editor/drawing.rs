@@ -59,6 +59,16 @@ impl Editor {
             return;
         }
 
+        let top_left = self.to_world_space(vec2(0.0, 0.0));
+        let bottom_right = self.to_world_space(vec2(screen_width(), screen_height()));
+        let viewport_pad = 500.0;
+        let viewport_rect = Rect::new(
+            top_left.x - viewport_pad,
+            top_left.y - viewport_pad,
+            (bottom_right.x - top_left.x) + viewport_pad * 2.0,
+            (bottom_right.y - top_left.y) + viewport_pad * 2.0,
+        );
+
         // 0. Build O(1) lookup map for components to avoid O(N^2) rendering bottleneck
         let mut comp_map = std::collections::HashMap::with_capacity(self.circuit.components.len());
         for comp in &self.circuit.components {
@@ -77,7 +87,12 @@ impl Editor {
         }
 
         // 1. Draw Wires / Connections
+        let visible_wires = self.canvas.wire_spatial_grid.query_rect(viewport_rect);
+        
         for wire in &self.circuit.connections {
+            if !visible_wires.contains(wire) {
+                continue;
+            }
             let src_comp = comp_map.get(&wire.src_comp_id).copied();
             let tgt_comp = comp_map.get(&wire.tgt_comp_id).copied();
 
@@ -85,17 +100,6 @@ impl Editor {
                 let (src_p, tgt_p) = self.get_connection_ports(wire, src, tgt);
                 let src_pos = self.to_screen_space(src_p);
                 let tgt_pos = self.to_screen_space(tgt_p);
-
-                // Wire frustum culling: skip drawing wire if it is completely off-screen
-                let pad = 50.0 * self.canvas.zoom;
-                let min_x = src_pos.x.min(tgt_pos.x) - pad;
-                let max_x = src_pos.x.max(tgt_pos.x) + pad;
-                let min_y = src_pos.y.min(tgt_pos.y) - pad;
-                let max_y = src_pos.y.max(tgt_pos.y) + pad;
-
-                if max_x < 0.0 || min_x > screen_width() || max_y < 0.0 || min_y > screen_height() {
-                    continue;
-                }
 
                 // Query state using port mapping table
                 let wire_state = if let Some(&gate_idx) = self
@@ -245,18 +249,7 @@ impl Editor {
         }
 
         // 2. Draw Components
-        let top_left = self.to_world_space(vec2(0.0, 0.0));
-        let bottom_right = self.to_world_space(vec2(screen_width(), screen_height()));
-        
-        // Pad the viewport in world space to account for ports, labels, and selection glows 
-        // Let's use a much larger padding to definitively rule out bounding box overflow
-        let pad = 500.0;
-        let viewport_rect = Rect::new(
-            top_left.x - pad,
-            top_left.y - pad,
-            (bottom_right.x - top_left.x) + pad * 2.0,
-            (bottom_right.y - top_left.y) + pad * 2.0,
-        );
+        // (viewport_rect is already computed above)
 
         let mut visible_comp_ids: Vec<usize> = self.canvas.spatial_grid.query_rect(viewport_rect).into_iter().collect();
         visible_comp_ids.sort_unstable(); // Restore deterministic drawing Z-order

@@ -150,8 +150,13 @@ impl Editor {
                 }
             }
             
+            let mut moved_comp_ids = std::collections::HashSet::new();
             for (id, old_rect, new_rect) in grid_updates {
                 self.canvas.spatial_grid.update(id, old_rect, new_rect);
+                moved_comp_ids.insert(id);
+            }
+            if !moved_comp_ids.is_empty() {
+                self.update_wires_for_components(&moved_comp_ids);
             }
 
             self.canvas.alignment_guides.clear();
