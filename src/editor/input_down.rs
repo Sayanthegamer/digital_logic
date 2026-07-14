@@ -84,18 +84,7 @@ impl Editor {
             let shift_pressed =
                 is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift);
 
-            let mut needs_snapshot = false;
-            if shift_pressed && !self.canvas.drag_snapshot_pushed {
-                for &id in self.canvas.drag_start_positions.keys() {
-                    if self.circuit.components.iter().any(|c| {
-                        c.id == id && c.comp_type == crate::engine::ComponentType::Junction
-                    }) {
-                        needs_snapshot = true;
-                        break;
-                    }
-                }
-            }
-            if needs_snapshot {
+            if !self.canvas.drag_snapshot_pushed {
                 self.push_history_snapshot();
                 self.canvas.drag_snapshot_pushed = true;
             }

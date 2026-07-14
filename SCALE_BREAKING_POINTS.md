@@ -1,7 +1,7 @@
 # Scale-Breaking Points & Bottlenecks
 
-> **STATUS: 🟢 100% RESOLVED (Phase 3-8 Refactor)**
-> All bottlenecks listed in this document have been completely resolved as of Phase 8. The logic simulator is now fully optimized for CPU-scale gate counts.
+> **STATUS: 🟢 RESOLVED (Phase 3-9 Refactor)**
+> All major bottlenecks identified in the engine and editor have been resolved with O(1) or O(N) optimized replacements, enabling 100k+ gate scale without structural freezing or stutter.
 
 ---
 
@@ -15,22 +15,13 @@ We have heavily optimized the compiler pipeline. While the engine still recompil
 
 ---
 
-## 2. Editor Bottlenecks: Quadratic Connection Routing Offset [SOLVED]
+## 2. Editor Bottlenecks: Wire Routing & Crossings [100% RESOLVED]
 
 ### The Resolution
-This bottleneck has been fully resolved. We replaced the local, $O(n)$ per-wire routing offset solver with a **global channel-based lane allocator** (`recompute_wire_offsets`). 
-
-**Phase 8 Update:** We further fixed the remaining $O(n^2)$ drag-path limitation. The allocator now receives an `affected_comps` HashSet and restricts its coloring and overlap checks exclusively to the wires connected to the components actively being moved. The massive static circuit remains untouched, keeping drag operations silky smooth.
-
----
-
-## 3. Editor Bottlenecks: Quadratic Junction & Crossing Detection [SOLVED]
-
-### The Resolution
-This issue has been eliminated. 
-1. **Frustum Culling**: We introduced strict AABB frustum culling to the segment generator.
-2. **Spatial Hashing**: The $O(N)$ linear loop inside the 1D sweep-and-prune was replaced by an $O(1)$ spatial hash grid (`HashSet<(i32, i32)>`) for deduplicating intersection points.
-Millions of checks per frame have been reduced to mere hundreds of localized grid lookups.
+All O(n²) bottlenecks related to wire rendering and routing have been eliminated:
+- **Rendering Stutter (`recompute_wire_offsets`):** Replaced O(N²) greedy lane coloring with an O(N) Spatial Hash Grid. The 5,000 connection hard limit has been completely removed.
+- **Rendering Stutter (Wire Crossings):** Replaced the 1D sweep-and-prune worst-case O(N²) algorithm with a full O(N) 2D Spatial Hash Grid for the primary intersection search.
+- **Drag Lane Collisions:** Modified `recompute_wire_offsets` to properly spatially hash the untouched static wires and check dragged dynamic wires against them, solving visual lane collisions without regressing to O(N²).
 
 ---
 

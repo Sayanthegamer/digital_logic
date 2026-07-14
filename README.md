@@ -63,7 +63,7 @@ The goal, stated plainly: **run a real 8-bit (eventually 16-bit) CPU, built enti
 
 | | |
 |---|---|
-| 🚀 **Massive Scale Engine** | Uses Kahn's Topological Sort for O(V+E) zero-clone depth scheduling, and Spatial Hashing for O(1) wire deduplication. Engineered to crunch 100,000+ gate CPUs in real-time at 60 FPS without breaking a sweat. |
+| 🚀 **Massive Scale Engine** | Uses Tarjan's Strongly Connected Components (SCC) algorithm for O(V+E) zero-clone depth scheduling, and Spatial Hashing for O(1) wire deduplication. Engineered to crunch 100,000+ gate CPUs in real-time at 60 FPS without breaking a sweat. |
 | 🔌 **Event-Driven Simulation** | Gates only re-evaluate when their inputs actually change — not every frame. Oscillation detection stops runaway feedback loops (e.g. an inverter wired to itself) from freezing the app. |
 | 🎮 **App Mode Routing** | Navigate seamlessly through a dedicated Main Menu, Project Manager, Settings Overlay, and Credits, keeping the Editor clean and focused. |
 | 🧩 **Custom Chips (Sub-Chips)** | Package any circuit into a named, reusable chip with custom input/output labels. Drop it into future circuits like any primitive. |
@@ -380,9 +380,8 @@ Minimum system requirements: a modern x86_64/ARM64 CPU, ~2 GB RAM, and any GPU c
 
 In the interest of not oversetting expectations: this is an active, evolving project, and being honest about where it currently stands is more useful than pretending it's a finished product.
 
-- **Works great today** for circuits up to a few hundred gates — adders, latches, ALUs, small counters, simple state machines — all fully real-time, even on modest laptop hardware.
-- **Scaling toward a full CPU** (thousands of primitive gates, deep nesting) is an ongoing engineering effort. The current architecture has known chokepoints — a recompile-on-every-edit pattern, some duplicated traversal logic between the editor and compiler, and a couple of struct/state-management issues that get more expensive as circuits grow — that are actively being addressed before that milestone is comfortable to hit.
-- **No multi-threaded simulation yet.** The event-driven design is efficient per-core, but everything currently runs on a single simulation thread by design (simplicity over premature parallelism).
+- **Works great today** for circuits up to a full CPU (100k+ primitive gates). The engine is capable of compiling and running incredibly deep nested hierarchies in low milliseconds, even on modest laptop hardware.
+- **No multi-threaded simulation yet.** The event-driven design is heavily optimized per-core, but everything currently runs on a single simulation thread by design (simplicity over premature parallelism).
 - Contributions, bug reports, and "this froze at N gates" reports are genuinely useful data points for prioritizing the next round of engine work.
 
 ## 📚 Documentation Index

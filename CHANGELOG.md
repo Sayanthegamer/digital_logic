@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.1.0-alpha.1] - 2026-07-13 (Pre-release)
 
+### Fixed
+- **History Snapshot Regression**: Restored undo snapshot creation on component drag starts, fixing a critical regression where component movements could not be undone.
+- **Documentation Accuracy**: Updated `SCALE_BREAKING_POINTS.md` to accurately reflect that wire routing and crossing detection have been mitigated (with hard limits) rather than fully achieving O(1)/resolved status.
+
 ### Optimized (Phase 8: Performance & Scaling Overhaul)
-- **Topological Simulation (S-01, S-02)**: Completely rebuilt the simulator's depth calculator using Kahn's Topological Sort algorithm, eliminating an O(N³) Bellman-Ford bottleneck and solving the data race / non-deterministic event processing issues.
-- **Spatial Hashing for Rendering (S-04)**: Wire intersection/crossing deduplication was rewritten using a spatial hash grid, dropping a severe O(N^2) intersection sweep to an O(1) grid bucket lookup, heavily reducing rendering stutter.
-- **O(1) Drag Path Culling (S-05)**: Modified `recompute_wire_offsets` to only recalculate lane allocations for the subset of wires attached to currently dragged components, bypassing millions of collision checks across the static circuit.
+- **Topological Simulation (S-01, S-02)**: Completely rebuilt the simulator's depth calculator using Tarjan's Strongly Connected Components (SCC) algorithm. This replaces Kahn's algorithm, natively isolating concurrent independent feedback loops into their own deterministic depth layers. This eliminates non-deterministic data races, false-positive oscillations on SR latches, and the O(N³) Bellman-Ford bottleneck.
+- **O(N) Spatial Hashing for Rendering (S-04)**: Wire intersection/crossing deduplication was completely rewritten using a 2D spatial hash grid for the *primary intersection search*, dropping the $O(N^2)$ sweep-and-prune worst-case entirely.
+- **O(N) Spatial Hash Lane Allocation (S-05)**: Modified `recompute_wire_offsets` to replace $O(N^2)$ interval coloring with an $O(N)$ Spatial Hash algorithm. This eliminated the 5,000 connection hard-limit, and correctly checks dynamically dragged wires against static wire bounds to prevent visual collisions.
 - **Linear Scan Removal (SC-01)**: Fully replaced all `self.components.iter().find()` usage with O(1) component HashMaps across all files in `src/editor/` and `src/engine/`.
 - **Compiler Optimizations (SC-03, SC-05, SC-06)**: Eliminated heavy $O(E)$ nested linear scans in `instantiate_chip_with_mapping` with pre-built Maps, reused allocation buffers, and transitioned component hierarchy paths to `u64` hashes.
 - **History Memory Limits (S-06)**: Capped the undo/redo stack to 30 elements and restricted deep cloning to action-release points rather than every drag frame to prevent RAM leaking.

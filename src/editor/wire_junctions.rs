@@ -32,6 +32,7 @@ pub struct IdentifiedSegment {
     pub a: Vec2,
     pub b: Vec2,
     pub conn_idx: usize,
+    pub seg_id: usize,
 }
 
 impl Editor {
@@ -55,7 +56,6 @@ impl Editor {
     }
 
     pub fn recompute_wire_offsets(&mut self, affected_comps: Option<&std::collections::HashSet<usize>>) {
-        if self.circuit.connections.len() > 5000 { return; }
         let mut wire_offsets = if affected_comps.is_some() {
             self.circuit.wire_offsets.clone()
         } else {
@@ -73,14 +73,15 @@ impl Editor {
             y_max: f32,
         }
 
+        let mut static_data = Vec::new();
         let mut conn_data = Vec::new();
 
         for conn in &self.circuit.connections {
-            if let Some(affected) = affected_comps {
-                if !affected.contains(&conn.src_comp_id) && !affected.contains(&conn.tgt_comp_id) {
-                    continue;
-                }
-            }
+            let is_affected = if let Some(affected) = affected_comps {
+                affected.contains(&conn.src_comp_id) || affected.contains(&conn.tgt_comp_id)
+            } else {
+                true
+            };
 
             let src_comp = self.get_component(conn.src_comp_id);
             let tgt_comp = self.get_component(conn.tgt_comp_id);
@@ -121,11 +122,16 @@ impl Editor {
                     });
                 }
 
-                conn_data.push(ConnectionSegments {
+                let seg_data = ConnectionSegments {
                     conn: *conn,
                     vertical_segs,
                     source_y: src_pos.y,
-                });
+                };
+                if is_affected {
+                    conn_data.push(seg_data);
+                } else {
+                    static_data.push(seg_data);
+                }
             }
         }
 
@@ -140,40 +146,73 @@ impl Editor {
                 .then(a.source_y.partial_cmp(&b.source_y).unwrap_or(std::cmp::Ordering::Equal))
         });
 
-        // Greedy interval coloring to assign non-overlapping lanes
-        let mut assigned_lanes = vec![0; conn_data.len()];
+        let cell_size_y = 100.0;
+        let cell_size_x = 20.0;
+        let mut grid: std::collections::HashMap<(i32, i32), Vec<(usize, VerticalSeg)>> = std::collections::HashMap::new();
 
-        for i in 0..conn_data.len() {
-            let mut occupied_lanes = std::collections::HashSet::new();
-            for j in 0..i {
-                let mut conflict = false;
-                for s1 in &conn_data[i].vertical_segs {
-                    for s2 in &conn_data[j].vertical_segs {
-                        // Check if they route in the same corridor
-                        let same_corridor = (s1.ideal_x - s2.ideal_x).abs() < 15.0;
-                        // Check if their Y spans overlap (with 4px margin)
-                        let y_overlap = s1.y_min - 4.0 < s2.y_max && s2.y_min - 4.0 < s1.y_max;
-
-                        if same_corridor && y_overlap {
-                            conflict = true;
-                            break;
-                        }
-                    }
-                    if conflict {
-                        break;
-                    }
-                }
-                if conflict {
-                    occupied_lanes.insert(assigned_lanes[j]);
+        for s_data in &static_data {
+            let offset = wire_offsets.get(&s_data.conn).copied().unwrap_or(0.0);
+            let offset_int = (offset / 6.0).round() as i32;
+            let lane = if offset_int >= 0 { (offset_int * 2) as usize } else { ((-offset_int * 2) - 1) as usize };
+            
+            for s in &s_data.vertical_segs {
+                let col = (s.ideal_x / cell_size_x).floor() as i32;
+                let start_row = (s.y_min / cell_size_y).floor() as i32;
+                let end_row = (s.y_max / cell_size_y).floor() as i32;
+                for r in start_row..=end_row {
+                    grid.entry((col, r)).or_default().push((lane, VerticalSeg {
+                        ideal_x: s.ideal_x,
+                        y_min: s.y_min,
+                        y_max: s.y_max,
+                    }));
                 }
             }
+        }
 
+        // Greedy interval coloring to assign non-overlapping lanes (Spatial Grid Optimized)
+        for i in 0..conn_data.len() {
+            let mut occupied_lanes = std::collections::HashSet::new();
+
+            for s1 in &conn_data[i].vertical_segs {
+                let col = (s1.ideal_x / cell_size_x).floor() as i32;
+                let start_row = (s1.y_min / cell_size_y).floor() as i32;
+                let end_row = (s1.y_max / cell_size_y).floor() as i32;
+
+                for c in (col - 1)..=(col + 1) {
+                    for r in start_row..=end_row {
+                        if let Some(cell) = grid.get(&(c, r)) {
+                            for (lane, s2) in cell {
+                                if occupied_lanes.contains(lane) { continue; }
+                                
+                                let same_corridor = (s1.ideal_x - s2.ideal_x).abs() < 15.0;
+                                let y_overlap = s1.y_min - 4.0 < s2.y_max && s2.y_min - 4.0 < s1.y_max;
+                                if same_corridor && y_overlap {
+                                    occupied_lanes.insert(*lane);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
             let mut lane = 0;
             while occupied_lanes.contains(&lane) {
                 lane += 1;
             }
-            assigned_lanes[i] = lane;
-            
+
+            for s in &conn_data[i].vertical_segs {
+                let col = (s.ideal_x / cell_size_x).floor() as i32;
+                let start_row = (s.y_min / cell_size_y).floor() as i32;
+                let end_row = (s.y_max / cell_size_y).floor() as i32;
+                for r in start_row..=end_row {
+                    grid.entry((col, r)).or_default().push((lane, VerticalSeg {
+                        ideal_x: s.ideal_x,
+                        y_min: s.y_min,
+                        y_max: s.y_max,
+                    }));
+                }
+            }
+
             // Convert lane number to pixel offset
             // Alternating pattern: 0, 6, -6, 12, -12...
             let pixel_offset = if lane % 2 == 0 {
@@ -329,6 +368,7 @@ impl Editor {
     /// Find all wire intersections (junctions and crossings) across all connections.
     pub fn find_wire_intersections(&self) -> Vec<WireIntersection> {
         let mut all_segments = Vec::new();
+        let mut seg_id_counter = 0;
         
         let sw = macroquad::window::screen_width();
         let sh = macroquad::window::screen_height();
@@ -364,38 +404,49 @@ impl Editor {
                         continue;
                     }
 
-                    all_segments.push(IdentifiedSegment { a, b, conn_idx });
+                    all_segments.push(IdentifiedSegment { a, b, conn_idx, seg_id: seg_id_counter });
+                    seg_id_counter += 1;
                 }
             }
         }
 
-        // 1D Sweep and Prune (Sort by minimum X coordinate)
-        all_segments.sort_by(|s1, s2| {
-            let min1 = s1.a.x.min(s1.b.x);
-            let min2 = s2.a.x.min(s2.b.x);
-            min1.partial_cmp(&min2).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        // Spatial Grid for O(N) intersection search
+        let cell_size = 50.0 * self.canvas.zoom;
+        let mut grid: std::collections::HashMap<(i32, i32), Vec<IdentifiedSegment>> = std::collections::HashMap::new();
+
+        for seg in &all_segments {
+            let min_x = seg.a.x.min(seg.b.x);
+            let max_x = seg.a.x.max(seg.b.x);
+            let min_y = seg.a.y.min(seg.b.y);
+            let max_y = seg.a.y.max(seg.b.y);
+
+            let start_col = (min_x / cell_size).floor() as i32;
+            let end_col = (max_x / cell_size).floor() as i32;
+            let start_row = (min_y / cell_size).floor() as i32;
+            let end_row = (max_y / cell_size).floor() as i32;
+
+            for col in start_col..=end_col {
+                for row in start_row..=end_row {
+                    grid.entry((col, row)).or_default().push(seg.clone());
+                }
+            }
+        }
 
         let mut intersections = Vec::new();
         let mut seen_points: std::collections::HashSet<(i32, i32)> = std::collections::HashSet::new();
+        let mut checked_pairs: std::collections::HashSet<(usize, usize)> = std::collections::HashSet::new();
         let epsilon = 2.0 * self.canvas.zoom;
 
-        for i in 0..all_segments.len() {
-            let s1 = &all_segments[i];
-            let max1_x = s1.a.x.max(s1.b.x) + epsilon * 2.0;
-            
-            for j in (i + 1)..all_segments.len() {
-                let s2 = &all_segments[j];
-                let min2_x = s2.a.x.min(s2.b.x);
-                
-                if min2_x > max1_x {
-                    // Since elements are sorted by min_x, all subsequent elements will also be > max1_x
-                    break;
-                }
+        for cell in grid.values() {
+            for i in 0..cell.len() {
+                let s1 = &cell[i];
+                for j in (i + 1)..cell.len() {
+                    let s2 = &cell[j];
 
-                if s1.conn_idx == s2.conn_idx {
-                    continue;
-                }
+                    if s1.conn_idx == s2.conn_idx { continue; }
+
+                    let pair = if s1.seg_id < s2.seg_id { (s1.seg_id, s2.seg_id) } else { (s2.seg_id, s1.seg_id) };
+                    if !checked_pairs.insert(pair) { continue; }
 
                 if let Some(point) = segment_intersection(
                     s1.a, s1.b,
@@ -453,6 +504,7 @@ impl Editor {
                         upper_thickness,
                     });
                 }
+            }
             }
         }
 

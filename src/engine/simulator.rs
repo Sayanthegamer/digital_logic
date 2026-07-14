@@ -174,55 +174,81 @@ impl Simulator {
         let num_nodes = self.nodes.capacity();
         if num_nodes == 0 { return; }
 
-        let mut in_degree = vec![0; num_nodes];
-        for i in 0..num_nodes {
-            if let Some(node) = self.nodes.get(i) {
-                for &dep in &node.dependents {
-                    if dep < num_nodes {
-                        in_degree[dep] += 1;
+        let mut index = 0;
+        let mut indices = vec![None; num_nodes];
+        let mut lowlinks = vec![0; num_nodes];
+        let mut on_stack = vec![false; num_nodes];
+        let mut stack = Vec::new();
+        let mut sccs = Vec::new();
+
+        let mut call_stack = Vec::new();
+
+        for start_node in 0..num_nodes {
+            if !self.nodes.contains(start_node) || indices[start_node].is_some() {
+                continue;
+            }
+
+            call_stack.push((start_node, 0));
+
+            while let Some((v, edge_idx)) = call_stack.pop() {
+                if edge_idx == 0 {
+                    indices[v] = Some(index);
+                    lowlinks[v] = index;
+                    index += 1;
+                    stack.push(v);
+                    on_stack[v] = true;
+                }
+
+                let mut returned = false;
+                let dependents_len = self.nodes[v].dependents.len();
+                
+                let mut current_edge = edge_idx;
+                while current_edge < dependents_len {
+                    let w = self.nodes[v].dependents[current_edge];
+                    if !self.nodes.contains(w) {
+                        current_edge += 1;
+                        continue;
                     }
+                    if indices[w].is_none() {
+                        call_stack.push((v, current_edge + 1));
+                        call_stack.push((w, 0));
+                        returned = true;
+                        break;
+                    } else if on_stack[w] {
+                        lowlinks[v] = lowlinks[v].min(indices[w].unwrap());
+                    }
+                    current_edge += 1;
+                }
+
+                if returned {
+                    continue;
+                }
+
+                if lowlinks[v] == indices[v].unwrap() {
+                    let mut scc = Vec::new();
+                    loop {
+                        let w = stack.pop().unwrap();
+                        on_stack[w] = false;
+                        scc.push(w);
+                        if w == v {
+                            break;
+                        }
+                    }
+                    sccs.push(scc);
+                }
+
+                if let Some(&(parent, _)) = call_stack.last() {
+                    lowlinks[parent] = lowlinks[parent].min(lowlinks[v]);
                 }
             }
         }
 
-        let mut queue = Vec::new();
-        for i in 0..num_nodes {
-            if self.nodes.contains(i) {
-                self.nodes[i].depth = 0;
-                if in_degree[i] == 0 {
-                    queue.push(i);
-                }
-            }
-        }
+        sccs.reverse();
 
-        let mut max_depth = 0;
-        let mut processed = 0;
-        
-        while let Some(u) = queue.pop() {
-            processed += 1;
-            let u_depth = self.nodes[u].depth;
-            max_depth = max_depth.max(u_depth);
-            
-            let deps = std::mem::take(&mut self.nodes[u].dependents);
-            
-            for &v in &deps {
-                if let Some(v_node) = self.nodes.get_mut(v) {
-                    v_node.depth = v_node.depth.max(u_depth + 1);
-                }
-                in_degree[v] -= 1;
-                if in_degree[v] == 0 {
-                    queue.push(v);
-                }
-            }
-            
-            self.nodes[u].dependents = deps;
-        }
-
-        if processed < self.nodes.len() {
-            max_depth += 1;
-            for i in 0..num_nodes {
-                if self.nodes.contains(i) && in_degree[i] > 0 {
-                    self.nodes[i].depth = max_depth;
+        for (depth, scc) in sccs.iter().enumerate() {
+            for &node in scc {
+                if let Some(n) = self.nodes.get_mut(node) {
+                    n.depth = depth;
                 }
             }
         }

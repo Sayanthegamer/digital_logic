@@ -155,9 +155,7 @@ impl Editor {
         self.engine.instance_tree = instance_tree;
         self.engine.active_clocks = active_clocks;
 
-        if self.circuit.connections.len() < 5000 {
-            self.recompute_wire_offsets(None);
-        }
+        self.recompute_wire_offsets(None);
         
         self.rebuild_spatial_grid();
     }
