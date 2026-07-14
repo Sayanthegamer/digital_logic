@@ -1,6 +1,7 @@
 use crate::editor::types::{VisualComponent, VisualConnection, TextAnnotation};
 use crate::editor::color_coding::ColorOverrides;
 use std::collections::HashMap;
+use crate::editor::wire_junctions::VerticalSeg;
 
 pub struct CircuitModel {
     pub components: Vec<VisualComponent>,
@@ -11,6 +12,7 @@ pub struct CircuitModel {
     pub color_overrides: ColorOverrides,
     pub wire_nudges: HashMap<VisualConnection, f32>,
     pub wire_offsets: HashMap<VisualConnection, f32>,
+    pub wire_lane_grid: HashMap<(i32, i32), Vec<(usize, VerticalSeg, VisualConnection)>>,
 }
 
 impl Default for CircuitModel {
@@ -24,6 +26,7 @@ impl Default for CircuitModel {
             color_overrides: ColorOverrides::default(),
             wire_nudges: HashMap::new(),
             wire_offsets: HashMap::new(),
+            wire_lane_grid: HashMap::new(),
         }
     }
 }

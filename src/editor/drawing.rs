@@ -65,6 +65,17 @@ impl Editor {
             comp_map.insert(comp.id, comp);
         }
 
+        // Precompute wire intersections so we can skip drawing the upper wire line through bridge arcs
+        let intersections = self.find_wire_intersections();
+        let mut upper_gaps: std::collections::HashMap<crate::editor::types::VisualConnection, Vec<(Vec2, f32)>> = std::collections::HashMap::new();
+        for int in &intersections {
+            if int.junction_type == crate::editor::wire_junctions::JunctionType::Crossing {
+                if let Some(upper) = int.upper_conn {
+                    upper_gaps.entry(upper).or_default().push((int.point, int.lower_thickness));
+                }
+            }
+        }
+
         // 1. Draw Wires / Connections
         for wire in &self.circuit.connections {
             let src_comp = comp_map.get(&wire.src_comp_id).copied();
@@ -107,6 +118,9 @@ impl Editor {
                 let wire_color_override = self.circuit.color_overrides.get_wire_color(wire);
                 let offset = self.get_connection_routing_offset(wire);
                 let is_bus = self.is_bus_connection(wire);
+                let empty_gaps = &[];
+                let gaps = upper_gaps.get(wire).map(|v| v.as_slice()).unwrap_or(empty_gaps);
+
                 self.draw_manhattan_wire(
                     src_pos,
                     tgt_pos,
@@ -116,15 +130,13 @@ impl Editor {
                     is_selected,
                     wire_color_override,
                     is_bus,
+                    gaps,
                 );
             }
         }
 
         // 1.1 Draw Wire Junction/Crossing Indicators
-        if self.circuit.connections.len() < 5000 {
-            let intersections = self.find_wire_intersections();
-            self.draw_wire_junctions(&intersections);
-        }
+        self.draw_wire_junctions(&intersections);
 
         // Draw active wire drag preview
         if let Some((src_id, src_port, src_is_input)) = self.canvas.active_wire_drag

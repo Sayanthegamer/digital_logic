@@ -225,7 +225,7 @@ impl Editor {
                 }
                 _ => false,
             };
-            self.draw_manhattan_wire(src_pos, tgt_pos, offset, 0, state, false, None, is_bus);
+            self.draw_manhattan_wire(src_pos, tgt_pos, offset, 0, state, false, None, is_bus, &[]);
         }
 
         // Draw internal components

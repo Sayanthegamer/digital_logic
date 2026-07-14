@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0-alpha.4] - 2026-07-14 (Pre-release)
+
+### Fixed
+- **Wire Crossing Visual Artifacts**: Eliminated massive visual artifacts at wire crossings caused by the previous alpha blending technique. Replaced overlapping `draw_circle` segments with continuous parametric lines (`draw_line`) in bridge arcs to eliminate fuzzy dotted overdraw.
+- **Dynamic Arc Radii**: Updated `gap_radius` calculations to dynamically match the thickness of the lowest wire it is crossing, eliminating the issue of active "glow" blooming through the gaps in the upper wire.
+- **Diagonal Crossing Alignment**: Fixed floating arc issues where 45-degree chamfer crossings resulted in misaligned bridge arcs. Arcs are now drawn parametrically along the true vector direction (`dir`) of the wire and bulged exactly perpendicular to the local segment rather than strictly up/down/left/right.
+- **Wire "Clipping" and Clutter**: Added 1D interval hole merging (`O(K log K)`) so that multiple adjacent gaps from tightly packed vertical wire bundles smoothly merge into a single extended gap. Replaced rigid multi-bump rendering with a single unified dynamic bridge arc across the entire bundle, removing ugly overlapping wavy artifacts.
+- **Zero-Allocation Rendering**: Resolved rendering stutter ("not performative") from `Vec::new()` calls inside the massive inner wire loop. Pre-hoisted and `clear()`ed Vectors significantly drops dynamic allocations per frame to zero.
+
 ## [3.1.0-alpha.1] - 2026-07-13 (Pre-release)
 
 ### Fixed

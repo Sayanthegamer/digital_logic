@@ -13,10 +13,18 @@ pub enum JunctionType {
     Crossing,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct VerticalSeg {
+    pub ideal_x: f32,
+    pub y_min: f32,
+    pub y_max: f32,
+}
+
 #[derive(Debug, Clone)]
 pub struct WireIntersection {
     pub point: Vec2,
     pub junction_type: JunctionType,
+    pub upper_conn: Option<VisualConnection>,
     /// Direction of the "upper" wire at this crossing (for drawing the bridge arc).
     /// Only meaningful for Crossing type. true = horizontal upper wire, false = vertical.
     pub upper_horizontal: bool,
@@ -66,11 +74,6 @@ impl Editor {
             conn: VisualConnection,
             vertical_segs: Vec<VerticalSeg>,
             source_y: f32,
-        }
-        struct VerticalSeg {
-            ideal_x: f32,
-            y_min: f32,
-            y_max: f32,
         }
 
         let mut conn_data = Vec::new();
@@ -151,7 +154,7 @@ impl Editor {
         // this grid spatially hashes the dynamic wires (conn_data) against each other.
         // During a full recompile (where conn_data contains ALL wires), this grid ensures
         // the collision check remains O(N) instead of degrading to O(N^2).
-        let mut grid: std::collections::HashMap<(i32, i32), Vec<(usize, VerticalSeg)>> = std::collections::HashMap::new();
+        let mut grid: std::collections::HashMap<(i32, i32), Vec<(usize, VerticalSeg, VisualConnection)>> = std::collections::HashMap::new();
 
         // Greedy interval coloring to assign non-overlapping lanes (Spatial Grid Optimized)
         for i in 0..conn_data.len() {
@@ -166,8 +169,9 @@ impl Editor {
                 // to avoid a plain nested O(N^2) scan over 0..i.
                 for c in (col - 1)..=(col + 1) {
                     for r in start_row..=end_row {
+                        // 1. Check against dynamically placed wires in current pass
                         if let Some(bucket) = grid.get(&(c, r)) {
-                            for (assigned_lane, s2) in bucket {
+                            for (assigned_lane, s2, _) in bucket {
                                 if occupied_lanes.contains(assigned_lane) { continue; }
                                 
                                 let same_corridor = (s1.ideal_x - s2.ideal_x).abs() < 15.0;
@@ -177,48 +181,21 @@ impl Editor {
                                 }
                             }
                         }
-                    }
-                }
-            }
 
-            // Check against static wires in wire_offsets
-            if let Some(affected) = affected_comps {
-                for (s_conn, &offset) in &wire_offsets {
-                    if affected.contains(&s_conn.src_comp_id) || affected.contains(&s_conn.tgt_comp_id) {
-                        continue;
-                    }
-
-                    let offset_int = (offset / 6.0).round() as i32;
-                    let lane = if offset_int >= 0 { (offset_int * 2) as usize } else { ((-offset_int * 2) - 1) as usize };
-                    
-                    if occupied_lanes.contains(&lane) { continue; }
-
-                    let src_comp = self.get_component(s_conn.src_comp_id);
-                    let tgt_comp = self.get_component(s_conn.tgt_comp_id);
-                    if let (Some(src), Some(tgt)) = (src_comp, tgt_comp) {
-                        let (src_pos, tgt_pos) = self.get_connection_ports(s_conn, src, tgt);
-                        
-                        let mut s2_segs = Vec::new();
-                        if tgt_pos.x >= src_pos.x + 20.0 {
-                            let ideal_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0;
-                            s2_segs.push(VerticalSeg { ideal_x, y_min: src_pos.y.min(tgt_pos.y), y_max: src_pos.y.max(tgt_pos.y) });
-                        } else {
-                            let stub_src = src_pos.x + 20.0;
-                            let target_stagger = s_conn.tgt_port as f32 * 6.0;
-                            let stub_tgt = tgt_pos.x - 20.0 - target_stagger;
-                            let mut mid_y = src_pos.y + (tgt_pos.y - src_pos.y) / 2.0;
-                            if (tgt_pos.y - src_pos.y).abs() < 10.0 { mid_y += 35.0; }
-                            s2_segs.push(VerticalSeg { ideal_x: stub_src, y_min: src_pos.y.min(mid_y), y_max: src_pos.y.max(mid_y) });
-                            s2_segs.push(VerticalSeg { ideal_x: stub_tgt, y_min: mid_y.min(tgt_pos.y), y_max: mid_y.max(tgt_pos.y) });
-                        }
-
-                        'check: for s1 in &conn_data[i].vertical_segs {
-                            for s2 in &s2_segs {
-                                let same_corridor = (s1.ideal_x - s2.ideal_x).abs() < 15.0;
-                                let y_overlap = s1.y_min - 4.0 < s2.y_max && s2.y_min - 4.0 < s1.y_max;
-                                if same_corridor && y_overlap {
-                                    occupied_lanes.insert(lane);
-                                    break 'check;
+                        // 2. Check against static wires if we are only recomputing affected components (O(1) Spatial Hash Grid Lookup)
+                        if let Some(affected) = affected_comps {
+                            if let Some(bucket) = self.circuit.wire_lane_grid.get(&(c, r)) {
+                                for (assigned_lane, s2, s_conn) in bucket {
+                                    if affected.contains(&s_conn.src_comp_id) || affected.contains(&s_conn.tgt_comp_id) {
+                                        continue;
+                                    }
+                                    if occupied_lanes.contains(assigned_lane) { continue; }
+                                    
+                                    let same_corridor = (s1.ideal_x - s2.ideal_x).abs() < 15.0;
+                                    let y_overlap = s1.y_min - 4.0 < s2.y_max && s2.y_min - 4.0 < s1.y_max;
+                                    if same_corridor && y_overlap {
+                                        occupied_lanes.insert(*assigned_lane);
+                                    }
                                 }
                             }
                         }
@@ -241,7 +218,7 @@ impl Editor {
                         ideal_x: s.ideal_x,
                         y_min: s.y_min,
                         y_max: s.y_max,
-                    }));
+                    }, conn_data[i].conn));
                 }
             }
 
@@ -257,6 +234,9 @@ impl Editor {
         }
 
         self.circuit.wire_offsets = wire_offsets;
+        if affected_comps.is_none() {
+            self.circuit.wire_lane_grid = grid;
+        }
     }
 
     pub fn get_blueprint_connection_routing_offset(
@@ -512,12 +492,19 @@ impl Editor {
                     let seg_i_horizontal = is_horizontal(s1.a, s1.b);
                     let seg_j_horizontal = is_horizontal(s2.a, s2.b);
 
-                    let (lower_conn_idx, upper_conn_idx, upper_is_horizontal) = if seg_i_horizontal {
-                        (s2.conn_idx, s1.conn_idx, true)
-                    } else if seg_j_horizontal {
-                        (s1.conn_idx, s2.conn_idx, true)
+                    let (lower_conn_idx, upper_conn_idx, upper_is_horizontal) = if seg_i_horizontal != seg_j_horizontal {
+                        if seg_i_horizontal {
+                            (s2.conn_idx, s1.conn_idx, true)
+                        } else {
+                            (s1.conn_idx, s2.conn_idx, true)
+                        }
                     } else {
-                        (s2.conn_idx, s1.conn_idx, seg_i_horizontal)
+                        // Arbitrary deterministic ordering for non-orthogonal intersections (e.g. chamfers)
+                        if s1.conn_idx > s2.conn_idx {
+                            (s2.conn_idx, s1.conn_idx, seg_i_horizontal)
+                        } else {
+                            (s1.conn_idx, s2.conn_idx, seg_j_horizontal)
+                        }
                     };
 
                     let lower_conn = &self.circuit.connections[lower_conn_idx];
@@ -530,6 +517,7 @@ impl Editor {
                         point,
                         junction_type: JunctionType::Crossing,
                         upper_horizontal: upper_is_horizontal,
+                        upper_conn: Some(*upper_conn),
                         lower_color,
                         lower_thickness,
                         upper_color,
@@ -543,57 +531,12 @@ impl Editor {
         intersections
     }
 
-    /// Draw junction indicators (filled dots for connected, bridge arcs for crossings).
+    /// Draw junction indicators (filled dots for connected).
     pub fn draw_wire_junctions(&self, intersections: &[WireIntersection]) {
         for intersection in intersections {
             match intersection.junction_type {
-                JunctionType::Connected => {} // Ignored
-                JunctionType::Crossing => {
-                    // Bridge arc — small semicircle hop
-                    let arc_radius = 6.0 * self.canvas.zoom;
-
-                    // 1. Draw a background circle to mask/erase both lines
-                    draw_circle(
-                        intersection.point.x,
-                        intersection.point.y,
-                        arc_radius,
-                        theme::BG_CANVAS.mq(),
-                    );
-
-                    // 2. Draw the lower wire segment straight through the center
-                    if intersection.upper_horizontal {
-                        // Upper wire is horizontal (arc goes up/down).
-                        // Lower wire is vertical, draw straight vertical segment.
-                        draw_line(
-                            intersection.point.x,
-                            intersection.point.y - arc_radius,
-                            intersection.point.x,
-                            intersection.point.y + arc_radius,
-                            intersection.lower_thickness,
-                            intersection.lower_color,
-                        );
-                    } else {
-                        // Upper wire is vertical (arc goes left/right).
-                        // Lower wire is horizontal, draw straight horizontal segment.
-                        draw_line(
-                            intersection.point.x - arc_radius,
-                            intersection.point.y,
-                            intersection.point.x + arc_radius,
-                            intersection.point.y,
-                            intersection.lower_thickness,
-                            intersection.lower_color,
-                        );
-                    }
-
-                    // 3. Draw the bridge arc for the upper wire using its style
-                    draw_bridge_arc(
-                        intersection.point,
-                        arc_radius,
-                        intersection.upper_horizontal,
-                        intersection.upper_thickness,
-                        intersection.upper_color,
-                    );
-                }
+                JunctionType::Connected => {} // Ignored for now (dots drawn elsewhere?)
+                JunctionType::Crossing => {} // Bridge arcs are now drawn dynamically in draw_manhattan_wire
             }
         }
     }
@@ -618,71 +561,20 @@ fn wires_share_endpoint(a: &VisualConnection, b: &VisualConnection) -> bool {
 fn segment_intersection(
     a1: Vec2, a2: Vec2,
     b1: Vec2, b2: Vec2,
-    epsilon: f32,
+    _epsilon: f32,
 ) -> Option<Vec2> {
-    let a_horiz = (a1.y - a2.y).abs() < epsilon;
-    let b_horiz = (b1.y - b2.y).abs() < epsilon;
-
-    // Parallel or collinear segments do not cross
-    if a_horiz == b_horiz {
+    let denom = (a1.x - a2.x) * (b1.y - b2.y) - (a1.y - a2.y) * (b1.x - b2.x);
+    if denom.abs() < 1e-5 {
         return None;
     }
+    let t = ((a1.x - b1.x) * (b1.y - b2.y) - (a1.y - b1.y) * (b1.x - b2.x)) / denom;
+    let u = ((a1.x - b1.x) * (a1.y - a2.y) - (a1.y - b1.y) * (a1.x - a2.x)) / denom;
 
-    // One horizontal, one vertical — standard orthogonal intersection
-    let (h_seg_a, h_seg_b, v_seg_a, v_seg_b) = if a_horiz {
-        (a1, a2, b1, b2)
-    } else {
-        (b1, b2, a1, a2)
-    };
-
-    let h_y = h_seg_a.y;
-    let h_min_x = h_seg_a.x.min(h_seg_b.x);
-    let h_max_x = h_seg_a.x.max(h_seg_b.x);
-
-    let v_x = v_seg_a.x;
-    let v_min_y = v_seg_a.y.min(v_seg_b.y);
-    let v_max_y = v_seg_a.y.max(v_seg_b.y);
-
-    // Check if the intersection point lies within both segments
-    if v_x >= h_min_x - epsilon
-        && v_x <= h_max_x + epsilon
-        && h_y >= v_min_y - epsilon
-        && h_y <= v_max_y + epsilon
-    {
-        Some(Vec2::new(v_x, h_y))
+    // Allow a small epsilon for intersection at the endpoints
+    if t >= -0.01 && t <= 1.01 && u >= -0.01 && u <= 1.01 {
+        Some(Vec2::new(a1.x + t * (a2.x - a1.x), a1.y + t * (a2.y - a1.y)))
     } else {
         None
     }
 }
 
-/// Draw a bridge arc (semicircle bump) at a crossing point.
-/// The arc goes perpendicular to the "upper" wire direction.
-fn draw_bridge_arc(
-    center: Vec2,
-    radius: f32,
-    upper_is_horizontal: bool,
-    thickness: f32,
-    wire_color: Color,
-) {
-    // Draw a semicircle arc for the bridge
-    let segments = 12;
-    let (start_angle, end_angle) = if upper_is_horizontal {
-        // Horizontal wire hops over: arc goes upward (from -PI to 0)
-        (-std::f32::consts::PI, 0.0_f32)
-    } else {
-        // Vertical wire hops over: arc goes rightward (from -PI/2 to PI/2)
-        (-std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2)
-    };
-
-    for i in 0..segments {
-        let t0 = start_angle + (end_angle - start_angle) * (i as f32 / segments as f32);
-        let t1 = start_angle + (end_angle - start_angle) * ((i + 1) as f32 / segments as f32);
-
-        let p0 = Vec2::new(center.x + radius * t0.cos(), center.y + radius * t0.sin());
-        let p1 = Vec2::new(center.x + radius * t1.cos(), center.y + radius * t1.sin());
-
-        draw_circle(p0.x, p0.y, thickness / 2.0, wire_color);
-        draw_circle(p1.x, p1.y, thickness / 2.0, wire_color);
-        draw_line(p0.x, p0.y, p1.x, p1.y, thickness, wire_color);
-    }
-}
