@@ -1,8 +1,6 @@
 # ⚡ Digital Logic Simulator
 
 [![Publish Release](https://github.com/Sayanthegamer/digital_logic/actions/workflows/release.yml/badge.svg)](https://github.com/Sayanthegamer/digital_logic/actions/workflows/release.yml)
-[![Build Windows EXE](https://github.com/Sayanthegamer/digital_logic/actions/workflows/windows.yml/badge.svg)](https://github.com/Sayanthegamer/digital_logic/actions/workflows/windows.yml)
-[![Build Android APK](https://github.com/Sayanthegamer/digital_logic/actions/workflows/android.yml/badge.svg)](https://github.com/Sayanthegamer/digital_logic/actions/workflows/android.yml)
 [![VirusTotal Scan](https://img.shields.io/badge/VirusTotal-Scanned-brightgreen?logo=virustotal)](https://www.virustotal.com/)
 [![Rust](https://img.shields.io/badge/rust-edition%202024-blue.svg)](https://www.rust-lang.org)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-lightgrey.svg)]()
