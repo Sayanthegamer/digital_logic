@@ -254,14 +254,7 @@ impl Editor {
         let mut visible_comp_ids: Vec<usize> = self.canvas.spatial_grid.query_rect(viewport_rect).into_iter().collect();
         visible_comp_ids.sort_unstable(); // Restore deterministic drawing Z-order
         
-        // Debug counter to let the user see exactly how many components are being culled
-        draw_text(
-            &format!("Culling Debug: {}/{} components visible", visible_comp_ids.len(), self.circuit.components.len()),
-            screen_width() / 2.0 - 150.0,
-            60.0,
-            30.0,
-            RED,
-        );
+
 
         for &comp_id in &visible_comp_ids {
             let Some(comp) = comp_map.get(&comp_id) else { continue };

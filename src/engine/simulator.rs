@@ -40,8 +40,7 @@ impl Simulator {
     /// Inputs are initially set to None (floating).
     /// Returns the unique index of the added gate.
     pub fn add_gate(&mut self, gate_type: GateType) -> usize {
-        // If the physical layout of the circuit changes, stale events are invalid.
-        self.event_queue.clear();
+        // Removing event_queue.clear() to preserve `in_queue` invariants for existing gates.
 
         // 0b00 = Floating, 0b01 = Low, 0b10 = High, 0b11 = Contention
         let initial_state = match gate_type {
@@ -76,8 +75,7 @@ impl Simulator {
     pub fn remove_gate(&mut self, gate_idx: usize) {
         if !self.nodes.contains(gate_idx) { return; }
         
-        // If the physical layout of the circuit changes, stale events are invalid.
-        self.event_queue.clear();
+        // Removing event_queue.clear() to preserve `in_queue` invariants for existing gates.
         // 1. Tell all dependents to forget about us
         let deps = self.nodes[gate_idx].dependents.clone();
         for dep_idx in deps {
@@ -118,8 +116,7 @@ impl Simulator {
     /// Connects the output of source_idx to target_idx on the specified port.
     /// port is 0 for input_a_source, 1 for input_b_source.
     pub fn connect(&mut self, source_idx: usize, target_idx: usize, port: u8) {
-        // If the physical layout of the circuit changes, stale events are invalid.
-        self.event_queue.clear();
+        // Removing event_queue.clear() to preserve `in_queue` invariants for existing gates.
 
         assert!(
             self.nodes.contains(source_idx),
