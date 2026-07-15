@@ -20,7 +20,7 @@ We have heavily optimized the compiler pipeline. While the engine still recompil
 ### The Resolution
 The simulator historically suffered from thread-pool overhead and data race constraints which confined event propagation to a single core. This bottleneck has been completely bypassed:
 - **Intelligent Hardware Profiler**: A dynamic runtime calibrator tests the host machine on startup to calculate the exact Rayon crossover threshold where parallelization beats single-threaded execution. 
-- **Topological Map-Reduce**: Gates inside the same topological depth layer are safely evaluated concurrently via `rayon::par_iter()`. This provides extreme throughput for massive circuits without encountering data races or breaking memory safety (the ABA slab issue was also patched to clear the queue on topology changes).
+- **Topological Map-Reduce**: Gates inside the same topological depth layer are safely evaluated concurrently via `rayon::par_iter()`. We guarantee strict deterministic event processing ordering under high optimization by using an `IndexedParallelIterator` (`.map().collect()`) followed by a sequential `.flatten()`, completely resolving subtle `filter_map` chunking race conditions while maintaining extreme throughput.
 
 ---
 

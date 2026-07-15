@@ -370,7 +370,15 @@ impl Simulator {
             };
 
             let updates: Vec<(usize, u8)> = if current_queue.len() >= self.dynamic_threshold {
-                current_queue.par_iter().filter_map(compute_state).collect()
+                // Use .map().collect() to force IndexedParallelIterator, preserving EXACT deterministic order,
+                // then flatten sequentially. This prevents Rayon's filter_map chunking from causing non-deterministic event loops.
+                current_queue
+                    .par_iter()
+                    .map(compute_state)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .flatten()
+                    .collect()
             } else {
                 current_queue.iter().filter_map(compute_state).collect()
             };

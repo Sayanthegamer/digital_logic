@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0-alpha.4] - 2026-07-15 (Pre-release)
+
+### Fixed
+- **Gate Unresponsiveness (in_queue invariant broken)**: Fixed a fatal issue where adding, removing, or wiring components would permanently freeze gates (like NANDs). The simulator was improperly clearing the event queue without resetting the `in_queue` flags, trapping pending gates in a permanently "queued" but un-evaluable state.
+- **Rayon Execution Determinism**: Fixed a critical release-build bug where the Rayon `par_iter().filter_map()` pipeline evaluated gates out of order under heavy optimization chunking. Rewrote the parallel reduction to use an `IndexedParallelIterator` (`map().collect().flatten()`) to strictly preserve chronological topological evaluation.
+- **Removed Culling Debug Text**: Cleaned up the development culling debug counter that was hardcoded to draw at the top of the canvas during rendering optimizations.
+
 ## [3.2.0-alpha.2] - 2026-07-14 (Pre-release)
 
 ### Added
