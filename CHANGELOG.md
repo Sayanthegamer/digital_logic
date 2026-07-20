@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **egui Deprecation Fix**: Replaced the deprecated `egui::DragValue::clamp_range` with `range` to clean up compile warnings.
 - **Stress Test Range Limits**: Clamped the recursion depth slider in `gui.rs` to a maximum of `8` (262,144 gates) and changed the default starting depth to `6` in `state.rs`. This prevents the editor from freezing/hanging due to exponential allocations when trying to recursively instantiate over 4 million gates in unoptimized debug mode.
 
+### Optimized
+- **Hardware Calibration Caching**: Cached the parallel crossover threshold using `std::sync::OnceLock` in `profiler.rs`. Previously, the simulator calibration benchmark was re-executed on every `compile()` call (whenever a component was added, wired, or moved). Caching this value guarantees a one-time startup benchmark cost, eliminating repeated micro-benchmarking overhead during edits.
+
 ## [3.2.0-alpha.4] - 2026-07-15 (Pre-release)
 
 ### Fixed
