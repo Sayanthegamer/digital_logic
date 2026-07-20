@@ -94,6 +94,13 @@ impl Editor {
                         *self = Editor::new();
                         self.ui.mode = AppMode::Editor;
                     } else if clicked_open {
+                        #[cfg(target_os = "android")]
+                        {
+                            self.ui.show_android_file_dialog = Some(crate::editor::state::AndroidFileDialogMode::Load);
+                            self.ui.android_file_dialog_status.clear();
+                            self.ui.mode = AppMode::Editor;
+                        }
+                        #[cfg(not(target_os = "android"))]
                         if self.load_project() {
                             self.ui.mode = AppMode::Editor;
                         }

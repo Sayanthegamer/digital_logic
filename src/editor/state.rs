@@ -75,6 +75,12 @@ pub enum AppMode {
     Credits,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum AndroidFileDialogMode {
+    Save,
+    Load,
+}
+
 pub struct UiState {
     pub mode: AppMode,
     pub show_settings: bool,
@@ -95,6 +101,10 @@ pub struct UiState {
     pub catalog_search_text: String,
     pub egui_wants_pointer: bool,
     pub egui_wants_keyboard: bool,
+    
+    pub show_android_file_dialog: Option<AndroidFileDialogMode>,
+    pub android_file_dialog_input: String,
+    pub android_file_dialog_status: String,
 
     // Debug Suite Fields
     pub show_debug_suite: bool,
@@ -144,6 +154,10 @@ impl Default for UiState {
             catalog_search_text: String::new(),
             egui_wants_pointer: false,
             egui_wants_keyboard: false,
+
+            show_android_file_dialog: None,
+            android_file_dialog_input: "my_project.logic".to_string(),
+            android_file_dialog_status: String::new(),
             
             show_debug_suite: false,
             debug_cull_bounds: false,

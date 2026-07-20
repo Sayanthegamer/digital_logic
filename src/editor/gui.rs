@@ -130,6 +130,8 @@ impl Editor {
             } // END OF is_editor BLOCK
 
             self.draw_settings_dialog(ctx);
+            #[cfg(target_os = "android")]
+            self.draw_android_file_dialog(ctx);
             self.draw_context_menu(ctx);
 
             egui_wants_pointer = ctx.wants_pointer_input()
@@ -433,9 +435,21 @@ impl Editor {
                                 ui.heading("Options");
                                 ui.horizontal(|ui| {
                                     if ui.button(format!("{} Save", theme::ICON_SAVE)).clicked() {
+                                        #[cfg(target_os = "android")]
+                                        {
+                                            self.ui.show_android_file_dialog = Some(crate::editor::state::AndroidFileDialogMode::Save);
+                                            self.ui.android_file_dialog_status.clear();
+                                        }
+                                        #[cfg(not(target_os = "android"))]
                                         self.save_project();
                                     }
                                     if ui.button(format!("{} Load", theme::ICON_FOLDER)).clicked() {
+                                        #[cfg(target_os = "android")]
+                                        {
+                                            self.ui.show_android_file_dialog = Some(crate::editor::state::AndroidFileDialogMode::Load);
+                                            self.ui.android_file_dialog_status.clear();
+                                        }
+                                        #[cfg(not(target_os = "android"))]
                                         self.load_project();
                                     }
                                     if ui
@@ -674,6 +688,12 @@ impl Editor {
                                 .on_hover_text("Save Project")
                                 .clicked()
                             {
+                                #[cfg(target_os = "android")]
+                                {
+                                    self.ui.show_android_file_dialog = Some(crate::editor::state::AndroidFileDialogMode::Save);
+                                    self.ui.android_file_dialog_status.clear();
+                                }
+                                #[cfg(not(target_os = "android"))]
                                 self.save_project();
                             }
                             if ui
@@ -681,6 +701,12 @@ impl Editor {
                                 .on_hover_text("Load Project")
                                 .clicked()
                             {
+                                #[cfg(target_os = "android")]
+                                {
+                                    self.ui.show_android_file_dialog = Some(crate::editor::state::AndroidFileDialogMode::Load);
+                                    self.ui.android_file_dialog_status.clear();
+                                }
+                                #[cfg(not(target_os = "android"))]
                                 self.load_project();
                             }
                             if ui
@@ -811,6 +837,115 @@ impl Editor {
                     }
                 });
             self.ui.show_settings = show_settings;
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    fn draw_android_file_dialog(&mut self, ctx: &egui::Context) {
+        if let Some(mode) = self.ui.show_android_file_dialog {
+            let mut open = true;
+            let title = match mode {
+                crate::editor::state::AndroidFileDialogMode::Save => "Save Project",
+                crate::editor::state::AndroidFileDialogMode::Load => "Load Project",
+            };
+
+            egui::Window::new(title)
+                .open(&mut open)
+                .resizable(true)
+                .default_width(320.0)
+                .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+                .show(ctx, |ui| {
+                    if !self.ui.android_file_dialog_status.is_empty() {
+                        ui.colored_label(egui::Color32::LIGHT_GREEN, &self.ui.android_file_dialog_status);
+                        ui.add_space(5.0);
+                    }
+
+                    let dir_res = super::persistence::get_android_external_files_dir()
+                        .or_else(|_| super::persistence::get_android_internal_files_dir());
+                    
+                    let mut files = Vec::new();
+                    if let Ok(dir) = dir_res {
+                        if let Ok(entries) = std::fs::read_dir(dir) {
+                            for entry in entries.flatten() {
+                                if let Ok(metadata) = entry.metadata() {
+                                    if metadata.is_file() {
+                                        let name = entry.file_name().to_string_lossy().into_owned();
+                                        if name.ends_with(".logic") || name.ends_with(".json") {
+                                            files.push(name);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    files.sort();
+
+                    if mode == crate::editor::state::AndroidFileDialogMode::Save {
+                        ui.horizontal(|ui| {
+                            ui.label("Name:");
+                            ui.text_edit_singleline(&mut self.ui.android_file_dialog_input);
+                        });
+                        
+                        ui.add_space(10.0);
+                        if ui.button("Save File").clicked() {
+                            let mut filename = self.ui.android_file_dialog_input.trim().to_string();
+                            if filename.is_empty() {
+                                filename = "project_save.logic".to_string();
+                            }
+                            if !filename.ends_with(".logic") && !filename.ends_with(".json") {
+                                filename.push_str(".logic");
+                            }
+                            
+                            if let Ok(dir) = super::persistence::get_android_external_files_dir()
+                                .or_else(|_| super::persistence::get_android_internal_files_dir()) 
+                            {
+                                let mut path = dir;
+                                path.push(&filename);
+                                if let Err(err) = self.save_to_path(path) {
+                                    self.ui.android_file_dialog_status = format!("Save failed: {err}");
+                                } else {
+                                    self.ui.android_file_dialog_status = format!("Saved as {filename}");
+                                }
+                            } else {
+                                self.ui.android_file_dialog_status = "Failed to resolve save directory".to_string();
+                            }
+                        }
+                    }
+
+                    ui.add_space(10.0);
+                    ui.separator();
+                    ui.label("Existing Files (Click to select/load):");
+                    
+                    egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
+                        if files.is_empty() {
+                            ui.label("(No projects found)");
+                        } else {
+                            for file in files {
+                                let selected = self.ui.android_file_dialog_input == file;
+                                if ui.selectable_label(selected, &file).clicked() {
+                                    self.ui.android_file_dialog_input = file.clone();
+                                    if mode == crate::editor::state::AndroidFileDialogMode::Load {
+                                        if let Ok(dir) = super::persistence::get_android_external_files_dir()
+                                            .or_else(|_| super::persistence::get_android_internal_files_dir()) 
+                                        {
+                                            let mut path = dir;
+                                            path.push(&file);
+                                            if self.load_from_path(&path) {
+                                                self.ui.android_file_dialog_status = format!("Loaded {file}");
+                                            } else {
+                                                self.ui.android_file_dialog_status = format!("Failed to load {file}");
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+
+            if !open {
+                self.ui.show_android_file_dialog = None;
+            }
         }
     }
 }
