@@ -38,7 +38,7 @@ impl Editor {
             style.visuals.widgets.hovered.bg_fill = theme::BORDER.egui();
             style.visuals.widgets.noninteractive.bg_fill = theme::BG_PANEL.egui();
             style.visuals.window_fill = theme::BG_PANEL.egui();
-            style.visuals.window_stroke = egui::Stroke::new(1.0, theme::BORDER.egui());
+            style.visuals.window_stroke = egui::Stroke::new(1.0_f32, theme::BORDER.egui());
             style.visuals.window_corner_radius = egui::CornerRadius::same(12);
             style.spacing.button_padding = egui::vec2(14.0, 10.0);
             style.spacing.item_spacing = egui::vec2(12.0, 12.0);

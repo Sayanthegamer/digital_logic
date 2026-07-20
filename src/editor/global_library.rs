@@ -232,6 +232,8 @@ pub fn load_global_library() -> GlobalLibrary {
 
 /// Save the global library to disk.
 pub fn save_global_library(lib: &GlobalLibrary) {
+    #[cfg(target_os = "android")]
+    let _ = lib;
     #[cfg(not(target_os = "android"))]
     {
         let dir = get_global_library_dir();
