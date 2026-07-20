@@ -220,17 +220,24 @@ impl Editor {
 }
 
 #[cfg(target_os = "android")]
-fn get_android_external_files_dir() -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+pub(crate) fn get_android_external_files_dir() -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     use jni::objects::{JObject, JValue};
 
-    let ctx = ndk_context::android_context();
-    let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }?;
-    let mut env = vm.attach_current_thread()?;
-    let context_obj = unsafe { JObject::from_raw(ctx.context() as jni::sys::jobject) };
+    let env_ptr = unsafe { miniquad::native::android::attach_jni_env() };
+    if env_ptr.is_null() {
+        return Err("attach_jni_env returned null".into());
+    }
+    let mut env = unsafe { jni::JNIEnv::from_raw(env_ptr as *mut jni::sys::JNIEnv)? };
+
+    let activity_ptr = unsafe { miniquad::native::android::ACTIVITY };
+    if activity_ptr.is_null() {
+        return Err("ACTIVITY jobject is null".into());
+    }
+    let context_obj = unsafe { JObject::from_raw(activity_ptr as jni::sys::jobject) };
 
     let file_obj = env
         .call_method(
-            context_obj,
+            &context_obj,
             "getExternalFilesDir",
             "(Ljava/lang/String;)Ljava/io/File;",
             &[JValue::Object(JObject::null().as_ref())],
@@ -241,30 +248,37 @@ fn get_android_external_files_dir() -> Result<std::path::PathBuf, Box<dyn std::e
     }
 
     let path_jstring = env
-        .call_method(file_obj, "getAbsolutePath", "()Ljava/lang/String;", &[])?
+        .call_method(&file_obj, "getAbsolutePath", "()Ljava/lang/String;", &[])?
         .l()?;
     let path: String = env.get_string((&path_jstring).into())?.into();
     Ok(std::path::PathBuf::from(path))
 }
 
 #[cfg(target_os = "android")]
-fn get_android_internal_files_dir() -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+pub(crate) fn get_android_internal_files_dir() -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     use jni::objects::JObject;
 
-    let ctx = ndk_context::android_context();
-    let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }?;
-    let mut env = vm.attach_current_thread()?;
-    let context_obj = unsafe { JObject::from_raw(ctx.context() as jni::sys::jobject) };
+    let env_ptr = unsafe { miniquad::native::android::attach_jni_env() };
+    if env_ptr.is_null() {
+        return Err("attach_jni_env returned null".into());
+    }
+    let mut env = unsafe { jni::JNIEnv::from_raw(env_ptr as *mut jni::sys::JNIEnv)? };
+
+    let activity_ptr = unsafe { miniquad::native::android::ACTIVITY };
+    if activity_ptr.is_null() {
+        return Err("ACTIVITY jobject is null".into());
+    }
+    let context_obj = unsafe { JObject::from_raw(activity_ptr as jni::sys::jobject) };
 
     let file_obj = env
-        .call_method(context_obj, "getFilesDir", "()Ljava/io/File;", &[])?
+        .call_method(&context_obj, "getFilesDir", "()Ljava/io/File;", &[])?
         .l()?;
     if file_obj.is_null() {
         return Err("getFilesDir() returned null".into());
     }
 
     let path_jstring = env
-        .call_method(file_obj, "getAbsolutePath", "()Ljava/lang/String;", &[])?
+        .call_method(&file_obj, "getAbsolutePath", "()Ljava/lang/String;", &[])?
         .l()?;
     let path: String = env.get_string((&path_jstring).into())?.into();
     Ok(std::path::PathBuf::from(path))
