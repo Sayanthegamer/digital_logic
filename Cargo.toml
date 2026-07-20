@@ -29,6 +29,7 @@ rfd = { version = "0.15", default-features = false, features = ["gtk3", "async-s
 [target.'cfg(target_os = "android")'.dependencies]
 ndk-context = "0.1.1"
 jni = "0.21.1"
+miniquad = "0.4.10"
 
 [build-dependencies]
 winres = "0.1.12"

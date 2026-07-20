@@ -1250,6 +1250,7 @@ dependencies = [
  "egui-macroquad",
  "jni",
  "macroquad",
+ "miniquad",
  "ndk-context",
  "rayon",
  "rfd",
