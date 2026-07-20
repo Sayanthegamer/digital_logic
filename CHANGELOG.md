@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.1] - 2026-07-20
+
+### Fixed
+- **Android Storage Crash**: Fixed a fatal runtime crash on Android when importing or saving projects. The crash was caused by accessing the uninitialized global `ndk-context` handle which returned null pointers. We refactored `persistence.rs` and `svg_exporter.rs` to safely retrieve the JNI environment and `jobject` context directly from Miniquad's public `attach_jni_env()` and `ACTIVITY` statics, ensuring robust storage operations.
+- **Android File Browser**: Replaced direct, silent file actions on Android with an interactive, in-app `egui::Window` file dialog. This window scans the Android app documents directory, lists existing `.logic` and `.json` projects, accepts custom user filenames, and displays instant status updates (like "Saved as <name>" or "Loaded <name>"), transforming the static background buttons into a functional file management system.
+
 ## [3.2.0] - 2026-07-20
 
 ### Fixed
@@ -13,8 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SR Latch Test Initialization**: Updated `test_sr_latch` in `tests.rs` to start with a complementary Set pulse (S_bar = false, R_bar = true) instead of setting both inputs to High simultaneously on uninitialized logic, ensuring clean latching in parallel/lockstep event propagation.
 - **egui Deprecation Fix**: Replaced the deprecated `egui::DragValue::clamp_range` with `range` to clean up compile warnings.
 - **Stress Test Range Limits**: Clamped the recursion depth slider in `gui.rs` to a maximum of `8` (262,144 gates) and changed the default starting depth to `6` in `state.rs`. This prevents the editor from freezing/hanging due to exponential allocations when trying to recursively instantiate over 4 million gates in unoptimized debug mode.
-- **Android Storage Crash**: Fixed a fatal runtime crash on Android when importing or saving projects. The crash was caused by accessing the uninitialized global `ndk-context` handle which returned null pointers. We refactored `persistence.rs` and `svg_exporter.rs` to safely retrieve the JNI environment and `jobject` context directly from Miniquad's public `attach_jni_env()` and `ACTIVITY` statics, ensuring robust storage operations.
-- **Android File Browser**: Replaced direct, silent file actions on Android with an interactive, in-app `egui::Window` file dialog. This window scans the Android app documents directory, lists existing `.logic` and `.json` projects, accepts custom user filenames, and displays instant status updates (like "Saved as <name>" or "Loaded <name>"), transforming the static background buttons into a fully functional file management system.
 
 ### Optimized
 - **Hardware Calibration Caching**: Cached the parallel crossover threshold using `std::sync::OnceLock` in `profiler.rs`. Previously, the simulator calibration benchmark was re-executed on every `compile()` call (whenever a component was added, wired, or moved). Caching this value guarantees a one-time startup benchmark cost, eliminating repeated micro-benchmarking overhead during edits.
