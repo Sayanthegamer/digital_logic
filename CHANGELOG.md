@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-07-20
+
+### Fixed
+- **Oscillation-Budget Evaluation Scope**: Fixed the oscillation-budget check in `propagate_events` to reset `depth_steps` per topological depth layer rather than accumulating it across the entire event loop call. This prevents false positive "Oscillation detected" errors when simulating wide independent parallel structures (like clock lines triggering multiple registers simultaneously).
+- **Dynamic Stress Test Scaling**: Replaced the hardcoded `16k` label on the generated stress test sub-chip with a dynamic label (e.g. `Massive 262.1k Gate Chip`) matching the actual target depth and gate counts.
+- **SR Latch Test Initialization**: Updated `test_sr_latch` in `tests.rs` to start with a complementary Set pulse (S_bar = false, R_bar = true) instead of setting both inputs to High simultaneously on uninitialized logic, ensuring clean latching in parallel/lockstep event propagation.
+- **egui Deprecation Fix**: Replaced the deprecated `egui::DragValue::clamp_range` with `range` to clean up compile warnings.
+- **Stress Test Range Limits**: Clamped the recursion depth slider in `gui.rs` to a maximum of `8` (262,144 gates) and changed the default starting depth to `6` in `state.rs`. This prevents the editor from freezing/hanging due to exponential allocations when trying to recursively instantiate over 4 million gates in unoptimized debug mode.
+
 ## [3.2.0-alpha.4] - 2026-07-15 (Pre-release)
 
 ### Fixed

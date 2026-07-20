@@ -254,6 +254,25 @@ impl Editor {
         let mut visible_comp_ids: Vec<usize> = self.canvas.spatial_grid.query_rect(viewport_rect).into_iter().collect();
         visible_comp_ids.sort_unstable(); // Restore deterministic drawing Z-order
         
+        self.ui.drawn_components = visible_comp_ids.len();
+
+        if self.ui.debug_cull_bounds {
+            let r = viewport_rect;
+            let vp_screen_pos = self.to_screen_space(macroquad::prelude::Vec2::new(r.x, r.y));
+            let vp_screen_end = self.to_screen_space(macroquad::prelude::Vec2::new(r.x + r.w, r.y + r.h));
+            draw_rectangle_lines(vp_screen_pos.x, vp_screen_pos.y, vp_screen_end.x - vp_screen_pos.x, vp_screen_end.y - vp_screen_pos.y, 4.0, RED);
+
+            for comp in &self.circuit.components {
+                let screen_pos = self.to_screen_space(comp.pos);
+                let comp_width = comp.width * self.canvas.zoom;
+                let comp_height = comp.height * self.canvas.zoom;
+                if visible_comp_ids.contains(&comp.id) {
+                    draw_rectangle_lines(screen_pos.x, screen_pos.y, comp_width, comp_height, 2.0, GREEN);
+                } else {
+                    draw_rectangle_lines(screen_pos.x, screen_pos.y, comp_width, comp_height, 2.0, GRAY);
+                }
+            }
+        }
 
 
         for &comp_id in &visible_comp_ids {

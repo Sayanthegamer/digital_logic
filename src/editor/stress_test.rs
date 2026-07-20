@@ -6,7 +6,7 @@ use macroquad::prelude::Vec2;
 impl Editor {
     /// Generates a massive recursively packaged synthetic circuit
     /// to stress test the Compiler, Chip Packaging, and Sub-Chip Hot-Reloading.
-    pub fn generate_stress_test(&mut self) {
+    pub fn generate_stress_test(&mut self, size: usize) {
         self.circuit.components.clear();
         self.circuit.connections.clear();
         self.circuit.next_component_id = 1;
@@ -62,7 +62,7 @@ impl Editor {
         // Level 5: 4 * 1024 = 4,096 NANDs
         // Level 6: 4 * 4096 = 16,384 NANDs
         
-        let target_depth = 6;
+        let target_depth = size.max(1);
         for depth in 1..=target_depth {
             let prev_idx = depth - 1;
             let mut components = Vec::new();
@@ -120,6 +120,14 @@ impl Editor {
         let final_subchip_idx = self.engine.library.len() - 1;
         let final_gates_count = 4_usize.pow(target_depth as u32 + 1);
 
+        let label = if final_gates_count >= 1_000_000 {
+            format!("Massive {:.1}M Gate Chip", final_gates_count as f32 / 1_000_000.0)
+        } else if final_gates_count >= 1_000 {
+            format!("Massive {:.1}k Gate Chip", final_gates_count as f32 / 1_000.0)
+        } else {
+            format!("Massive {} Gate Chip", final_gates_count)
+        };
+
         // 3. Place ONE massive packaged subchip on the canvas
         self.circuit.components.push(VisualComponent {
             id: self.circuit.next_component_id,
@@ -127,7 +135,7 @@ impl Editor {
             pos: Vec2::new(300.0, 300.0),
             width: 100.0,
             height: 100.0,
-            label: format!("Massive 16k Chip"),
+            label,
             clock_period: None,
             bus_width: None,
             color: None,
@@ -182,13 +190,87 @@ impl Editor {
     }
 
     /// Generates the stress test and immediately drills down into the base blueprint (Level 0)
-    /// so the user can test hot-reloading a single gate and see it instantly patch the 16k package!
+    /// so the user can test hot-reloading a single gate and see it instantly patch the generated package!
     pub fn generate_hot_reload_test(&mut self) {
-        self.generate_stress_test();
+        self.generate_stress_test(6);
         // The base blueprint "Level_0_XOR" is at index 0.
         // Drill down into it:
         self.unpack_blueprint_to_canvas(0);
         self.canvas.pan = macroquad::prelude::Vec2::new(100.0, 100.0);
         println!("Hot-Reload Proving Test: You are now editing the Level_0_XOR blueprint (Index 0). \nMake a change and click 'Save Changes & Return'!");
+    }
+
+    /// Generates a zero-delay ring oscillator to intentionally crash/stress the engine's 
+    /// oscillation detection limits.
+    pub fn generate_oscillation_test(&mut self) {
+        self.circuit.components.clear();
+        self.circuit.connections.clear();
+        self.circuit.next_component_id = 1;
+
+        // Place 3 NAND gates (acting as NOT gates) in a ring
+        for i in 0..3 {
+            self.circuit.components.push(VisualComponent {
+                id: self.circuit.next_component_id,
+                comp_type: ComponentType::Nand,
+                pos: Vec2::new(200.0 + i as f32 * 150.0, 300.0),
+                width: 60.0,
+                height: 40.0,
+                label: format!("NOT {}", i),
+                clock_period: None,
+                bus_width: None,
+                color: None,
+            });
+            self.circuit.next_component_id += 1;
+        }
+
+        // Wire them in a ring: 0 -> 1, 1 -> 2, 2 -> 0. 
+        // For a NAND to act as a NOT, we need to wire the source to both inputs.
+        let connections = vec![
+            (1, 2), // gate 1 to 2
+            (2, 3), // gate 2 to 3
+            (3, 1), // gate 3 to 1
+        ];
+
+        for (src_id, tgt_id) in connections {
+            // Target port 0
+            self.circuit.connections.push(VisualConnection {
+                src_comp_id: src_id,
+                src_port: 0,
+                tgt_comp_id: tgt_id,
+                tgt_port: 0,
+            });
+            // Target port 1
+            self.circuit.connections.push(VisualConnection {
+                src_comp_id: src_id,
+                src_port: 0,
+                tgt_comp_id: tgt_id,
+                tgt_port: 1,
+            });
+        }
+
+        // Add an input connected to one of the gates to kickstart it
+        self.circuit.components.push(VisualComponent {
+            id: self.circuit.next_component_id,
+            comp_type: ComponentType::Input,
+            pos: Vec2::new(50.0, 300.0),
+            width: 60.0,
+            height: 40.0,
+            label: "Kickstart".to_string(),
+            clock_period: None,
+            bus_width: None,
+            color: None,
+        });
+        
+        self.circuit.connections.push(VisualConnection {
+            src_comp_id: self.circuit.next_component_id,
+            src_port: 0,
+            tgt_comp_id: 1,
+            tgt_port: 0,
+        });
+        self.circuit.next_component_id += 1;
+
+        self.compile();
+        self.engine.is_playing = true; // Auto-play to trigger oscillation
+        println!("Oscillation Test Generated! Toggle the Kickstart input to crash the simulation.");
     }
 }

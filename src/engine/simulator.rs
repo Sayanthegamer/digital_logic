@@ -36,6 +36,14 @@ impl Simulator {
         self.event_queue.clear();
     }
 
+    pub fn set_single_threaded(&mut self, single: bool) {
+        if single {
+            self.dynamic_threshold = usize::MAX;
+        } else {
+            self.dynamic_threshold = crate::engine::profiler::detect_parallel_crossover_threshold();
+        }
+    }
+
     /// Adds a gate of a specific type to the simulator.
     /// Inputs are initially set to None (floating).
     /// Returns the unique index of the added gate.
@@ -414,6 +422,7 @@ impl Simulator {
             // it will be processed in the next iteration of the while loop before moving to depth+1.
             if self.event_queue[depth].is_empty() {
                 depth += 1;
+                depth_steps = 0;
             }
         }
 

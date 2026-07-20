@@ -21,6 +21,7 @@ We have heavily optimized the compiler pipeline. While the engine still recompil
 The simulator historically suffered from thread-pool overhead and data race constraints which confined event propagation to a single core. This bottleneck has been completely bypassed:
 - **Intelligent Hardware Profiler**: A dynamic runtime calibrator tests the host machine on startup to calculate the exact Rayon crossover threshold where parallelization beats single-threaded execution. 
 - **Topological Map-Reduce**: Gates inside the same topological depth layer are safely evaluated concurrently via `rayon::par_iter()`. We guarantee strict deterministic event processing ordering under high optimization by using an `IndexedParallelIterator` (`.map().collect()`) followed by a sequential `.flatten()`, completely resolving subtle `filter_map` chunking race conditions while maintaining extreme throughput.
+- **Depth-Level Oscillation Budget**: Fixed a correctness flaw in the oscillation-budget check. The step counter (`depth_steps`) is now properly reset when moving to the next topological depth layer, preventing independent, wide, non-oscillating parallel networks from exhaustively triggering a false-positive oscillation limit.
 
 ---
 

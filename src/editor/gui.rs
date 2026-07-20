@@ -123,6 +123,10 @@ impl Editor {
                 } else {
                     self.draw_desktop_editor_ui(ctx);
                 }
+                
+                if self.ui.show_debug_suite {
+                    self.draw_debug_suite(ctx);
+                }
             } // END OF is_editor BLOCK
 
             self.draw_settings_dialog(ctx);
@@ -134,6 +138,82 @@ impl Editor {
             self.ui.egui_wants_keyboard = ctx.wants_keyboard_input();
         });
         self.ui.egui_wants_pointer = egui_wants_pointer;
+    }
+
+    fn draw_debug_suite(&mut self, ctx: &egui::Context) {
+        let mut open = self.ui.show_debug_suite;
+        egui::Window::new(format!("{} Debug Suite [F6]", crate::editor::theme::ICON_SETTINGS))
+            .open(&mut open)
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.heading("Performance Limits");
+                let fps = macroquad::time::get_fps();
+                ui.label(format!("FPS: {}", fps));
+                ui.label(format!("Ticks per Frame: {}", self.engine.ticks_per_frame));
+                ui.label(format!("Total Gates: {}", self.engine.simulator.nodes.len()));
+                ui.label(format!("Total Active Clocks: {}", self.engine.active_clocks.len()));
+                
+                ui.separator();
+                ui.heading("Threading");
+                let mut single = self.ui.debug_single_thread;
+                if ui.checkbox(&mut single, "Force Single-Threaded Mode").changed() {
+                    self.ui.debug_single_thread = single;
+                    self.engine.simulator.set_single_threaded(single);
+                }
+                
+                ui.separator();
+                ui.heading("Culling Visualiser");
+                ui.checkbox(&mut self.ui.debug_cull_bounds, "Show Culling Bounds (Red=Frustum, Green=Drawn, Gray=Culled)");
+                ui.label(format!("Components Drawn: {} / {}", self.ui.drawn_components, self.circuit.components.len()));
+                
+                ui.separator();
+                ui.heading("Software Limits Test");
+                ui.horizontal(|ui| {
+                    ui.label("Stress Test Recursion Depth:");
+                    ui.add(egui::DragValue::new(&mut self.ui.stress_test_size).speed(0.1).range(1..=8));
+                });
+                ui.horizontal(|ui| {
+                    if ui.button("Generate Stress Test!").clicked() {
+                        self.generate_stress_test(self.ui.stress_test_size);
+                    }
+                    if ui.button("Generate Oscillation Crash Test").clicked() {
+                        self.generate_oscillation_test();
+                    }
+                });
+                
+                ui.separator();
+                ui.heading("Logging");
+                ui.checkbox(&mut self.ui.debug_continuous_log, "Continuous Logging to debug_suite.log");
+                if ui.button("Export Snapshot to Log").clicked() {
+                    self.export_debug_log();
+                }
+            });
+        self.ui.show_debug_suite = open;
+        
+        if self.ui.debug_continuous_log {
+            let current_time = macroquad::time::get_time();
+            if current_time - self.ui.last_debug_log_time >= 1.0 {
+                self.export_debug_log();
+                self.ui.last_debug_log_time = current_time;
+            }
+        }
+    }
+    
+    fn export_debug_log(&self) {
+        use std::io::Write;
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("debug_suite.log") {
+            let fps = macroquad::time::get_fps();
+            let time = macroquad::time::get_time();
+            let _ = writeln!(file, "[{:.2}s] FPS: {}, Ticks/Frame: {}, Total Gates: {}, Drawn/Total Comps: {}/{}, Threading: {}", 
+                time,
+                fps,
+                self.engine.ticks_per_frame,
+                self.engine.simulator.nodes.len(),
+                self.ui.drawn_components,
+                self.circuit.components.len(),
+                if self.ui.debug_single_thread { "Single" } else { "Multi" }
+            );
+        }
     }
 
     fn draw_context_menu(&mut self, ctx: &egui::Context) {

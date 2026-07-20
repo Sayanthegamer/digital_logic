@@ -185,9 +185,13 @@ fn test_sr_latch() {
     sim.connect(q_nand, q_out, 0);
     sim.connect(q_bar_nand, q_bar_out, 0);
 
-    // Initial inputs to 1 (inactive state)
-    sim.set_input(s_bar, true);
+    // Initialize the latch: start with S_bar = false (set) and R_bar = true to force a valid complementary state
+    sim.set_input(s_bar, false);
     sim.set_input(r_bar, true);
+    assert!(sim.propagate_events(100).is_ok());
+
+    // Release Set (S_bar = true) -> state should latch (Q=1, Q_bar=0)
+    sim.set_input(s_bar, true);
     assert!(sim.propagate_events(100).is_ok());
 
     // Latch should settle in a valid state (either Q=0/Q_bar=1 or Q=1/Q_bar=0)

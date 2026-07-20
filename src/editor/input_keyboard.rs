@@ -35,7 +35,10 @@ impl Editor {
                 self.generate_hot_reload_test();
             }
             if is_key_pressed(KeyCode::F12) {
-                self.generate_stress_test();
+                self.generate_stress_test(self.ui.stress_test_size);
+            }
+            if is_key_pressed(KeyCode::F6) {
+                self.ui.show_debug_suite = !self.ui.show_debug_suite;
             }
 
             // Tool Shortcuts

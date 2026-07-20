@@ -96,6 +96,15 @@ pub struct UiState {
     pub egui_wants_pointer: bool,
     pub egui_wants_keyboard: bool,
 
+    // Debug Suite Fields
+    pub show_debug_suite: bool,
+    pub debug_cull_bounds: bool,
+    pub debug_single_thread: bool,
+    pub drawn_components: usize,
+    pub stress_test_size: usize,
+    pub debug_continuous_log: bool,
+    pub last_debug_log_time: f64,
+
     /// Screen-space canvas viewport rect (x, y, w, h) after egui panels are laid out.
     /// Used for camera fit/recenter calculations.
     pub canvas_viewport: Option<(f32, f32, f32, f32)>,
@@ -135,6 +144,15 @@ impl Default for UiState {
             catalog_search_text: String::new(),
             egui_wants_pointer: false,
             egui_wants_keyboard: false,
+            
+            show_debug_suite: false,
+            debug_cull_bounds: false,
+            debug_single_thread: false,
+            drawn_components: 0,
+            stress_test_size: 6,
+            debug_continuous_log: false,
+            last_debug_log_time: 0.0,
+
             canvas_viewport: None,
             dragging_catalog_idx: None,
             drag_hovered_idx: None,
