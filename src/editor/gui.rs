@@ -6,7 +6,7 @@ pub fn setup_egui() {
         let mut fonts = egui::FontDefinitions::default();
         fonts.font_data.insert(
             "material_icons".to_owned(),
-            egui::FontData::from_static(include_bytes!("../../MaterialIcons-Regular.ttf")).into(),
+            egui::FontData::from_static(include_bytes!("../../assets/MaterialIcons-Regular.ttf")).into(),
         );
         fonts
             .families

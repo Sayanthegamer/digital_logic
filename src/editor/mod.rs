@@ -72,7 +72,7 @@ impl Editor {
     pub fn new() -> Self {
         #[cfg(not(test))]
         let font = {
-            let font_bytes = include_bytes!("../Inter-Regular.ttf");
+            let font_bytes = include_bytes!("../../assets/Inter-Regular.ttf");
             Some(load_ttf_font_from_bytes(font_bytes).expect("Failed to load embedded Inter font"))
         };
         #[cfg(test)]

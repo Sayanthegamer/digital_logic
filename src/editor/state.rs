@@ -270,3 +270,44 @@ impl Default for CanvasState {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CanvasToolMode {
+    Idle,
+    Placing(ActiveTool),
+    Wiring,
+    DraggingComponents,
+    BoxSelecting,
+    DraggingAnnotation,
+}
+
+impl CanvasState {
+    pub fn tool_mode(&self) -> CanvasToolMode {
+        if let Some(tool) = self.selected_tool {
+            CanvasToolMode::Placing(tool)
+        } else if self.active_wire_drag.is_some() || self.dragging_wire.is_some() {
+            CanvasToolMode::Wiring
+        } else if self.dragging_annotation_idx.is_some() {
+            CanvasToolMode::DraggingAnnotation
+        } else if self.dragging_comp_id.is_some() || !self.drag_start_positions.is_empty() {
+            CanvasToolMode::DraggingComponents
+        } else if self.selection_box_start.is_some() {
+            CanvasToolMode::BoxSelecting
+        } else {
+            CanvasToolMode::Idle
+        }
+    }
+
+    pub fn clear_interaction_modes(&mut self) {
+        self.selected_tool = None;
+        self.active_wire_drag = None;
+        self.dragging_wire = None;
+        self.dragging_comp_id = None;
+        self.selection_box_start = None;
+        self.dragging_annotation_idx = None;
+        self.drag_start_positions.clear();
+        self.drag_start_sizes.clear();
+        self.drag_snapshot_pushed = false;
+    }
+}
+

@@ -59,3 +59,11 @@ This was resolved during the Phase 5 decoupling. We added a dedicated `bus_width
 This layout clutter issue has been fully resolved.
 1. **Perpendicular Tap Routing**: We introduced `get_connection_ports` and `get_junction_connect_pos` inside `editor/mod.rs`. Wires connected to a stretched Junction now tap perpendicularly along the closest coordinate of the Junction's body instead of routing to its endpoints. This entirely prevents horizontal/vertical overlapping segments on fan-out and fan-in wires connecting to Junction buses.
 2. **Wire Deduplication**: We added a filtering rule in `input_release.rs` that cleans up matching connections (`src_comp_id`, `src_port`, `tgt_comp_id`, `tgt_port`) before pushing new ones, ensuring no duplicate wires stack on top of each other.
+
+---
+
+## 7. Canvas Tool State Machine & Spatial Hash World Invariance [SOLVED]
+
+### The Resolution
+1. **World-Space Spatial Grid Invariance**: Verified and documented that `SpatialHashGrid` indexes components and wires using world-space bounding boxes (`comp.pos`), rendering camera pan/zoom queries $O(1)$ without grid invalidation.
+2. **Canvas Tool State Abstraction**: Added `CanvasToolMode` state abstraction to `CanvasState` in `state.rs`, providing safe modal state queries (`tool_mode()`) and unified tool resets (`clear_interaction_modes()`).

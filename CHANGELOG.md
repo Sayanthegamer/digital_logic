@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.2] - 2026-07-21
+
+### Changed
+- **Asset Directory Centralization**: Re-organized embedded font assets into `assets/`. Moved `Inter-Regular.ttf` and `MaterialIcons-Regular.ttf` to `assets/` and updated `include_bytes!` relative compilation paths in `src/editor/mod.rs` and `gui.rs`.
+- **Canvas Tool State Machine**: Added `CanvasToolMode` enum and state abstraction methods (`tool_mode()`, `clear_interaction_modes()`) to `CanvasState` in `state.rs`, providing clean modal state management for input handlers.
+
+### Removed
+- **Repository Hygiene Cleanup**: Removed leftover `scratch.rs` scratch file from the workspace root.
+
 ## [3.2.1] - 2026-07-20
 
 ### Fixed
