@@ -174,6 +174,55 @@ impl Simulator {
             .get(blueprint_idx)
             .ok_or_else(|| format!("Blueprint not found at index {}", blueprint_idx))?;
 
+        // Validate all connections to prevent out-of-bounds panics
+        for conn in &blueprint.connections {
+            // Check source
+            match conn.source {
+                SourcePort::ComponentOutput {
+                    component_idx,
+                    port_idx,
+                } => {
+                    if component_idx >= blueprint.components.len() {
+                        return Err(format!("Invalid source component index {}", component_idx));
+                    }
+                    let comp = &blueprint.components[component_idx];
+                    let (_, out_ports) =
+                        comp.component_type.get_port_counts(comp.bus_width, library);
+                    if port_idx >= out_ports {
+                        return Err(format!("Invalid source port index {}", port_idx));
+                    }
+                }
+                SourcePort::ChipInput(idx) => {
+                    if idx >= blueprint.inputs {
+                        return Err(format!("Invalid chip input index {}", idx));
+                    }
+                }
+            }
+
+            // Check target
+            match conn.target {
+                TargetPort::ComponentInput {
+                    component_idx,
+                    port_idx,
+                } => {
+                    if component_idx >= blueprint.components.len() {
+                        return Err(format!("Invalid target component index {}", component_idx));
+                    }
+                    let comp = &blueprint.components[component_idx];
+                    let (in_ports, _) =
+                        comp.component_type.get_port_counts(comp.bus_width, library);
+                    if port_idx >= in_ports {
+                        return Err(format!("Invalid target port index {}", port_idx));
+                    }
+                }
+                TargetPort::ChipOutput(idx) => {
+                    if idx >= blueprint.outputs {
+                        return Err(format!("Invalid chip output index {}", idx));
+                    }
+                }
+            }
+        }
+
         let mut component_ports = Vec::new();
         let mut tree = InstanceTree::default();
 

@@ -185,8 +185,9 @@ impl Editor {
         }
 
         // Settle initial states
-        let max_steps = (sim.nodes.len() * 10).max(1000);
-        match sim.propagate_events(max_steps) {
+        // Budget multiplier of 100 scales the evaluation cap linearly with capacity (100 * capacity).
+        let budget_multiplier = 100;
+        match sim.propagate_events(budget_multiplier) {
             Ok(_) => self.engine.propagation_error = None,
             Err(e) => self.engine.propagation_error = Some(e),
         }

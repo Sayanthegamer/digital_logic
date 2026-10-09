@@ -636,9 +636,9 @@ fn test_bus_compilation_and_propagation() {
     // 4. Test signal propagation
     // Toggle inputs: IN_0 = true, IN_1 = false, IN_2 = true, IN_3 = false
     let input_states = [true, false, true, false];
-    for i in 0..4 {
+    for (i, &state) in input_states.iter().enumerate() {
         if let Some(&sim_idx) = editor.engine.visual_to_sim_map.get(&i) {
-            editor.engine.simulator.set_input(sim_idx, input_states[i]);
+            editor.engine.simulator.set_input(sim_idx, state);
         }
     }
 
@@ -647,10 +647,10 @@ fn test_bus_compilation_and_propagation() {
     assert!(propagate_ok);
 
     // Verify output values match input values
-    for i in 0..4 {
+    for (i, &state) in input_states.iter().enumerate() {
         if let Some(&sim_idx) = editor.engine.visual_to_sim_map.get(&(6 + i)) {
             let output_val = editor.engine.simulator.get_raw_state(sim_idx);
-            let expected_val = if input_states[i] { 0b10 } else { 0b01 };
+            let expected_val = if state { 0b10 } else { 0b01 };
             assert_eq!(output_val, expected_val, "Output {} state mismatch!", i);
         } else {
             panic!("Output {} not compiled in visual_to_sim_map!", i);
