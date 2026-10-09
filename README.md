@@ -73,7 +73,7 @@ The goal, stated plainly: **run a real 8-bit (eventually 16-bit) CPU, built enti
 | 🪄 **Auto Arrange** | Click a button to magically untangle your circuit. Uses a Sugiyama-based DAG layout engine with crossing minimization, dummy nodes for wire routing, and smart Y-alignment for beautiful, straight wires. |
 | 🔎 **Component Search** | Dynamically filter the parts catalog to find exactly the primitive or custom chip you need without scrolling. |
 | ↩️ **Undo / Redo** | Full history stack for canvas edits — place, wire, delete, drag — all reversible. |
-| 💾 **Save / Load Projects** | Serializes your entire chip library, canvas, wiring, and annotations to a portable `.json` project file. |
+| 💾 **Save / Load Projects** | Serializes your entire chip library, canvas, wiring, and annotations to a portable project file (`.logic`, with `.json` also accepted on load). |
 | ✍️ **Text Annotations** | Drop sticky notes on the canvas to document what a section of your circuit actually does (you'll thank yourself later). |
 | 📱 **Touch & Mobile Ready** | Pinch-to-zoom, two-finger pan, and a dedicated mobile UI layout — this isn't just a desktop demo bolted onto a phone. |
 | 🖥️ **Cross-Platform** | Native builds for Windows, Linux, macOS, and Android — same Rust codebase, same performance characteristics, no Electron in sight. |
@@ -137,6 +137,230 @@ flowchart TB
 ```
 
 ### The flattening compiler, in one picture
+
+This is the part that makes deep nesting free. When a chip contains sub-chips, the compiler doesn't keep that hierarchy around at runtime — it recursively resolves every wire back to its ultimate primitive driver *at compile time*, so the simulator only ever sees flat NAND gates.
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'lineColor': '#c9d1d9', 'textColor': '#e6edf3', 'primaryTextColor': '#e6edf3', 'secondaryTextColor': '#e6edf3', 'tertiaryTextColor': '#e6edf3', 'edgeLabelBackground': '#161b22' }}}%%
+flowchart LR
+    classDef nestedNode fill:#2a5078,stroke:#eef2f5,stroke-width:1.5px,color:#ffffff;
+    classDef flatNode fill:#1a365d,stroke:#d4e1f9,stroke-width:1.5px,color:#ffffff;
+
+    subgraph Nested["What you build (nested view)"]
+        direction TB
+        CPU["CPU"] --> ALU["ALU"]
+        ALU --> ADD["Adder"]
+        ADD --> XOR1["XOR"]
+        XOR1 --> NAND1["NAND"]
+    end
+
+    Nested -.->|"Compiler flattens hierarchy"| Flat
+
+    subgraph Flat["What the Simulator actually runs (flat array)"]
+        direction LR
+        G1["NAND #0"] --- G2["NAND #1"] --- G3["NAND #2"] --- G4["NAND #3"] --- Gdots["... thousands more"]
+    end
+
+    class CPU,ALU,ADD,XOR1,NAND1 nestedNode;
+    class G1,G2,G3,G4,Gdots flatNode;
+    style Nested fill:#161b22,stroke:#8b949e,stroke-width:2px,color:#f0f6fc;
+    style Flat fill:#0d1117,stroke:#58a6ff,stroke-width:2px,color:#f0f6fc;
+    linkStyle default stroke:#c9d1d9,stroke-width:1.5px;
+```
+
+Nesting depth becomes purely a *user organization* concept. A CPU built from 10,000 nested chip instances runs exactly as fast as 10,000 raw NAND gates laid out flat — because that's literally what it becomes.
+
+## 🔬 How the Simulation Actually Works
+
+The engine models everything as one of five primitive gate types:
+
+| Primitive | Behavior |
+|---|---|
+| **NAND** | `!(A && B)`. The single universal gate — every other gate you place (AND, OR, XOR, NOT, latches...) compiles down to a network of these. |
+| **Input** | A user- or outer-chip-driven source of logic level. |
+| **Output** | A sink that reflects whatever drives it. |
+| **TriStateBuffer** | Data on input A, enable on input B. Drives High/Low when enabled, Floating when not — the building block for shared buses. |
+| **BusResolver** | Merges multiple drivers on one net: Floating yields to the other driver, a High meeting a Low becomes Contention. Inserted automatically by the compiler. |
+
+The **Clock** you place in the editor isn't a separate primitive: it compiles to an Input gate, and the editor's tick loop flips it every `period / 2` ticks — independently of every other clock in the circuit.
+
+Instead of a brute-force loop that re-checks every gate every frame, the simulator keeps an **event queue** split into one queue per topological depth. When an input changes, only its *direct dependents* get queued for re-evaluation — and their state change (if any) cascades to *their* dependents, and so on. Untouched parts of a million-gate circuit cost nothing on a frame where nothing near them changed. Layers are processed shallowest-first; a wide layer is evaluated across all CPU cores with Rayon, a narrow one on a single thread.
+
+```mermaid
+sequenceDiagram
+    participant U as You (toggle a switch)
+    participant S as Simulator
+    participant Q as Event Queue
+    participant G as Dependent Gates
+
+    U->>S: set_input(gate, true)
+    S->>S: state changed?
+    alt state actually changed
+        S->>Q: enqueue direct dependents
+        loop until queue empty
+            Q->>G: pop & evaluate gate
+            G->>G: new_state = f(inputs)
+            alt output changed
+                G->>Q: enqueue its own dependents
+            end
+        end
+    else no change
+        S-->>U: nothing to do, skip entirely
+    end
+```
+
+Wires carry a **4-state signal** rather than a plain boolean — `Floating (00)`, `Low (01)`, `High (10)`, and `Contention (11)` — which is what makes bus junctions, tri-state buffers, and "why is this pin doing nothing" debugging actually possible.
+
+To stop a zero-delay feedback loop (e.g. an inverter wired directly back to itself) from freezing the app in an infinite evaluation loop, `propagate_events` enforces a cumulative evaluation budget for each propagation pass. Blow past it and the engine reports an `Oscillation detected` error instead of hanging your session.
+
+## 🚀 Quick Start
+
+You have two paths in. Pick whichever matches your patience level.
+
+### Option A — Just Run the Binary (fastest)
+
+No Rust, no compiling, no dependencies. Just download and double-click.
+
+1. Head to the **[Releases page](../../releases)**.
+2. Grab the build for your platform:
+   - 🪟 **Windows** → `logic_simulator_bin.exe`
+   - 🤖 **Android** → `logic_simulator.apk` *(you may need to allow "install from unknown sources" the first time)*
+3. Run it. That's it — you're placing gates in seconds.
+
+> Every release binary is code-signed with a build attestation and scanned by VirusTotal before publishing (see the badges up top) — you can verify provenance yourself via the GitHub Actions run for that release tag.
+
+### Option B — Build From Source
+
+For when you want to hack on the engine itself, or your platform isn't covered by a pre-built binary (Linux / macOS).
+
+#### 1. Install prerequisites
+
+**Rust toolchain** (all platforms):
+```bash
+# via rustup — https://rustup.rs
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+**Linux only** — graphics & audio dependencies for Macroquad/egui:
+```bash
+sudo apt-get update
+sudo apt-get install -y pkg-config libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev libwayland-dev
+```
+
+**Windows / macOS** — no extra system packages needed beyond a working Rust toolchain.
+
+#### 2. Clone & run
+
+```bash
+git clone https://github.com/Sayanthegamer/digital_logic.git
+cd digital_logic
+
+# Debug build — fast to compile, noticeably slower simulation
+cargo run
+
+# Release build — REQUIRED for anything beyond toy circuits.
+# Compiler optimizations make a massive difference once you're
+# simulating hundreds or thousands of gates.
+cargo run --release
+```
+
+Run the test suite (engine layer has solid coverage — NAND truth tables, SR latches, multi-domain clocks, nested-chip compilation, serialization round-trips):
+
+```bash
+cargo test
+```
+
+#### 3. (Optional) Build for Android
+
+<details>
+<summary>Click to expand Android build steps</summary>
+
+```bash
+# Install Android targets
+rustup target add aarch64-linux-android armv7-linux-androideabi
+
+# Install cargo-ndk
+cargo install cargo-ndk
+
+# Set NDK_HOME to point at your installed NDK, then:
+cargo ndk -t arm64-v8a -t armeabi-v7a -o android/app/src/main/jniLibs build --release
+
+cd android
+./gradlew assembleRelease
+```
+
+Full details, including keystore generation for signed release APKs, live in [`DEPLOYMENT.md`](DEPLOYMENT.md).
+
+</details>
+
+The resulting executable lands at:
+- **Linux / macOS:** `./target/release/logic_simulator_bin`
+- **Windows:** `.\target\release\logic_simulator_bin.exe`
+- **Android:** `.\android\app\build\outputs\apk\release\app-release.apk` (local build) or via the Gradle pipeline above
+
+## ⌨️ Controls Cheat Sheet
+
+| Action | Input |
+|---|---|
+| Place / Connect / Toggle Input | Left Click |
+| Move component | Left Click + Drag |
+| Delete selection | Right Click, or `Delete` / `Backspace` |
+| Zoom | Scroll wheel / pinch |
+| Pan | Right-click drag / two-finger drag |
+| Select Input tool | `1` or `I` |
+| Select Output tool | `2` or `O` |
+| Select NAND tool | `3` or `N` |
+| Select Clock tool | `4` or `K` |
+| Select Text Annotation tool | `5` or `T` |
+| Play / Pause simulation | `Space` |
+| Recompile canvas | `C` |
+| Save project | `Ctrl` + `S` |
+| Load project | `Ctrl` + `L` |
+| Deselect / cancel tool | `Esc` |
+| Undo / Redo | via UI buttons in the properties panel |
+
+## 📁 Project Layout
+
+```
+digital_logic/
+├── src/
+│   ├── engine/              # Pure simulation core — no rendering, no UI
+│   │   ├── simulator.rs     # Event-driven propagation, SCC depth layering, defragmentation
+│   │   ├── compiler.rs      # Flattens nested chip hierarchies → raw gates
+│   │   ├── types.rs         # GateType, ChipBlueprint, Connection, etc.
+│   │   ├── profiler.rs      # Calibrates the parallel-vs-sequential crossover threshold
+│   │   └── tests.rs         # Truth-table, latch, clock, compilation tests
+│   │
+│   ├── editor/               # Macroquad + egui frontend
+│   │   ├── canvas.rs         # Visual → simulator compilation bridge
+│   │   ├── drawing*.rs       # Wire/component rendering & manhattan routing
+│   │   ├── input.rs          # Input entry point and coordinator
+│   │   ├── input_*.rs        # Modular phase-specific input handlers (press, drag, release, hover, etc.)
+│   │   ├── inspection_*.rs   # "Look Inside" deep-trace overlay
+│   │   ├── ui_*.rs           # egui panels: catalog, properties
+│   │   ├── history.rs        # Undo / redo snapshot stack
+│   │   ├── persistence.rs    # .logic / .json project save/load
+│   │   └── state.rs          # EngineState / CanvasState / UiState
+│   │
+│   ├── lib.rs                 # Frame loop glue (draw_gui → update → draw)
+│   └── main.rs
+│
+├── android/                  # Gradle project + JNI glue for the APK build
+├── .github/workflows/        # CI: Windows EXE, Android APK, tagged releases
+├── ARCHITECTURE.md            # Deep dive on engine/editor separation
+├── DESIGN.md                  # Data-oriented design philosophy & rationale
+├── SPEC.md                    # Formal spec of primitives & propagation rules
+├── SYSTEM.md                  # System requirements & dependency list
+├── DEPLOYMENT.md               # Full build & release instructions
+└── CHANGELOG.md
+```
+
+## 🖥️ Platform Support
+
+| Platform | Status | Notes |
+|---|---|---|
+| Windows (x86_64) | ✅ Prebuilt binary in Releases | CI-built, attested, VirusTotal-scanned every push to `main` |
+| Android (ARM64 / ARMv7) | ✅ Prebuilt APK in Releases | Touch-native UI wi## The flattening compiler, in one picture
 
 This is the part that makes deep nesting free. When a chip contains sub-chips, the compiler doesn't keep that hierarchy around at runtime — it recursively resolves every wire back to its ultimate primitive driver *at compile time*, so the simulator only ever sees flat NAND gates.
 
