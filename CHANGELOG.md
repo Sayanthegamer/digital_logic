@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.2.3] - 2026-10-09
 
+### Documentation
+- **Docs synced with the engine**: `ARCHITECTURE.md`, `DESIGN.md`, `SPEC.md`, `SCALE_BREAKING_POINTS.md` and `README.md` now describe Tarjan SCC depth layering, the `Slab<GateNode>` / `u8` 4-state storage, the five primitive gates (including `TriStateBuffer` and `BusResolver`), clocks compiling to Input gates, the cumulative oscillation budget, and Rayon layer parallelism. Corrected the release binary name to `logic_simulator_bin` in `README.md` and `DEPLOYMENT.md`.
+
 ### Fixed
 - **Rayon Concurrency Defeat (SCC Topological Depth Layering)**: Replaced sequential iteration over strongly connected components in `calculate_depths()` with true longest-path topological depth layering on the condensation DAG ($\text{depth}(v) = \max_{u \in \text{preds}}(\text{depth}(u) + 1)$). This eliminates serialization and allows parallel gates to evaluate concurrently across all CPU threads with Rayon.
 - **Sub-Chip Multi-Driver Bus Resolution**: Fixed bus overwriting when custom chips are instantiated. Rather than overwriting existing connection mappings, the compiler now detects multiple drivers to the same internal port and automatically synthesizes a `BusResolver` tree to resolve high-impedance (`0b00`) and contention (`0b11`) states.
