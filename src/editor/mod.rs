@@ -70,13 +70,12 @@ impl Default for Editor {
 
 impl Editor {
     pub fn new() -> Self {
-        #[cfg(not(test))]
         let font = {
             let font_bytes = include_bytes!("../../assets/Inter-Regular.ttf");
-            Some(load_ttf_font_from_bytes(font_bytes).expect("Failed to load embedded Inter font"))
+            std::panic::catch_unwind(|| load_ttf_font_from_bytes(font_bytes))
+                .ok()
+                .and_then(|res| res.ok())
         };
-        #[cfg(test)]
-        let font = None;
 
         let mut editor = Self {
             circuit: circuit_model::CircuitModel::default(),

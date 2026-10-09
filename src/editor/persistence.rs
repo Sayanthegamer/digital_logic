@@ -32,7 +32,7 @@ pub struct ProjectFileRef<'a> {
 }
 
 impl Editor {
-    pub(crate) fn save_to_path<P: AsRef<std::path::Path>>(
+    pub fn save_to_path<P: AsRef<std::path::Path>>(
         &self,
         path: P,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -53,7 +53,7 @@ impl Editor {
         Ok(())
     }
 
-    pub(crate) fn load_from_path<P: AsRef<std::path::Path>>(&mut self, path: P) -> bool {
+    pub fn load_from_path<P: AsRef<std::path::Path>>(&mut self, path: P) -> bool {
         // Cap file reads at 50 MB to prevent OOM from maliciously large files.
         const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024;
         if let Ok(file) = std::fs::File::open(path) {

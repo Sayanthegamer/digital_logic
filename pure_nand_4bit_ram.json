@@ -1,0 +1,4956 @@
+{
+  "library": [
+    {
+      "name": "NOT",
+      "inputs": 1,
+      "outputs": 1,
+      "input_names": [
+        "IN"
+      ],
+      "output_names": [
+        "OUT"
+      ],
+      "components": [
+        {
+          "component_type": "Nand",
+          "pos": [
+            200.0,
+            150.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "AND",
+      "inputs": 2,
+      "outputs": 1,
+      "input_names": [
+        "A",
+        "B"
+      ],
+      "output_names": [
+        "OUT"
+      ],
+      "components": [
+        {
+          "component_type": "Nand",
+          "pos": [
+            200.0,
+            150.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            380.0,
+            150.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "OR",
+      "inputs": 2,
+      "outputs": 1,
+      "input_names": [
+        "A",
+        "B"
+      ],
+      "output_names": [
+        "OUT"
+      ],
+      "components": [
+        {
+          "component_type": "Nand",
+          "pos": [
+            200.0,
+            100.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            200.0,
+            240.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            400.0,
+            170.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "NOR",
+      "inputs": 2,
+      "outputs": 1,
+      "input_names": [
+        "A",
+        "B"
+      ],
+      "output_names": [
+        "OUT"
+      ],
+      "components": [
+        {
+          "component_type": "Nand",
+          "pos": [
+            200.0,
+            100.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            200.0,
+            240.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            380.0,
+            170.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            540.0,
+            170.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "XOR",
+      "inputs": 2,
+      "outputs": 1,
+      "input_names": [
+        "A",
+        "B"
+      ],
+      "output_names": [
+        "OUT"
+      ],
+      "components": [
+        {
+          "component_type": "Nand",
+          "pos": [
+            200.0,
+            170.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            360.0,
+            100.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            360.0,
+            240.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            520.0,
+            170.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "XNOR",
+      "inputs": 2,
+      "outputs": 1,
+      "input_names": [
+        "A",
+        "B"
+      ],
+      "output_names": [
+        "OUT"
+      ],
+      "components": [
+        {
+          "component_type": "Nand",
+          "pos": [
+            200.0,
+            170.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            360.0,
+            100.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            360.0,
+            240.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            520.0,
+            170.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            670.0,
+            170.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 4,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 4,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 4,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "HalfAdder",
+      "inputs": 2,
+      "outputs": 2,
+      "input_names": [
+        "A",
+        "B"
+      ],
+      "output_names": [
+        "Sum",
+        "Cout"
+      ],
+      "components": [
+        {
+          "component_type": {
+            "SubChip": 4
+          },
+          "pos": [
+            250.0,
+            100.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 1
+          },
+          "pos": [
+            250.0,
+            240.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "FullAdder",
+      "inputs": 3,
+      "outputs": 2,
+      "input_names": [
+        "A",
+        "B",
+        "Cin"
+      ],
+      "output_names": [
+        "Sum",
+        "Cout"
+      ],
+      "components": [
+        {
+          "component_type": {
+            "SubChip": 6
+          },
+          "pos": [
+            200.0,
+            120.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 6
+          },
+          "pos": [
+            380.0,
+            150.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 2
+          },
+          "pos": [
+            540.0,
+            240.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 2
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "Adder4Bit",
+      "inputs": 9,
+      "outputs": 5,
+      "input_names": [
+        "A0",
+        "A1",
+        "A2",
+        "A3",
+        "B0",
+        "B1",
+        "B2",
+        "B3",
+        "Cin"
+      ],
+      "output_names": [
+        "S0",
+        "S1",
+        "S2",
+        "S3",
+        "Cout"
+      ],
+      "components": [
+        {
+          "component_type": {
+            "SubChip": 7
+          },
+          "pos": [
+            200.0,
+            80.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 7
+          },
+          "pos": [
+            380.0,
+            80.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 7
+          },
+          "pos": [
+            560.0,
+            80.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 7
+          },
+          "pos": [
+            740.0,
+            80.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 8
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 5
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 1
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 2
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 6
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 2
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 3
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 7
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 3
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ChipOutput": 4
+          }
+        }
+      ]
+    },
+    {
+      "name": "MUX2to1",
+      "inputs": 3,
+      "outputs": 1,
+      "input_names": [
+        "D0",
+        "D1",
+        "SEL"
+      ],
+      "output_names": [
+        "OUT"
+      ],
+      "components": [
+        {
+          "component_type": {
+            "SubChip": 0
+          },
+          "pos": [
+            200.0,
+            220.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 1
+          },
+          "pos": [
+            360.0,
+            100.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 1
+          },
+          "pos": [
+            360.0,
+            240.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 2
+          },
+          "pos": [
+            520.0,
+            170.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 2
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 2
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "MUX4to1",
+      "inputs": 6,
+      "outputs": 1,
+      "input_names": [
+        "D0",
+        "D1",
+        "D2",
+        "D3",
+        "S0",
+        "S1"
+      ],
+      "output_names": [
+        "OUT"
+      ],
+      "components": [
+        {
+          "component_type": {
+            "SubChip": 9
+          },
+          "pos": [
+            220.0,
+            100.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 9
+          },
+          "pos": [
+            220.0,
+            240.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 9
+          },
+          "pos": [
+            440.0,
+            170.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 2
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 3
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 5
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "MUX4Bit_2to1",
+      "inputs": 9,
+      "outputs": 4,
+      "input_names": [
+        "A0",
+        "A1",
+        "A2",
+        "A3",
+        "B0",
+        "B1",
+        "B2",
+        "B3",
+        "SEL"
+      ],
+      "output_names": [
+        "OUT0",
+        "OUT1",
+        "OUT2",
+        "OUT3"
+      ],
+      "components": [
+        {
+          "component_type": {
+            "SubChip": 9
+          },
+          "pos": [
+            250.0,
+            70.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 9
+          },
+          "pos": [
+            250.0,
+            180.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 9
+          },
+          "pos": [
+            250.0,
+            290.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 9
+          },
+          "pos": [
+            250.0,
+            400.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 8
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 5
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 8
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 1
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 2
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 6
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 8
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 2
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 3
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 7
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 8
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 3
+          }
+        }
+      ]
+    },
+    {
+      "name": "MUX4Bit_4to1",
+      "inputs": 18,
+      "outputs": 4,
+      "input_names": [
+        "W0_0",
+        "W0_1",
+        "W0_2",
+        "W0_3",
+        "W1_0",
+        "W1_1",
+        "W1_2",
+        "W1_3",
+        "W2_0",
+        "W2_1",
+        "W2_2",
+        "W2_3",
+        "W3_0",
+        "W3_1",
+        "W3_2",
+        "W3_3",
+        "S0",
+        "S1"
+      ],
+      "output_names": [
+        "OUT0",
+        "OUT1",
+        "OUT2",
+        "OUT3"
+      ],
+      "components": [
+        {
+          "component_type": {
+            "SubChip": 10
+          },
+          "pos": [
+            250.0,
+            60.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 10
+          },
+          "pos": [
+            250.0,
+            200.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 10
+          },
+          "pos": [
+            250.0,
+            340.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 10
+          },
+          "pos": [
+            250.0,
+            480.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 8
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 12
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 3
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 16
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 4
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 17
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 5
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 5
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 9
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 13
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 3
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 16
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 4
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 17
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 5
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 1
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 2
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 6
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 10
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 14
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 3
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 16
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 4
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 17
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 5
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 2
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 3
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 7
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 11
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 15
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 3
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 16
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 4
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 17
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 5
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 3
+          }
+        }
+      ]
+    },
+    {
+      "name": "Decoder2to4",
+      "inputs": 3,
+      "outputs": 4,
+      "input_names": [
+        "A0",
+        "A1",
+        "Strobe"
+      ],
+      "output_names": [
+        "Y0",
+        "Y1",
+        "Y2",
+        "Y3"
+      ],
+      "components": [
+        {
+          "component_type": {
+            "SubChip": 0
+          },
+          "pos": [
+            200.0,
+            100.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 0
+          },
+          "pos": [
+            200.0,
+            200.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 1
+          },
+          "pos": [
+            380.0,
+            70.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 1
+          },
+          "pos": [
+            540.0,
+            70.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 1
+          },
+          "pos": [
+            380.0,
+            170.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 1
+          },
+          "pos": [
+            540.0,
+            170.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 1
+          },
+          "pos": [
+            380.0,
+            270.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 1
+          },
+          "pos": [
+            540.0,
+            270.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 1
+          },
+          "pos": [
+            380.0,
+            370.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 1
+          },
+          "pos": [
+            540.0,
+            370.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 2
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 4,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 4,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 4,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 5,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 2
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 5,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 5,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 1
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 6,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 7,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 2
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 7,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 7,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 2
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 8,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 8,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 8,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 9,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 2
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 9,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 9,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 3
+          }
+        }
+      ]
+    },
+    {
+      "name": "DLatch",
+      "inputs": 2,
+      "outputs": 2,
+      "input_names": [
+        "D",
+        "Enable"
+      ],
+      "output_names": [
+        "Q",
+        "Q_bar"
+      ],
+      "components": [
+        {
+          "component_type": "Nand",
+          "pos": [
+            200.0,
+            100.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            350.0,
+            200.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            500.0,
+            100.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": "Nand",
+          "pos": [
+            500.0,
+            200.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "BitCell",
+      "inputs": 2,
+      "outputs": 1,
+      "input_names": [
+        "Data_In",
+        "Write_Enable"
+      ],
+      "output_names": [
+        "Data_Out"
+      ],
+      "components": [
+        {
+          "component_type": {
+            "SubChip": 14
+          },
+          "pos": [
+            250.0,
+            150.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "Register4Bit",
+      "inputs": 5,
+      "outputs": 4,
+      "input_names": [
+        "D0",
+        "D1",
+        "D2",
+        "D3",
+        "Write_Enable"
+      ],
+      "output_names": [
+        "Q0",
+        "Q1",
+        "Q2",
+        "Q3"
+      ],
+      "components": [
+        {
+          "component_type": {
+            "SubChip": 15
+          },
+          "pos": [
+            250.0,
+            60.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 15
+          },
+          "pos": [
+            250.0,
+            160.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 15
+          },
+          "pos": [
+            250.0,
+            260.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 15
+          },
+          "pos": [
+            250.0,
+            360.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 1
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 2
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 2
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 3
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 3
+          }
+        }
+      ]
+    },
+    {
+      "name": "RAM_4x4Bit",
+      "inputs": 8,
+      "outputs": 4,
+      "input_names": [
+        "Addr0",
+        "Addr1",
+        "CS",
+        "WE",
+        "Data_In_0",
+        "Data_In_1",
+        "Data_In_2",
+        "Data_In_3"
+      ],
+      "output_names": [
+        "Data_Out_0",
+        "Data_Out_1",
+        "Data_Out_2",
+        "Data_Out_3"
+      ],
+      "components": [
+        {
+          "component_type": {
+            "SubChip": 1
+          },
+          "pos": [
+            150.0,
+            50.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 13
+          },
+          "pos": [
+            300.0,
+            100.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 16
+          },
+          "pos": [
+            500.0,
+            50.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 16
+          },
+          "pos": [
+            500.0,
+            180.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 16
+          },
+          "pos": [
+            500.0,
+            310.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 16
+          },
+          "pos": [
+            500.0,
+            440.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 12
+          },
+          "pos": [
+            750.0,
+            200.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 2
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 3
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 4
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 4
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 2
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 4,
+              "port_idx": 4
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 3
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 5,
+              "port_idx": 4
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 5
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 6
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 7
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 2,
+              "port_idx": 3
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 5
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 6
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 7
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 3,
+              "port_idx": 3
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 4,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 5
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 4,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 6
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 4,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 7
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 4,
+              "port_idx": 3
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 5,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 5
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 5,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 6
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 5,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 7
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 5,
+              "port_idx": 3
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 2
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 2,
+              "port_idx": 3
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 3
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 4
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 5
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 2
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 6
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 3,
+              "port_idx": 3
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 7
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 4,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 8
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 4,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 9
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 4,
+              "port_idx": 2
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 10
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 4,
+              "port_idx": 3
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 11
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 5,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 12
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 5,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 13
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 5,
+              "port_idx": 2
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 14
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 5,
+              "port_idx": 3
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 15
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 16
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 6,
+              "port_idx": 17
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 6,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 6,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ChipOutput": 1
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 6,
+              "port_idx": 2
+            }
+          },
+          "target": {
+            "ChipOutput": 2
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 6,
+              "port_idx": 3
+            }
+          },
+          "target": {
+            "ChipOutput": 3
+          }
+        }
+      ]
+    },
+    {
+      "name": "RAM4Bit_ALU_Unit",
+      "inputs": 9,
+      "outputs": 9,
+      "input_names": [
+        "Addr0",
+        "Addr1",
+        "CS",
+        "WE",
+        "Operand_0",
+        "Operand_1",
+        "Operand_2",
+        "Operand_3",
+        "Cin"
+      ],
+      "output_names": [
+        "RAM_Out_0",
+        "RAM_Out_1",
+        "RAM_Out_2",
+        "RAM_Out_3",
+        "Sum_0",
+        "Sum_1",
+        "Sum_2",
+        "Sum_3",
+        "Cout"
+      ],
+      "components": [
+        {
+          "component_type": {
+            "SubChip": 17
+          },
+          "pos": [
+            240.0,
+            150.0
+          ],
+          "clock_period": null
+        },
+        {
+          "component_type": {
+            "SubChip": 8
+          },
+          "pos": [
+            540.0,
+            150.0
+          ],
+          "clock_period": null
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "ChipInput": 0
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 1
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 2
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 3
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 3
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 4
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 5
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 5
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 6
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 6
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 7
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 0,
+              "port_idx": 7
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 4
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 4
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 5
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 5
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 6
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 6
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 7
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 7
+            }
+          }
+        },
+        {
+          "source": {
+            "ChipInput": 8
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 8
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 0
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ChipOutput": 1
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 2
+            }
+          },
+          "target": {
+            "ChipOutput": 2
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 2
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 2
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 3
+            }
+          },
+          "target": {
+            "ChipOutput": 3
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 0,
+              "port_idx": 3
+            }
+          },
+          "target": {
+            "ComponentInput": {
+              "component_idx": 1,
+              "port_idx": 3
+            }
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 0
+            }
+          },
+          "target": {
+            "ChipOutput": 4
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 1
+            }
+          },
+          "target": {
+            "ChipOutput": 5
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 2
+            }
+          },
+          "target": {
+            "ChipOutput": 6
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 3
+            }
+          },
+          "target": {
+            "ChipOutput": 7
+          }
+        },
+        {
+          "source": {
+            "ComponentOutput": {
+              "component_idx": 1,
+              "port_idx": 4
+            }
+          },
+          "target": {
+            "ChipOutput": 8
+          }
+        }
+      ]
+    }
+  ],
+  "components": [
+    {
+      "id": 1,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        330.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "Addr0",
+      "clock_period": null
+    },
+    {
+      "id": 2,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        370.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "Addr1",
+      "clock_period": null
+    },
+    {
+      "id": 3,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        410.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "CS",
+      "clock_period": null
+    },
+    {
+      "id": 4,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        450.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "WE",
+      "clock_period": null
+    },
+    {
+      "id": 5,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        500.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "D0",
+      "clock_period": null
+    },
+    {
+      "id": 6,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        540.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "D1",
+      "clock_period": null
+    },
+    {
+      "id": 7,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        580.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "D2",
+      "clock_period": null
+    },
+    {
+      "id": 8,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        620.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "D3",
+      "clock_period": null
+    },
+    {
+      "id": 10,
+      "comp_type": {
+        "SubChip": 17
+      },
+      "pos": [
+        340.0,
+        360.0
+      ],
+      "width": 180.0,
+      "height": 270.0,
+      "label": "RAM_4x4Bit",
+      "clock_period": null
+    },
+    {
+      "id": 11,
+      "comp_type": "Output",
+      "pos": [
+        600.0,
+        420.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "Q0",
+      "clock_period": null
+    },
+    {
+      "id": 12,
+      "comp_type": "Output",
+      "pos": [
+        600.0,
+        470.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "Q1",
+      "clock_period": null
+    },
+    {
+      "id": 13,
+      "comp_type": "Output",
+      "pos": [
+        600.0,
+        520.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "Q2",
+      "clock_period": null
+    },
+    {
+      "id": 14,
+      "comp_type": "Output",
+      "pos": [
+        600.0,
+        570.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "Q3",
+      "clock_period": null
+    },
+    {
+      "id": 20,
+      "comp_type": "Input",
+      "pos": [
+        820.0,
+        320.0
+      ],
+      "width": 60.0,
+      "height": 26.0,
+      "label": "A0",
+      "clock_period": null
+    },
+    {
+      "id": 21,
+      "comp_type": "Input",
+      "pos": [
+        820.0,
+        355.0
+      ],
+      "width": 60.0,
+      "height": 26.0,
+      "label": "A1",
+      "clock_period": null
+    },
+    {
+      "id": 22,
+      "comp_type": "Input",
+      "pos": [
+        820.0,
+        390.0
+      ],
+      "width": 60.0,
+      "height": 26.0,
+      "label": "A2",
+      "clock_period": null
+    },
+    {
+      "id": 23,
+      "comp_type": "Input",
+      "pos": [
+        820.0,
+        425.0
+      ],
+      "width": 60.0,
+      "height": 26.0,
+      "label": "A3",
+      "clock_period": null
+    },
+    {
+      "id": 24,
+      "comp_type": "Input",
+      "pos": [
+        820.0,
+        470.0
+      ],
+      "width": 60.0,
+      "height": 26.0,
+      "label": "B0",
+      "clock_period": null
+    },
+    {
+      "id": 25,
+      "comp_type": "Input",
+      "pos": [
+        820.0,
+        505.0
+      ],
+      "width": 60.0,
+      "height": 26.0,
+      "label": "B1",
+      "clock_period": null
+    },
+    {
+      "id": 26,
+      "comp_type": "Input",
+      "pos": [
+        820.0,
+        540.0
+      ],
+      "width": 60.0,
+      "height": 26.0,
+      "label": "B2",
+      "clock_period": null
+    },
+    {
+      "id": 27,
+      "comp_type": "Input",
+      "pos": [
+        820.0,
+        575.0
+      ],
+      "width": 60.0,
+      "height": 26.0,
+      "label": "B3",
+      "clock_period": null
+    },
+    {
+      "id": 28,
+      "comp_type": "Input",
+      "pos": [
+        820.0,
+        620.0
+      ],
+      "width": 60.0,
+      "height": 26.0,
+      "label": "Cin",
+      "clock_period": null
+    },
+    {
+      "id": 30,
+      "comp_type": {
+        "SubChip": 8
+      },
+      "pos": [
+        980.0,
+        370.0
+      ],
+      "width": 170.0,
+      "height": 250.0,
+      "label": "Adder4Bit",
+      "clock_period": null
+    },
+    {
+      "id": 31,
+      "comp_type": "Output",
+      "pos": [
+        1230.0,
+        390.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "S0",
+      "clock_period": null
+    },
+    {
+      "id": 32,
+      "comp_type": "Output",
+      "pos": [
+        1230.0,
+        435.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "S1",
+      "clock_period": null
+    },
+    {
+      "id": 33,
+      "comp_type": "Output",
+      "pos": [
+        1230.0,
+        480.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "S2",
+      "clock_period": null
+    },
+    {
+      "id": 34,
+      "comp_type": "Output",
+      "pos": [
+        1230.0,
+        525.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "S3",
+      "clock_period": null
+    },
+    {
+      "id": 35,
+      "comp_type": "Output",
+      "pos": [
+        1230.0,
+        570.0
+      ],
+      "width": 70.0,
+      "height": 30.0,
+      "label": "Cout",
+      "clock_period": null
+    },
+    {
+      "id": 40,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        780.0
+      ],
+      "width": 70.0,
+      "height": 26.0,
+      "label": "Addr0",
+      "clock_period": null
+    },
+    {
+      "id": 41,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        815.0
+      ],
+      "width": 70.0,
+      "height": 26.0,
+      "label": "Addr1",
+      "clock_period": null
+    },
+    {
+      "id": 42,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        850.0
+      ],
+      "width": 70.0,
+      "height": 26.0,
+      "label": "CS",
+      "clock_period": null
+    },
+    {
+      "id": 43,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        885.0
+      ],
+      "width": 70.0,
+      "height": 26.0,
+      "label": "WE",
+      "clock_period": null
+    },
+    {
+      "id": 44,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        930.0
+      ],
+      "width": 70.0,
+      "height": 26.0,
+      "label": "Op0",
+      "clock_period": null
+    },
+    {
+      "id": 45,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        965.0
+      ],
+      "width": 70.0,
+      "height": 26.0,
+      "label": "Op1",
+      "clock_period": null
+    },
+    {
+      "id": 46,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        1000.0
+      ],
+      "width": 70.0,
+      "height": 26.0,
+      "label": "Op2",
+      "clock_period": null
+    },
+    {
+      "id": 47,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        1035.0
+      ],
+      "width": 70.0,
+      "height": 26.0,
+      "label": "Op3",
+      "clock_period": null
+    },
+    {
+      "id": 48,
+      "comp_type": "Input",
+      "pos": [
+        150.0,
+        1080.0
+      ],
+      "width": 70.0,
+      "height": 26.0,
+      "label": "Cin",
+      "clock_period": null
+    },
+    {
+      "id": 50,
+      "comp_type": {
+        "SubChip": 18
+      },
+      "pos": [
+        340.0,
+        810.0
+      ],
+      "width": 220.0,
+      "height": 290.0,
+      "label": "RAM4Bit_ALU_Unit",
+      "clock_period": null
+    },
+    {
+      "id": 51,
+      "comp_type": "Output",
+      "pos": [
+        650.0,
+        830.0
+      ],
+      "width": 80.0,
+      "height": 28.0,
+      "label": "RAM_Q0",
+      "clock_period": null
+    },
+    {
+      "id": 52,
+      "comp_type": "Output",
+      "pos": [
+        650.0,
+        870.0
+      ],
+      "width": 80.0,
+      "height": 28.0,
+      "label": "RAM_Q1",
+      "clock_period": null
+    },
+    {
+      "id": 53,
+      "comp_type": "Output",
+      "pos": [
+        650.0,
+        910.0
+      ],
+      "width": 80.0,
+      "height": 28.0,
+      "label": "RAM_Q2",
+      "clock_period": null
+    },
+    {
+      "id": 54,
+      "comp_type": "Output",
+      "pos": [
+        650.0,
+        950.0
+      ],
+      "width": 80.0,
+      "height": 28.0,
+      "label": "RAM_Q3",
+      "clock_period": null
+    },
+    {
+      "id": 55,
+      "comp_type": "Output",
+      "pos": [
+        820.0,
+        850.0
+      ],
+      "width": 80.0,
+      "height": 28.0,
+      "label": "Sum0",
+      "clock_period": null
+    },
+    {
+      "id": 56,
+      "comp_type": "Output",
+      "pos": [
+        820.0,
+        890.0
+      ],
+      "width": 80.0,
+      "height": 28.0,
+      "label": "Sum1",
+      "clock_period": null
+    },
+    {
+      "id": 57,
+      "comp_type": "Output",
+      "pos": [
+        820.0,
+        930.0
+      ],
+      "width": 80.0,
+      "height": 28.0,
+      "label": "Sum2",
+      "clock_period": null
+    },
+    {
+      "id": 58,
+      "comp_type": "Output",
+      "pos": [
+        820.0,
+        970.0
+      ],
+      "width": 80.0,
+      "height": 28.0,
+      "label": "Sum3",
+      "clock_period": null
+    },
+    {
+      "id": 59,
+      "comp_type": "Output",
+      "pos": [
+        820.0,
+        1010.0
+      ],
+      "width": 80.0,
+      "height": 28.0,
+      "label": "Cout",
+      "clock_period": null
+    }
+  ],
+  "connections": [
+    {
+      "src_comp_id": 1,
+      "src_port": 0,
+      "tgt_comp_id": 10,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 2,
+      "src_port": 0,
+      "tgt_comp_id": 10,
+      "tgt_port": 1
+    },
+    {
+      "src_comp_id": 3,
+      "src_port": 0,
+      "tgt_comp_id": 10,
+      "tgt_port": 2
+    },
+    {
+      "src_comp_id": 4,
+      "src_port": 0,
+      "tgt_comp_id": 10,
+      "tgt_port": 3
+    },
+    {
+      "src_comp_id": 5,
+      "src_port": 0,
+      "tgt_comp_id": 10,
+      "tgt_port": 4
+    },
+    {
+      "src_comp_id": 6,
+      "src_port": 0,
+      "tgt_comp_id": 10,
+      "tgt_port": 5
+    },
+    {
+      "src_comp_id": 7,
+      "src_port": 0,
+      "tgt_comp_id": 10,
+      "tgt_port": 6
+    },
+    {
+      "src_comp_id": 8,
+      "src_port": 0,
+      "tgt_comp_id": 10,
+      "tgt_port": 7
+    },
+    {
+      "src_comp_id": 10,
+      "src_port": 0,
+      "tgt_comp_id": 11,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 10,
+      "src_port": 1,
+      "tgt_comp_id": 12,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 10,
+      "src_port": 2,
+      "tgt_comp_id": 13,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 10,
+      "src_port": 3,
+      "tgt_comp_id": 14,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 20,
+      "src_port": 0,
+      "tgt_comp_id": 30,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 21,
+      "src_port": 0,
+      "tgt_comp_id": 30,
+      "tgt_port": 1
+    },
+    {
+      "src_comp_id": 22,
+      "src_port": 0,
+      "tgt_comp_id": 30,
+      "tgt_port": 2
+    },
+    {
+      "src_comp_id": 23,
+      "src_port": 0,
+      "tgt_comp_id": 30,
+      "tgt_port": 3
+    },
+    {
+      "src_comp_id": 24,
+      "src_port": 0,
+      "tgt_comp_id": 30,
+      "tgt_port": 4
+    },
+    {
+      "src_comp_id": 25,
+      "src_port": 0,
+      "tgt_comp_id": 30,
+      "tgt_port": 5
+    },
+    {
+      "src_comp_id": 26,
+      "src_port": 0,
+      "tgt_comp_id": 30,
+      "tgt_port": 6
+    },
+    {
+      "src_comp_id": 27,
+      "src_port": 0,
+      "tgt_comp_id": 30,
+      "tgt_port": 7
+    },
+    {
+      "src_comp_id": 28,
+      "src_port": 0,
+      "tgt_comp_id": 30,
+      "tgt_port": 8
+    },
+    {
+      "src_comp_id": 30,
+      "src_port": 0,
+      "tgt_comp_id": 31,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 30,
+      "src_port": 1,
+      "tgt_comp_id": 32,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 30,
+      "src_port": 2,
+      "tgt_comp_id": 33,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 30,
+      "src_port": 3,
+      "tgt_comp_id": 34,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 30,
+      "src_port": 4,
+      "tgt_comp_id": 35,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 40,
+      "src_port": 0,
+      "tgt_comp_id": 50,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 41,
+      "src_port": 0,
+      "tgt_comp_id": 50,
+      "tgt_port": 1
+    },
+    {
+      "src_comp_id": 42,
+      "src_port": 0,
+      "tgt_comp_id": 50,
+      "tgt_port": 2
+    },
+    {
+      "src_comp_id": 43,
+      "src_port": 0,
+      "tgt_comp_id": 50,
+      "tgt_port": 3
+    },
+    {
+      "src_comp_id": 44,
+      "src_port": 0,
+      "tgt_comp_id": 50,
+      "tgt_port": 4
+    },
+    {
+      "src_comp_id": 45,
+      "src_port": 0,
+      "tgt_comp_id": 50,
+      "tgt_port": 5
+    },
+    {
+      "src_comp_id": 46,
+      "src_port": 0,
+      "tgt_comp_id": 50,
+      "tgt_port": 6
+    },
+    {
+      "src_comp_id": 47,
+      "src_port": 0,
+      "tgt_comp_id": 50,
+      "tgt_port": 7
+    },
+    {
+      "src_comp_id": 48,
+      "src_port": 0,
+      "tgt_comp_id": 50,
+      "tgt_port": 8
+    },
+    {
+      "src_comp_id": 50,
+      "src_port": 0,
+      "tgt_comp_id": 51,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 50,
+      "src_port": 1,
+      "tgt_comp_id": 52,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 50,
+      "src_port": 2,
+      "tgt_comp_id": 53,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 50,
+      "src_port": 3,
+      "tgt_comp_id": 54,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 50,
+      "src_port": 4,
+      "tgt_comp_id": 55,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 50,
+      "src_port": 5,
+      "tgt_comp_id": 56,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 50,
+      "src_port": 6,
+      "tgt_comp_id": 57,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 50,
+      "src_port": 7,
+      "tgt_comp_id": 58,
+      "tgt_port": 0
+    },
+    {
+      "src_comp_id": 50,
+      "src_port": 8,
+      "tgt_comp_id": 59,
+      "tgt_port": 0
+    }
+  ],
+  "next_component_id": 70,
+  "annotations": [
+    {
+      "text": "=================================================================\n  PURE NAND 4-BIT RAM & ALU COMPUTER ARCHITECTURE\n=================================================================\nBuilt strictly from first principles starting from single NAND gates:\n- Level 1: Basic Logic (NOT, AND, OR, NOR, XOR, XNOR)\n- Level 2: Arithmetic Adders (Half Adder, Full Adder, 4-Bit Adder)\n- Level 3: Multiplexers & Decoders (2:1 MUX, 4:1 MUX, 4-Bit Bus MUX, 2-to-4 Decoder)\n- Level 4: Latches & BitCells (4-NAND D-Latch, Gated BitCell)\n- Level 5: Registers (4-Bit Word Register)\n- Level 6: Addressable RAM (4 words x 4-bit = 16-bit RAM with CS & WE)\n- Level 7: Integrated System (4-Bit RAM + ALU Accumulator Unit)\n\nTip: Select any subchip and click 'Look Inside' to drill down through all 7 layers down to raw NAND!",
+      "pos": [
+        100.0,
+        50.0
+      ]
+    },
+    {
+      "text": "=== MODULE 1: 4-WORD x 4-BIT RAM (Level 6) ===\nHow to Operate:\n1. Select Address using Addr0, Addr1 switches (00=Word0, 01=Word1, 10=Word2, 11=Word3).\n2. Turn CS (Chip Select) ON.\n3. WRITE: Set Data In [D0..D3], then click WE (Write Enable) ON then OFF.\n4. READ: Keep WE OFF and CS ON. The LEDs [Q0..Q3] immediately display the stored 4-bit word!",
+      "pos": [
+        100.0,
+        260.0
+      ]
+    },
+    {
+      "text": "=== MODULE 2: 4-BIT RIPPLE CARRY ADDER (Level 2) ===\nCalculates: [A3..A0] + [B3..B0] + Cin = [Cout, S3..S0]\nBuilt from Full Adders -> Half Adders -> XOR & AND -> Pure NANDs!",
+      "pos": [
+        800.0,
+        260.0
+      ]
+    },
+    {
+      "text": "=== MODULE 3: INTEGRATED 4-BIT RAM + ALU ACCUMULATOR SYSTEM (Level 7) ===\nCombines the 4x4 RAM and the 4-bit ALU into an integrated CPU data-path:\nReads the selected word from RAM and adds it to the incoming Operand + Cin in real-time!\n- RAM Out [Q0..Q3]: Displays stored word at selected address.\n- ALU Result [Sum0..Sum3, Cout]: Displays (RAM_Word + Operand + Cin).",
+      "pos": [
+        100.0,
+        720.0
+      ]
+    }
+  ],
+  "color_overrides": {
+    "component_colors": {},
+    "connection_colors": {}
+  },
+  "wire_nudges": []
+}

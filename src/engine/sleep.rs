@@ -59,6 +59,14 @@ impl SleepDomain {
         }
 
         self.is_sleeping = true;
+
+        // Enqueue external dependents of latches to ensure downstream logic settles
+        for &latch_idx in &self.latch_indices {
+            let deps = sim.nodes.dependents[latch_idx].clone();
+            for dep in deps {
+                sim.enqueue_internal(dep as usize);
+            }
+        }
     }
 
     /// Wakes the domain and unpacks dense bit buffers back into active simulation states
@@ -89,6 +97,14 @@ impl SleepDomain {
         // Enqueue all gates in domain to re-evaluate with current inputs
         for &gate_idx in &self.gates {
             sim.enqueue_internal(gate_idx);
+        }
+
+        // Enqueue external dependents of latches
+        for &latch_idx in &self.latch_indices {
+            let deps = sim.nodes.dependents[latch_idx].clone();
+            for dep in deps {
+                sim.enqueue_internal(dep as usize);
+            }
         }
 
         self.is_sleeping = false;

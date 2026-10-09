@@ -21,6 +21,7 @@ A high-performance, Rust-powered digital logic sandbox where you wire up NAND ga
 
 - [What is this?](#-what-is-this)
 - [Why it exists](#-why-it-exists)
+- [Interactive Demo: Pure NAND 4-Bit RAM & ALU](#-interactive-demo-pure-nand-4-bit-ram--alu)
 - [Feature Tour](#-feature-tour)
 - [Architecture, Visually](#-architecture-visually)
 - [How the Simulation Actually Works](#-how-the-simulation-actually-works)
@@ -56,6 +57,43 @@ Most visual logic simulators hit a wall once circuits get big. The usual culprit
 This project takes the opposite bet: **Data-Oriented Design**. Struct-of-arrays memory layout, an event-driven propagation queue (gates only evaluate when an input actually changes), and — most importantly — a **compiler pass that flattens the entire nested-chip hierarchy down to raw NAND gates** before simulation ever begins. By the time the simulator runs, it has no concept of "sub-chips" at all — just one big contiguous array of primitives. Nesting depth costs **zero** at runtime.
 
 The goal, stated plainly: **run a real 8-bit (eventually 16-bit) CPU, built entirely out of user-placed NAND gates, in real time, on modest consumer hardware** — no server, no cloud compute, just a laptop CPU core doing what it does best.
+
+## 🎛️ Interactive Demo: Pure NAND 4-Bit RAM & ALU
+
+A complete, live interactive showcase is shipped directly with the codebase: [`pure_nand_4bit_ram.logic`](pure_nand_4bit_ram.logic) (also available in JSON as [`pure_nand_4bit_ram.json`](pure_nand_4bit_ram.json)).
+
+It demonstrates the full power of the simulator by constructing a complete 4-word $\times$ 4-bit RAM and ALU accumulator strictly from the ground up across **7 distinct abstraction levels**, starting with single NAND gates:
+
+```mermaid
+flowchart TD
+    NAND["Level 0: Raw NAND Gate Primitives"]
+    L1["Level 1: Basic Logic (NOT, AND, OR, NOR, XOR, XNOR)"]
+    L2["Level 2: Arithmetic Adders (Half Adder, Full Adder, 4-Bit Adder)"]
+    L3["Level 3: Routing & Selection (2:1 MUX, 4:1 MUX, 4-Bit Bus MUX, 2-to-4 Address Decoder)"]
+    L4["Level 4: Sequential Latches (4-NAND Gated D-Latch, Gated BitCell with WE)"]
+    L5["Level 5: Word Registers (4-Bit Word Register = 4x BitCell)"]
+    L6["Level 6: Addressable RAM (4 Words x 4-Bit = 16-Bit RAM with CS & WE)"]
+    L7["Level 7: Integrated System (4-Bit RAM + ALU Accumulator Unit)"]
+
+    NAND --> L1
+    L1 --> L2
+    L1 --> L3
+    NAND --> L4
+    L4 --> L5
+    L3 --> L6
+    L5 --> L6
+    L6 --> L7
+    L2 --> L7
+```
+
+### Quick Run:
+1. Launch the simulator: `cargo run --release`
+2. Open the project: Click **File → Open...** (`Ctrl+O`) and choose `pure_nand_4bit_ram.logic`.
+3. Interact with the 3 pre-wired canvas modules:
+   - **Module 1: 4-Word $\times$ 4-Bit Addressable RAM** — Choose an address (`Addr0`, `Addr1`), turn `CS` ON, set data on `D0..D3`, and pulse `WE` ON then OFF to store words. Read back any address live onto `Q0..Q3`.
+   - **Module 2: 4-Bit Ripple Carry Adder** — Live pure-NAND arithmetic computing $[A] + [B] + Cin = [Cout, Sum]$.
+   - **Module 3: Integrated RAM + ALU Accumulator** — CPU data-path that reads the addressed RAM word and adds it to an incoming operand in real time.
+   - **Recursive Inspection:** Right-click any chip (`RAM_4x4Bit`, `Adder4Bit`, `Register4Bit`, etc.) and click **"Look Inside"** to drill down layer by layer all the way to raw NAND gates!
 
 ## ✨ Feature Tour
 
@@ -267,7 +305,7 @@ cargo run
 cargo run --release
 ```
 
-Run the test suite (55 unit/integration tests running in <0.9s — NAND truth tables, SR latches, multi-domain clocks, nested-chip compilation, 32-bit CPU pure-NAND arithmetic, multi-bank activity-gated RAM, topological sleep-gating detection, and SoA storage benchmarks):
+Run the test suite (57 unit/integration tests running in <0.9s — NAND truth tables, SR latches, multi-domain clocks, nested-chip compilation, 32-bit CPU pure-NAND arithmetic, multi-bank activity-gated RAM, topological sleep-gating detection, SoA storage benchmarks, and pure-NAND 4-bit RAM & ALU system verification):
 
 ```bash
 cargo test

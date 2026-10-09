@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.1] - 2026-10-09
+
+### Added
+- **Interactive Pure-NAND 4-Bit RAM & ALU Demo (`pure_nand_4bit_ram.logic` / `.json`)**:
+  - Implemented an end-to-end 7-tier computer architecture constructed purely from ground-up primitive NAND gates:
+    - *Level 1: Basic Logic* — NOT, AND, OR, NOR, XOR, XNOR.
+    - *Level 2: Arithmetic Adders* — Half Adder, Full Adder, 4-Bit Ripple Carry Adder.
+    - *Level 3: Multiplexers & Decoders* — 2:1 MUX, 4:1 MUX, 4-Bit Bus MUX, 2-to-4 Address Decoder.
+    - *Level 4: Sequential Latches* — 4-NAND Gated D-Latch, Gated BitCell with Write Enable.
+    - *Level 5: Word Registers* — 4-Bit Word Register ($4 \times$ BitCell).
+    - *Level 6: Addressable RAM* — 4-Word $\times$ 4-Bit (16-bit) RAM with Chip-Select, Write-Enable, and non-destructive 4-way multiplexed read.
+    - *Level 7: Integrated System* — 4-Bit RAM + ALU Accumulator Unit executing simultaneous read, write, and real-time operand addition.
+  - Shipped with interactive canvas switches, output LEDs, and comprehensive documentation annotations.
+  - Fully supports recursive "Look Inside" inspection down all 7 abstraction levels to raw NAND gates.
+  - Added full test suite `tests/test_pure_nand_4bit_ram_project.rs` verifying 100% truth tables, memory retention across all addresses, ALU operations, and project serialization/deserialization.
+
+### Fixed
+- **Sleep Domain Downstream Latch Notification (`src/engine/sleep.rs`)**:
+  - Enqueued external dependents of latches during `SleepDomain::hibernate` and `SleepDomain::wake`, ensuring downstream combinational logic (such as multiplexers reading from latches) immediately re-evaluates upon latch state restoration.
+- **Headless & Integration Test Font Loading Crash (`src/editor/mod.rs`)**:
+  - Wrapped font loading in `std::panic::catch_unwind`, preventing Macroquad `THREAD_ID.is_some()` panics when instantiating `Editor` in windowless test harnesses or CLI tools.
+- **Project Persistence API Visibility (`src/editor/persistence.rs`)**:
+  - Promoted `Editor::save_to_path` and `Editor::load_from_path` to `pub`, allowing external integration tests and automation tools to load and save `.logic` projects programmatically.
+
 ## [3.3.0] - 2026-10-09
 
 ### Added
