@@ -35,8 +35,8 @@ cargo build --release
 ```
 
 The resulting executable will be located at:
-- Linux/macOS: `./target/release/logic_simulator`
-- Windows: `.\target\release\logic_simulator.exe`
+- Linux/macOS: `./target/release/logic_simulator_bin`
+- Windows: `.\target\release\logic_simulator_bin.exe`
 
 You can run it directly:
 
