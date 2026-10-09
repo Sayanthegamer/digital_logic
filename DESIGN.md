@@ -11,21 +11,23 @@ Many logic simulators use an Object-Oriented approach where every gate and wire 
 ## Our Solution: Data-Oriented Design
 
 ### 1. The NAND Core
-At the mathematical base of the simulator, all complex logic resolves down to a single primitive: the NAND gate. (Inputs, Outputs, and Clocks act as state injection points rather than logic operators). By standardizing the logic operator, the execution loop is incredibly simple and uniform.
+At the mathematical base of the simulator, all combinational logic resolves down to a single operator: the NAND gate. Inputs and Outputs act as state injection and observation points (a Clock compiles to an Input that the editor toggles), while `TriStateBuffer` and `BusResolver` primitives exist to model shared buses. By standardizing the logic operator, the execution loop stays small and uniform.
 
-### 2. Struct of Arrays (SoA)
-Instead of an array of objects `[{type, state, connections}, ...]`, the `Simulator` manages separate, contiguous arrays:
-- `states: Vec<bool>`: The current binary state of every primitive.
-- `gates: Vec<PrimitiveGate>`: The topology (type and input sources).
-- `dependents: Vec<Vec<usize>>`: A forward-mapped adjacency list showing which gates rely on a specific gate's output.
+### 2. Flat, Index-Based Node Storage
+Instead of heap-allocated gate objects that point at each other, the `Simulator` keeps every primitive in one `slab::Slab<GateNode>` and refers to gates by `usize` index:
+- `gate: PrimitiveGate`: The gate type and its two input sources (`Option<usize>` indices).
+- `state: u8`: The current 4-state signal (`0b00` Floating, `0b01` Low, `0b10` High, `0b11` Contention).
+- `dependents: Vec<usize>`: A forward adjacency list of the gates that read this gate's output.
+- `depth` and `in_queue`: Scheduling metadata for the per-depth event queues.
 
-During simulation, evaluating a NAND gate is essentially a few pointer jumps in a contiguous memory block:
+During simulation, evaluating a NAND gate is a couple of index lookups into that slab:
 ```rust
-let val_a = states[gate.input_a];
-let val_b = states[gate.input_b];
-states[idx] = !(val_a && val_b);
+let val_a = input_a_source.map(|s| nodes[s].state).unwrap_or(0b00);
+let val_b = input_b_source.map(|s| nodes[s].state).unwrap_or(0b00);
+let high = |v: u8| (v & 0b10) != 0;
+let new_state = if !(high(val_a) && high(val_b)) { 0b10 } else { 0b01 };
 ```
-This data layout is extremely friendly to CPU caches. Furthermore, the `Simulator` strictly sorts these arrays topologically immediately after compilation. When a Rayon thread picks up a chunk of the `event_queue` for parallel evaluation, it naturally reads from and writes to a densely packed block of memory with zero cache misses.
+This is an array-of-structs layout with compact (single-byte) state, not a strict struct-of-arrays. The locality gain comes from ordering: immediately after compilation the `Simulator` re-inserts all nodes sorted by topological depth, so gates in the same layer sit next to each other when a Rayon thread picks up a chunk of the `event_queue`.
 
 ### 3. Flat Compilation Hierarchy
 When a user builds a complex chip (like an ALU) from smaller sub-chips (like Adders), and then places that ALU inside a CPU, the simulator *does not retain this nested hierarchy at runtime*.
