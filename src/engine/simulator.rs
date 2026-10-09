@@ -362,9 +362,9 @@ impl Simulator {
         old_to_new
     }
 
-    pub fn propagate_events(&mut self, max_steps_multiplier: usize) -> Result<usize, String> {
+    pub fn propagate_events(&mut self, budget_multiplier: usize) -> Result<usize, String> {
         let mut total_steps = 0;
-        let max_steps = self.nodes.capacity() * max_steps_multiplier.max(100);
+        let max_steps = self.nodes.capacity() * budget_multiplier.max(100);
 
         let mut depth = 0;
         while depth < self.event_queue.len() {

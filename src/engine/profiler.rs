@@ -68,6 +68,6 @@ pub fn detect_parallel_crossover_threshold() -> usize {
         }
 
         // Fallback if parallel is somehow slower even at 16000 gates
-        10000
+        usize::MAX
     })
 }

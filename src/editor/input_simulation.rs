@@ -19,7 +19,7 @@ impl Editor {
                     }
                 }
 
-                let max_steps = (self.engine.simulator.nodes.len() * 10).max(1000);
+                let max_steps = 100;
                 match self.engine.simulator.propagate_events(max_steps) {
                     Ok(_) => self.engine.propagation_error = None,
                     Err(e) => {

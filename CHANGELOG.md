@@ -1,4 +1,13 @@
-# Changelog
+## [3.2.4] - Unreleased
+
+### Fixed
+- **Oscillation Budget Scaling**: Changed the oscillation budget to scale linearly with circuit size (100 * N) instead of quadratically, preventing false stalls on extremely large circuits.
+- **Parallel Profiler Fallback**: Fixed the `detect_parallel_crossover_threshold` fallback to return `usize::MAX` (disabling parallel) if it never beats sequential execution during testing, rather than a fixed 10000 that would incorrectly force parallel mode.
+- **Safe Compilation**: Added upfront index bounds checking to `instantiate_chip_with_mapping` so malformed project file blueprints return an `Err` rather than panicking.
+- **Safe Loading**: `load_project()` now validates the parsed project components using a scratch simulator before writing to the global library or overwriting the current state.
+- **Documentation Accuracy**: Corrected the architectural description of feedback evaluation depth rewinding to accurately state that events enqueued at an earlier depth are picked up once the loop runs past the last non-empty layer.
+
+## [3.2.3] - Unreleased# Changelog
 
 All notable changes to this project will be documented in this file.
 

@@ -185,7 +185,7 @@ impl Editor {
         }
 
         // Settle initial states
-        let max_steps = (sim.nodes.len() * 10).max(1000);
+        let max_steps = 100;
         match sim.propagate_events(max_steps) {
             Ok(_) => self.engine.propagation_error = None,
             Err(e) => self.engine.propagation_error = Some(e),

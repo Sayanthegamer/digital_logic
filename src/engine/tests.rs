@@ -1146,3 +1146,25 @@ fn test_feedback_loop_drains_upstream_events_in_single_pass() {
     assert!(res.is_err());
     assert!(res.unwrap_err().contains("Oscillation detected"));
 }
+
+#[test]
+fn test_oscillation_budget_regression() {
+    let mut sim = Simulator::new();
+
+    // Create an oscillator: NAND gate with output fed back to both inputs
+    let nand = sim.add_gate(GateType::Nand);
+    sim.connect(nand, nand, 0); // feed back to port 0
+    sim.connect(nand, nand, 1); // feed back to port 1
+
+    // ~50k independent gates to artificially inflate capacity
+    for _ in 0..50_000 {
+        sim.add_gate(GateType::Nand);
+    }
+
+    // Attempting to propagate events should exceed the max_steps limit quickly
+    let res = sim.propagate_events(100);
+    assert!(
+        res.is_err(),
+        "Oscillation should be detected quickly despite 50k capacity"
+    );
+}
