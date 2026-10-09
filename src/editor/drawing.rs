@@ -2,8 +2,8 @@ use crate::editor::theme;
 use crate::engine::ComponentType;
 use macroquad::prelude::*;
 
-use crate::editor::types::VisualConnection;
 use super::Editor;
+use crate::editor::types::VisualConnection;
 
 use crate::editor::drawing_shapes::*;
 
@@ -20,8 +20,9 @@ impl Editor {
     pub fn is_bus_connection(&self, conn: &VisualConnection) -> bool {
         let src_comp = self.get_component(conn.src_comp_id);
         let tgt_comp = self.get_component(conn.tgt_comp_id);
-        src_comp.map_or(false, |c| c.comp_type == ComponentType::BusJoiner && conn.src_port == 0)
-            || tgt_comp.map_or(false, |c| c.comp_type == ComponentType::BusSplitter && conn.tgt_port == 0)
+        src_comp.is_some_and(|c| c.comp_type == ComponentType::BusJoiner && conn.src_port == 0)
+            || tgt_comp
+                .is_some_and(|c| c.comp_type == ComponentType::BusSplitter && conn.tgt_port == 0)
     }
 
     pub fn draw(&mut self) {
@@ -77,22 +78,29 @@ impl Editor {
 
         // Precompute wire intersections so we can skip drawing the upper wire line through bridge arcs
         let intersections = self.find_wire_intersections();
-        let mut upper_gaps: std::collections::HashMap<crate::editor::types::VisualConnection, Vec<(Vec2, f32)>> = std::collections::HashMap::new();
+        let mut upper_gaps: std::collections::HashMap<
+            crate::editor::types::VisualConnection,
+            Vec<(Vec2, f32)>,
+        > = std::collections::HashMap::new();
         for int in &intersections {
-            if int.junction_type == crate::editor::wire_junctions::JunctionType::Crossing {
-                if let Some(upper) = int.upper_conn {
-                    upper_gaps.entry(upper).or_default().push((int.point, int.lower_thickness));
-                }
+            if int.junction_type == crate::editor::wire_junctions::JunctionType::Crossing
+                && let Some(upper) = int.upper_conn
+            {
+                upper_gaps
+                    .entry(upper)
+                    .or_default()
+                    .push((int.point, int.lower_thickness));
             }
         }
 
         // 1. Draw Wires / Connections
         let visible_wires = self.canvas.wire_spatial_grid.query_rect(viewport_rect);
-        
-        for wire in &self.circuit.connections {
-            if !visible_wires.contains(wire) {
-                continue;
-            }
+        let mut sorted_visible_wires: Vec<&crate::editor::types::VisualConnection> =
+            visible_wires.iter().collect();
+        sorted_visible_wires
+            .sort_unstable_by_key(|w| (w.src_comp_id, w.src_port, w.tgt_comp_id, w.tgt_port));
+
+        for wire in sorted_visible_wires {
             let src_comp = comp_map.get(&wire.src_comp_id).copied();
             let tgt_comp = comp_map.get(&wire.tgt_comp_id).copied();
 
@@ -123,7 +131,10 @@ impl Editor {
                 let offset = self.get_connection_routing_offset(wire);
                 let is_bus = self.is_bus_connection(wire);
                 let empty_gaps = &[];
-                let gaps = upper_gaps.get(wire).map(|v| v.as_slice()).unwrap_or(empty_gaps);
+                let gaps = upper_gaps
+                    .get(wire)
+                    .map(|v| v.as_slice())
+                    .unwrap_or(empty_gaps);
 
                 self.draw_manhattan_wire(
                     src_pos,
@@ -146,7 +157,8 @@ impl Editor {
         if let Some((src_id, src_port, src_is_input)) = self.canvas.active_wire_drag
             && let Some(src) = self.get_component(src_id)
         {
-            let (src_inputs, src_outputs) = self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
+            let (src_inputs, src_outputs) =
+                self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
             let start_pos = if src_is_input {
                 self.to_screen_space(src.input_port_pos(src_port, src_inputs))
             } else {
@@ -160,7 +172,10 @@ impl Editor {
                 && tgt_id != src_id
                 && let Some(tgt_comp) = self.get_component(tgt_id)
             {
-                let (tgt_inputs, tgt_outputs) = self.get_component_ports_count_with_width(tgt_comp.comp_type, Some(tgt_comp.bus_width()));
+                let (tgt_inputs, tgt_outputs) = self.get_component_ports_count_with_width(
+                    tgt_comp.comp_type,
+                    Some(tgt_comp.bus_width()),
+                );
                 end_pos = if tgt_is_input {
                     self.to_screen_space(tgt_comp.input_port_pos(tgt_port, tgt_inputs))
                 } else {
@@ -241,9 +256,9 @@ impl Editor {
             }
         }
 
-        // 1.9 Pre-calculate input port states to avoid catastrophic O(N^2 * E) rendering loop
-        let mut input_port_states = std::collections::HashMap::with_capacity(self.circuit.connections.len());
-        for wire in &self.circuit.connections {
+        // 1.9 Pre-calculate input port states for visible wires to avoid scanning off-screen circuit
+        let mut input_port_states = std::collections::HashMap::with_capacity(visible_wires.len());
+        for wire in &visible_wires {
             let state = self.get_wire_state(wire.src_comp_id, wire.src_port);
             input_port_states.insert((wire.tgt_comp_id, wire.tgt_port), state);
         }
@@ -251,33 +266,61 @@ impl Editor {
         // 2. Draw Components
         // (viewport_rect is already computed above)
 
-        let mut visible_comp_ids: Vec<usize> = self.canvas.spatial_grid.query_rect(viewport_rect).into_iter().collect();
+        let mut visible_comp_ids: Vec<usize> = self
+            .canvas
+            .spatial_grid
+            .query_rect(viewport_rect)
+            .into_iter()
+            .collect();
         visible_comp_ids.sort_unstable(); // Restore deterministic drawing Z-order
-        
+
         self.ui.drawn_components = visible_comp_ids.len();
 
         if self.ui.debug_cull_bounds {
             let r = viewport_rect;
             let vp_screen_pos = self.to_screen_space(macroquad::prelude::Vec2::new(r.x, r.y));
-            let vp_screen_end = self.to_screen_space(macroquad::prelude::Vec2::new(r.x + r.w, r.y + r.h));
-            draw_rectangle_lines(vp_screen_pos.x, vp_screen_pos.y, vp_screen_end.x - vp_screen_pos.x, vp_screen_end.y - vp_screen_pos.y, 4.0, RED);
+            let vp_screen_end =
+                self.to_screen_space(macroquad::prelude::Vec2::new(r.x + r.w, r.y + r.h));
+            draw_rectangle_lines(
+                vp_screen_pos.x,
+                vp_screen_pos.y,
+                vp_screen_end.x - vp_screen_pos.x,
+                vp_screen_end.y - vp_screen_pos.y,
+                4.0,
+                RED,
+            );
 
             for comp in &self.circuit.components {
                 let screen_pos = self.to_screen_space(comp.pos);
                 let comp_width = comp.width * self.canvas.zoom;
                 let comp_height = comp.height * self.canvas.zoom;
                 if visible_comp_ids.contains(&comp.id) {
-                    draw_rectangle_lines(screen_pos.x, screen_pos.y, comp_width, comp_height, 2.0, GREEN);
+                    draw_rectangle_lines(
+                        screen_pos.x,
+                        screen_pos.y,
+                        comp_width,
+                        comp_height,
+                        2.0,
+                        GREEN,
+                    );
                 } else {
-                    draw_rectangle_lines(screen_pos.x, screen_pos.y, comp_width, comp_height, 2.0, GRAY);
+                    draw_rectangle_lines(
+                        screen_pos.x,
+                        screen_pos.y,
+                        comp_width,
+                        comp_height,
+                        2.0,
+                        GRAY,
+                    );
                 }
             }
         }
 
-
         for &comp_id in &visible_comp_ids {
-            let Some(comp) = comp_map.get(&comp_id) else { continue };
-            
+            let Some(comp) = comp_map.get(&comp_id) else {
+                continue;
+            };
+
             let screen_pos = self.to_screen_space(comp.pos);
             let comp_width = comp.width * self.canvas.zoom;
             let comp_height = comp.height * self.canvas.zoom;
@@ -351,7 +394,11 @@ impl Editor {
             // Draw component box with rounded corners and drop shadow
             // Drop shadow removed for performance / Blueprint style
 
-            let accent_color = if let Some(color_override) = comp.color.map(|c| Color::new(c[0], c[1], c[2], c[3])).or_else(|| self.circuit.color_overrides.get_component_color(comp.id)) {
+            let accent_color = if let Some(color_override) = comp
+                .color
+                .map(|c| Color::new(c[0], c[1], c[2], c[3]))
+                .or_else(|| self.circuit.color_overrides.get_component_color(comp.id))
+            {
                 color_override
             } else {
                 match comp.comp_type {
@@ -382,7 +429,7 @@ impl Editor {
                     screen_pos.y,
                     comp_width,
                     comp_height,
-                    accent_color.clone(),
+                    accent_color,
                 );
                 continue;
             }
@@ -425,10 +472,14 @@ impl Editor {
             // Draw text label / Semantic state
             if comp.comp_type != ComponentType::SevenSegment && self.canvas.zoom >= 0.35 {
                 let base_font_size = 13.0;
-                
+
                 let display_label = match comp.comp_type {
                     ComponentType::Input | ComponentType::Output => {
-                        format!("{} [{}]", comp.label, if is_input_active { "1" } else { "0" })
+                        format!(
+                            "{} [{}]",
+                            comp.label,
+                            if is_input_active { "1" } else { "0" }
+                        )
                     }
                     _ => comp.label.clone(),
                 };
@@ -462,7 +513,8 @@ impl Editor {
             }
 
             // Draw port circles
-            let (inputs_count, outputs_count) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
+            let (inputs_count, outputs_count) =
+                self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
             let port_radius = 4.0 * self.canvas.zoom;
 
             let mut seg_states = [false; 8];
@@ -472,7 +524,10 @@ impl Editor {
             for i in 0..inputs_count {
                 let port_pos = self.to_screen_space(comp.input_port_pos(i, inputs_count));
 
-                let input_active = input_port_states.get(&(comp.id, i)).copied().unwrap_or(false);
+                let input_active = input_port_states
+                    .get(&(comp.id, i))
+                    .copied()
+                    .unwrap_or(false);
 
                 if comp.comp_type == ComponentType::SevenSegment && i < 8 {
                     seg_states[i] = input_active;
@@ -718,7 +773,8 @@ impl Editor {
         if let Some((comp_id, port_idx, is_input)) = self.canvas.hovered_port
             && let Some(comp) = self.get_component(comp_id)
         {
-            let (inputs_count, outputs_count) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
+            let (inputs_count, outputs_count) =
+                self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
             let pos = if is_input {
                 self.to_screen_space(comp.input_port_pos(port_idx, inputs_count))
             } else {
@@ -745,24 +801,39 @@ impl Editor {
             );
         }
         // Draw keyboard tab focus indicator
-        if let Some((comp_id, port_opt)) = self.canvas.tab_focus {
-            if let Some(comp) = self.get_component(comp_id) {
-                if let Some((port_idx, is_input)) = port_opt {
-                    // Draw a square bracket around the port
-                    let (in_count, out_count) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
-                    let pos = if is_input {
-                        self.to_screen_space(comp.input_port_pos(port_idx, in_count))
-                    } else {
-                        self.to_screen_space(comp.output_port_pos(port_idx, out_count))
-                    };
-                    draw_rectangle_lines(pos.x - 6.0, pos.y - 6.0, 12.0, 12.0, 2.0, theme::ACCENT_ACTIVE.mq());
+        if let Some((comp_id, port_opt)) = self.canvas.tab_focus
+            && let Some(comp) = self.get_component(comp_id)
+        {
+            if let Some((port_idx, is_input)) = port_opt {
+                // Draw a square bracket around the port
+                let (in_count, out_count) = self
+                    .get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
+                let pos = if is_input {
+                    self.to_screen_space(comp.input_port_pos(port_idx, in_count))
                 } else {
-                    // Draw a dashed highlight around the component
-                    let screen_pos = self.to_screen_space(comp.pos);
-                    let w = comp.width * self.canvas.zoom;
-                    let h = comp.height * self.canvas.zoom;
-                    draw_rectangle_lines(screen_pos.x - 4.0, screen_pos.y - 4.0, w + 8.0, h + 8.0, 2.0, theme::ACCENT_ACTIVE.mq());
-                }
+                    self.to_screen_space(comp.output_port_pos(port_idx, out_count))
+                };
+                draw_rectangle_lines(
+                    pos.x - 6.0,
+                    pos.y - 6.0,
+                    12.0,
+                    12.0,
+                    2.0,
+                    theme::ACCENT_ACTIVE.mq(),
+                );
+            } else {
+                // Draw a dashed highlight around the component
+                let screen_pos = self.to_screen_space(comp.pos);
+                let w = comp.width * self.canvas.zoom;
+                let h = comp.height * self.canvas.zoom;
+                draw_rectangle_lines(
+                    screen_pos.x - 4.0,
+                    screen_pos.y - 4.0,
+                    w + 8.0,
+                    h + 8.0,
+                    2.0,
+                    theme::ACCENT_ACTIVE.mq(),
+                );
             }
         }
 

@@ -75,14 +75,16 @@ impl Simulator {
             self.event_queue.push(Vec::new());
         }
         self.event_queue[0].push(index);
-        
+
         index
     }
 
     /// Removes a gate and automatically disconnects all dependents and sources
     pub fn remove_gate(&mut self, gate_idx: usize) {
-        if !self.nodes.contains(gate_idx) { return; }
-        
+        if !self.nodes.contains(gate_idx) {
+            return;
+        }
+
         // Removing event_queue.clear() to preserve `in_queue` invariants for existing gates.
         // 1. Tell all dependents to forget about us
         let deps = self.nodes[gate_idx].dependents.clone();
@@ -102,22 +104,22 @@ impl Simulator {
                 self.enqueue(dep_idx);
             }
         }
-        
+
         // 2. Tell our sources to stop tracking us as a dependent
         let a_src = self.nodes[gate_idx].gate.input_a_source;
         let b_src = self.nodes[gate_idx].gate.input_b_source;
-        
-        if let Some(s_idx) = a_src {
-            if let Some(src_node) = self.nodes.get_mut(s_idx) {
-                src_node.dependents.retain(|&x| x != gate_idx);
-            }
+
+        if let Some(s_idx) = a_src
+            && let Some(src_node) = self.nodes.get_mut(s_idx)
+        {
+            src_node.dependents.retain(|&x| x != gate_idx);
         }
-        if let Some(s_idx) = b_src {
-            if let Some(src_node) = self.nodes.get_mut(s_idx) {
-                src_node.dependents.retain(|&x| x != gate_idx);
-            }
+        if let Some(s_idx) = b_src
+            && let Some(src_node) = self.nodes.get_mut(s_idx)
+        {
+            src_node.dependents.retain(|&x| x != gate_idx);
         }
-        
+
         self.nodes.remove(gate_idx);
     }
 
@@ -175,21 +177,23 @@ impl Simulator {
     }
 
     fn enqueue(&mut self, gate_idx: usize) {
-        if let Some(node) = self.nodes.get_mut(gate_idx) {
-            if !node.in_queue {
-                node.in_queue = true;
-                let depth = node.depth;
-                if self.event_queue.len() <= depth {
-                    self.event_queue.resize(depth + 1, Vec::new());
-                }
-                self.event_queue[depth].push(gate_idx);
+        if let Some(node) = self.nodes.get_mut(gate_idx)
+            && !node.in_queue
+        {
+            node.in_queue = true;
+            let depth = node.depth;
+            if self.event_queue.len() <= depth {
+                self.event_queue.resize(depth + 1, Vec::new());
             }
+            self.event_queue[depth].push(gate_idx);
         }
     }
 
     pub fn calculate_depths(&mut self) {
         let num_nodes = self.nodes.capacity();
-        if num_nodes == 0 { return; }
+        if num_nodes == 0 {
+            return;
+        }
 
         let mut index = 0;
         let mut indices = vec![None; num_nodes];
@@ -218,7 +222,7 @@ impl Simulator {
 
                 let mut returned = false;
                 let dependents_len = self.nodes[v].dependents.len();
-                
+
                 let mut current_edge = edge_idx;
                 while current_edge < dependents_len {
                     let w = self.nodes[v].dependents[current_edge];
@@ -262,7 +266,35 @@ impl Simulator {
 
         sccs.reverse();
 
-        for (depth, scc) in sccs.iter().enumerate() {
+        let num_sccs = sccs.len();
+        let mut node_to_scc = vec![usize::MAX; num_nodes];
+        for (scc_idx, scc) in sccs.iter().enumerate() {
+            for &node in scc {
+                if node < num_nodes {
+                    node_to_scc[node] = scc_idx;
+                }
+            }
+        }
+
+        let mut scc_depth = vec![0; num_sccs];
+        for scc_idx in 0..num_sccs {
+            let current_depth = scc_depth[scc_idx];
+            for &node in &sccs[scc_idx] {
+                if let Some(n) = self.nodes.get(node) {
+                    for &dep in &n.dependents {
+                        if dep < num_nodes {
+                            let dep_scc = node_to_scc[dep];
+                            if dep_scc != usize::MAX && dep_scc != scc_idx {
+                                scc_depth[dep_scc] = scc_depth[dep_scc].max(current_depth + 1);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for (scc_idx, scc) in sccs.iter().enumerate() {
+            let depth = scc_depth[scc_idx];
             for &node in scc {
                 if let Some(n) = self.nodes.get_mut(node) {
                     n.depth = depth;
@@ -273,13 +305,21 @@ impl Simulator {
 
     pub fn defragment_and_sort_by_depth(&mut self) -> Vec<usize> {
         let capacity = self.nodes.capacity();
-        let mut old_to_new = vec![usize::MAX; capacity];
 
-        let mut valid_nodes: Vec<(usize, GateNode)> = self
-            .nodes
-            .iter()
-            .map(|(idx, node)| (idx, node.clone()))
-            .collect();
+        let is_already_compact_and_sorted = self.nodes.len() == capacity
+            && self
+                .nodes
+                .iter()
+                .zip(self.nodes.iter().skip(1))
+                .all(|((_, a), (_, b))| a.depth <= b.depth);
+
+        if is_already_compact_and_sorted {
+            return (0..capacity).collect();
+        }
+
+        let mut old_to_new = vec![usize::MAX; capacity];
+        let old_nodes = std::mem::take(&mut self.nodes);
+        let mut valid_nodes: Vec<(usize, GateNode)> = old_nodes.into_iter().collect();
 
         valid_nodes.sort_by_key(|(_, node)| node.depth);
 
@@ -290,20 +330,30 @@ impl Simulator {
         }
 
         for (_, node) in new_slab.iter_mut() {
-            if let Some(src) = node.gate.input_a_source {
+            if let Some(src) = node.gate.input_a_source
+                && src < old_to_new.len()
+                && old_to_new[src] != usize::MAX
+            {
                 node.gate.input_a_source = Some(old_to_new[src]);
             }
-            if let Some(src) = node.gate.input_b_source {
+            if let Some(src) = node.gate.input_b_source
+                && src < old_to_new.len()
+                && old_to_new[src] != usize::MAX
+            {
                 node.gate.input_b_source = Some(old_to_new[src]);
             }
             for dep in &mut node.dependents {
-                *dep = old_to_new[*dep];
+                if *dep < old_to_new.len() && old_to_new[*dep] != usize::MAX {
+                    *dep = old_to_new[*dep];
+                }
             }
         }
 
         for depth_queue in &mut self.event_queue {
             for idx in depth_queue.iter_mut() {
-                *idx = old_to_new[*idx];
+                if *idx < old_to_new.len() && old_to_new[*idx] != usize::MAX {
+                    *idx = old_to_new[*idx];
+                }
             }
         }
 
@@ -315,16 +365,14 @@ impl Simulator {
     pub fn propagate_events(&mut self, max_steps_multiplier: usize) -> Result<usize, String> {
         let mut total_steps = 0;
         let max_steps = self.nodes.capacity() * max_steps_multiplier.max(100);
-        
+
         let mut depth = 0;
-        let mut depth_steps = 0;
         while depth < self.event_queue.len() {
-            if self.event_queue[depth].is_empty() { 
+            if self.event_queue[depth].is_empty() {
                 depth += 1;
-                depth_steps = 0;
-                continue; 
+                continue;
             }
-            
+
             let current_queue = std::mem::take(&mut self.event_queue[depth]);
             for &idx in &current_queue {
                 if let Some(node) = self.nodes.get_mut(idx) {
@@ -334,8 +382,10 @@ impl Simulator {
 
             let nodes = &self.nodes;
             let compute_state = |&idx: &usize| -> Option<(usize, u8)> {
-                if !nodes.contains(idx) { return None; }
-                
+                if !nodes.contains(idx) {
+                    return None;
+                }
+
                 let val_a = nodes[idx]
                     .gate
                     .input_a_source
@@ -397,9 +447,8 @@ impl Simulator {
                 next_enqueues.push(idx);
             }
 
-            depth_steps += current_queue.len();
             total_steps += current_queue.len();
-            if depth_steps >= max_steps {
+            if total_steps >= max_steps {
                 return Err(format!(
                     "Oscillation detected: exceeded max_steps limit of {}",
                     max_steps
@@ -413,16 +462,15 @@ impl Simulator {
                 }
                 self.nodes[idx].dependents = deps;
             }
-            
-            // Loop condition: we want to process all depths up to current event_queue.len().
-            // Wait, if self.enqueue pushes events to the same depth (e.g. cycle within same depth layer?), 
-            // `self.event_queue[depth]` might become non-empty. 
-            // In the original, it used `for depth in 0..max_depth`. Let's just increment depth.
-            // But we changed to a while loop, so if something is enqueued at the current depth, 
-            // it will be processed in the next iteration of the while loop before moving to depth+1.
+
             if self.event_queue[depth].is_empty() {
                 depth += 1;
-                depth_steps = 0;
+            }
+
+            if depth >= self.event_queue.len()
+                && let Some(first_non_empty) = self.event_queue.iter().position(|q| !q.is_empty())
+            {
+                depth = first_non_empty;
             }
         }
 
@@ -430,10 +478,16 @@ impl Simulator {
     }
 
     pub fn get_raw_state(&self, gate_idx: usize) -> u8 {
-        self.nodes.get(gate_idx).map(|node| node.state).unwrap_or(0b00)
+        self.nodes
+            .get(gate_idx)
+            .map(|node| node.state)
+            .unwrap_or(0b00)
     }
 
     pub fn get_state(&self, gate_idx: usize) -> bool {
-        self.nodes.get(gate_idx).map(|node| node.state == 0b10).unwrap_or(false)
+        self.nodes
+            .get(gate_idx)
+            .map(|node| node.state == 0b10)
+            .unwrap_or(false)
     }
 }

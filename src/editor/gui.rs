@@ -6,7 +6,8 @@ pub fn setup_egui() {
         let mut fonts = egui::FontDefinitions::default();
         fonts.font_data.insert(
             "material_icons".to_owned(),
-            egui::FontData::from_static(include_bytes!("../../assets/MaterialIcons-Regular.ttf")).into(),
+            egui::FontData::from_static(include_bytes!("../../assets/MaterialIcons-Regular.ttf"))
+                .into(),
         );
         fonts
             .families
@@ -123,7 +124,7 @@ impl Editor {
                 } else {
                     self.draw_desktop_editor_ui(ctx);
                 }
-                
+
                 if self.ui.show_debug_suite {
                     self.draw_debug_suite(ctx);
                 }
@@ -144,54 +145,80 @@ impl Editor {
 
     fn draw_debug_suite(&mut self, ctx: &egui::Context) {
         let mut open = self.ui.show_debug_suite;
-        egui::Window::new(format!("{} Debug Suite [F6]", crate::editor::theme::ICON_SETTINGS))
-            .open(&mut open)
-            .resizable(true)
-            .show(ctx, |ui| {
-                ui.heading("Performance Limits");
-                let fps = macroquad::time::get_fps();
-                ui.label(format!("FPS: {}", fps));
-                ui.label(format!("Ticks per Frame: {}", self.engine.ticks_per_frame));
-                ui.label(format!("Total Gates: {}", self.engine.simulator.nodes.len()));
-                ui.label(format!("Total Active Clocks: {}", self.engine.active_clocks.len()));
-                
-                ui.separator();
-                ui.heading("Threading");
-                let mut single = self.ui.debug_single_thread;
-                if ui.checkbox(&mut single, "Force Single-Threaded Mode").changed() {
-                    self.ui.debug_single_thread = single;
-                    self.engine.simulator.set_single_threaded(single);
+        egui::Window::new(format!(
+            "{} Debug Suite [F6]",
+            crate::editor::theme::ICON_SETTINGS
+        ))
+        .open(&mut open)
+        .resizable(true)
+        .show(ctx, |ui| {
+            ui.heading("Performance Limits");
+            let fps = macroquad::time::get_fps();
+            ui.label(format!("FPS: {}", fps));
+            ui.label(format!("Ticks per Frame: {}", self.engine.ticks_per_frame));
+            ui.label(format!(
+                "Total Gates: {}",
+                self.engine.simulator.nodes.len()
+            ));
+            ui.label(format!(
+                "Total Active Clocks: {}",
+                self.engine.active_clocks.len()
+            ));
+
+            ui.separator();
+            ui.heading("Threading");
+            let mut single = self.ui.debug_single_thread;
+            if ui
+                .checkbox(&mut single, "Force Single-Threaded Mode")
+                .changed()
+            {
+                self.ui.debug_single_thread = single;
+                self.engine.simulator.set_single_threaded(single);
+            }
+
+            ui.separator();
+            ui.heading("Culling Visualiser");
+            ui.checkbox(
+                &mut self.ui.debug_cull_bounds,
+                "Show Culling Bounds (Red=Frustum, Green=Drawn, Gray=Culled)",
+            );
+            ui.label(format!(
+                "Components Drawn: {} / {}",
+                self.ui.drawn_components,
+                self.circuit.components.len()
+            ));
+
+            ui.separator();
+            ui.heading("Software Limits Test");
+            ui.horizontal(|ui| {
+                ui.label("Stress Test Recursion Depth:");
+                ui.add(
+                    egui::DragValue::new(&mut self.ui.stress_test_size)
+                        .speed(0.1)
+                        .range(1..=8),
+                );
+            });
+            ui.horizontal(|ui| {
+                if ui.button("Generate Stress Test!").clicked() {
+                    self.generate_stress_test(self.ui.stress_test_size);
                 }
-                
-                ui.separator();
-                ui.heading("Culling Visualiser");
-                ui.checkbox(&mut self.ui.debug_cull_bounds, "Show Culling Bounds (Red=Frustum, Green=Drawn, Gray=Culled)");
-                ui.label(format!("Components Drawn: {} / {}", self.ui.drawn_components, self.circuit.components.len()));
-                
-                ui.separator();
-                ui.heading("Software Limits Test");
-                ui.horizontal(|ui| {
-                    ui.label("Stress Test Recursion Depth:");
-                    ui.add(egui::DragValue::new(&mut self.ui.stress_test_size).speed(0.1).range(1..=8));
-                });
-                ui.horizontal(|ui| {
-                    if ui.button("Generate Stress Test!").clicked() {
-                        self.generate_stress_test(self.ui.stress_test_size);
-                    }
-                    if ui.button("Generate Oscillation Crash Test").clicked() {
-                        self.generate_oscillation_test();
-                    }
-                });
-                
-                ui.separator();
-                ui.heading("Logging");
-                ui.checkbox(&mut self.ui.debug_continuous_log, "Continuous Logging to debug_suite.log");
-                if ui.button("Export Snapshot to Log").clicked() {
-                    self.export_debug_log();
+                if ui.button("Generate Oscillation Crash Test").clicked() {
+                    self.generate_oscillation_test();
                 }
             });
+
+            ui.separator();
+            ui.heading("Logging");
+            ui.checkbox(
+                &mut self.ui.debug_continuous_log,
+                "Continuous Logging to debug_suite.log",
+            );
+            if ui.button("Export Snapshot to Log").clicked() {
+                self.export_debug_log();
+            }
+        });
         self.ui.show_debug_suite = open;
-        
+
         if self.ui.debug_continuous_log {
             let current_time = macroquad::time::get_time();
             if current_time - self.ui.last_debug_log_time >= 1.0 {
@@ -200,20 +227,30 @@ impl Editor {
             }
         }
     }
-    
+
     fn export_debug_log(&self) {
         use std::io::Write;
-        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("debug_suite.log") {
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("debug_suite.log")
+        {
             let fps = macroquad::time::get_fps();
             let time = macroquad::time::get_time();
-            let _ = writeln!(file, "[{:.2}s] FPS: {}, Ticks/Frame: {}, Total Gates: {}, Drawn/Total Comps: {}/{}, Threading: {}", 
+            let _ = writeln!(
+                file,
+                "[{:.2}s] FPS: {}, Ticks/Frame: {}, Total Gates: {}, Drawn/Total Comps: {}/{}, Threading: {}",
                 time,
                 fps,
                 self.engine.ticks_per_frame,
                 self.engine.simulator.nodes.len(),
                 self.ui.drawn_components,
                 self.circuit.components.len(),
-                if self.ui.debug_single_thread { "Single" } else { "Multi" }
+                if self.ui.debug_single_thread {
+                    "Single"
+                } else {
+                    "Multi"
+                }
             );
         }
     }
@@ -253,7 +290,8 @@ impl Editor {
                             .color_edit_button_rgba_unmultiplied(&mut self.ui.context_menu_color)
                             .changed()
                         {
-                            self.circuit.color_overrides
+                            self.circuit
+                                .color_overrides
                                 .set_component_color(comp_id, Some(self.ui.context_menu_color));
                         }
 
@@ -278,20 +316,23 @@ impl Editor {
                                     (preset[2] * 255.0) as u8,
                                     255,
                                 );
-                                if ui
-                                    .add(egui::Button::new("  ").fill(c))
-                                    .clicked()
-                                {
+                                if ui.add(egui::Button::new("  ").fill(c)).clicked() {
                                     self.ui.context_menu_color = *preset;
-                                    self.circuit.color_overrides
+                                    self.circuit
+                                        .color_overrides
                                         .set_component_color(comp_id, Some(*preset));
                                 }
                             }
                         });
 
                         ui.add_space(4.0);
-                        if ui.button(format!("{} Reset Color", theme::ICON_CLEAR)).clicked() {
-                            self.circuit.color_overrides.set_component_color(comp_id, None);
+                        if ui
+                            .button(format!("{} Reset Color", theme::ICON_CLEAR))
+                            .clicked()
+                        {
+                            self.circuit
+                                .color_overrides
+                                .set_component_color(comp_id, None);
                             keep_open = false;
                         }
                     }
@@ -308,7 +349,8 @@ impl Editor {
                             .color_edit_button_rgba_unmultiplied(&mut self.ui.context_menu_color)
                             .changed()
                         {
-                            self.circuit.color_overrides
+                            self.circuit
+                                .color_overrides
                                 .set_wire_color(&conn, Some(self.ui.context_menu_color));
                         }
 
@@ -333,19 +375,20 @@ impl Editor {
                                     (preset[2] * 255.0) as u8,
                                     255,
                                 );
-                                if ui
-                                    .add(egui::Button::new("  ").fill(c))
-                                    .clicked()
-                                {
+                                if ui.add(egui::Button::new("  ").fill(c)).clicked() {
                                     self.ui.context_menu_color = *preset;
-                                    self.circuit.color_overrides
+                                    self.circuit
+                                        .color_overrides
                                         .set_wire_color(&conn, Some(*preset));
                                 }
                             }
                         });
 
                         ui.add_space(4.0);
-                        if ui.button(format!("{} Reset Color", theme::ICON_CLEAR)).clicked() {
+                        if ui
+                            .button(format!("{} Reset Color", theme::ICON_CLEAR))
+                            .clicked()
+                        {
                             self.circuit.color_overrides.set_wire_color(&conn, None);
                             keep_open = false;
                         }
@@ -437,7 +480,9 @@ impl Editor {
                                     if ui.button(format!("{} Save", theme::ICON_SAVE)).clicked() {
                                         #[cfg(target_os = "android")]
                                         {
-                                            self.ui.show_android_file_dialog = Some(crate::editor::state::AndroidFileDialogMode::Save);
+                                            self.ui.show_android_file_dialog = Some(
+                                                crate::editor::state::AndroidFileDialogMode::Save,
+                                            );
                                             self.ui.android_file_dialog_status.clear();
                                         }
                                         #[cfg(not(target_os = "android"))]
@@ -446,7 +491,9 @@ impl Editor {
                                     if ui.button(format!("{} Load", theme::ICON_FOLDER)).clicked() {
                                         #[cfg(target_os = "android")]
                                         {
-                                            self.ui.show_android_file_dialog = Some(crate::editor::state::AndroidFileDialogMode::Load);
+                                            self.ui.show_android_file_dialog = Some(
+                                                crate::editor::state::AndroidFileDialogMode::Load,
+                                            );
                                             self.ui.android_file_dialog_status.clear();
                                         }
                                         #[cfg(not(target_os = "android"))]
@@ -461,7 +508,10 @@ impl Editor {
                                 });
 
                                 ui.add_space(5.0);
-                                if ui.button(format!("{} Auto Arrange", theme::ICON_REFRESH)).clicked() {
+                                if ui
+                                    .button(format!("{} Auto Arrange", theme::ICON_REFRESH))
+                                    .clicked()
+                                {
                                     self.auto_arrange_components();
                                 }
 
@@ -580,10 +630,16 @@ impl Editor {
                             }
 
                             ui.separator();
-                            
-                            if ui.button(format!("{} Auto Arrange", crate::editor::theme::ICON_REFRESH))
-                                .on_hover_text("Automatically arrange components based on connections")
-                                .clicked() 
+
+                            if ui
+                                .button(format!(
+                                    "{} Auto Arrange",
+                                    crate::editor::theme::ICON_REFRESH
+                                ))
+                                .on_hover_text(
+                                    "Automatically arrange components based on connections",
+                                )
+                                .clicked()
                             {
                                 self.auto_arrange_components();
                             }
@@ -690,7 +746,8 @@ impl Editor {
                             {
                                 #[cfg(target_os = "android")]
                                 {
-                                    self.ui.show_android_file_dialog = Some(crate::editor::state::AndroidFileDialogMode::Save);
+                                    self.ui.show_android_file_dialog =
+                                        Some(crate::editor::state::AndroidFileDialogMode::Save);
                                     self.ui.android_file_dialog_status.clear();
                                 }
                                 #[cfg(not(target_os = "android"))]
@@ -703,7 +760,8 @@ impl Editor {
                             {
                                 #[cfg(target_os = "android")]
                                 {
-                                    self.ui.show_android_file_dialog = Some(crate::editor::state::AndroidFileDialogMode::Load);
+                                    self.ui.show_android_file_dialog =
+                                        Some(crate::editor::state::AndroidFileDialogMode::Load);
                                     self.ui.android_file_dialog_status.clear();
                                 }
                                 #[cfg(not(target_os = "android"))]
@@ -757,12 +815,9 @@ impl Editor {
 
         // Cache the actual canvas viewport (remaining area) in logical pixels.
         let r = ctx.available_rect();
-        self.ui.canvas_viewport.replace((
-            r.min.x,
-            r.min.y,
-            r.width(),
-            r.height(),
-        ));
+        self.ui
+            .canvas_viewport
+            .replace((r.min.x, r.min.y, r.width(), r.height()));
     }
 
     fn draw_settings_dialog(&mut self, ctx: &egui::Context) {
@@ -862,7 +917,7 @@ impl Editor {
 
                     let dir_res = super::persistence::get_android_external_files_dir()
                         .or_else(|_| super::persistence::get_android_internal_files_dir());
-                    
+
                     let mut files = Vec::new();
                     if let Ok(dir) = dir_res {
                         if let Ok(entries) = std::fs::read_dir(dir) {
@@ -885,7 +940,7 @@ impl Editor {
                             ui.label("Name:");
                             ui.text_edit_singleline(&mut self.ui.android_file_dialog_input);
                         });
-                        
+
                         ui.add_space(10.0);
                         if ui.button("Save File").clicked() {
                             let mut filename = self.ui.android_file_dialog_input.trim().to_string();
@@ -895,9 +950,9 @@ impl Editor {
                             if !filename.ends_with(".logic") && !filename.ends_with(".json") {
                                 filename.push_str(".logic");
                             }
-                            
+
                             if let Ok(dir) = super::persistence::get_android_external_files_dir()
-                                .or_else(|_| super::persistence::get_android_internal_files_dir()) 
+                                .or_else(|_| super::persistence::get_android_internal_files_dir())
                             {
                                 let mut path = dir;
                                 path.push(&filename);
@@ -915,7 +970,7 @@ impl Editor {
                     ui.add_space(10.0);
                     ui.separator();
                     ui.label("Existing Files (Click to select/load):");
-                    
+
                     egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
                         if files.is_empty() {
                             ui.label("(No projects found)");
@@ -926,7 +981,7 @@ impl Editor {
                                     self.ui.android_file_dialog_input = file.clone();
                                     if mode == crate::editor::state::AndroidFileDialogMode::Load {
                                         if let Ok(dir) = super::persistence::get_android_external_files_dir()
-                                            .or_else(|_| super::persistence::get_android_internal_files_dir()) 
+                                            .or_else(|_| super::persistence::get_android_internal_files_dir())
                                         {
                                             let mut path = dir;
                                             path.push(&file);

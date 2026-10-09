@@ -1,0 +1,6 @@
+# Ignore large simulation data, raw weights, and binary CAS dumps
+cas_blobs/
+*.bin
+*.npy
+*.pt
+*.raw

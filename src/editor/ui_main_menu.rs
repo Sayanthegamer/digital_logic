@@ -96,7 +96,8 @@ impl Editor {
                     } else if clicked_open {
                         #[cfg(target_os = "android")]
                         {
-                            self.ui.show_android_file_dialog = Some(crate::editor::state::AndroidFileDialogMode::Load);
+                            self.ui.show_android_file_dialog =
+                                Some(crate::editor::state::AndroidFileDialogMode::Load);
                             self.ui.android_file_dialog_status.clear();
                             self.ui.mode = AppMode::Editor;
                         }
@@ -253,13 +254,16 @@ impl Editor {
                                     }
                                 }
                                 // Drop any components of this exact type
-                                let to_remove: Vec<_> = self.circuit.components
+                                let to_remove: Vec<_> = self
+                                    .circuit
+                                    .components
                                     .iter()
                                     .filter(|c| c.comp_type == ComponentType::SubChip(idx))
                                     .filter(|c| c.comp_type == ComponentType::SubChip(idx))
                                     .map(|c| c.id)
                                     .collect();
-                                self.circuit.components
+                                self.circuit
+                                    .components
                                     .retain(|c| c.comp_type != ComponentType::SubChip(idx));
                                 self.circuit.connections.retain(|w| {
                                     !to_remove.contains(&w.src_comp_id)

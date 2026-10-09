@@ -1,7 +1,7 @@
+use super::Editor;
+use super::types::ActiveTool;
 use crate::engine::ComponentType;
 use macroquad::prelude::*;
-use super::types::ActiveTool;
-use super::Editor;
 
 impl Editor {
     pub fn handle_keyboard_shortcuts(&mut self, egui_wants_keyboard: bool) {
@@ -65,30 +65,32 @@ impl Editor {
             }
 
             // Keyboard Interaction (Enter)
-            if is_key_pressed(KeyCode::Enter) {
-                if let Some((comp_id, port_opt)) = self.canvas.tab_focus {
-                    if let Some((port_idx, is_input)) = port_opt {
-                        // Enter on a port: start or finish wiring
-                        self.canvas.hovered_port = Some((comp_id, port_idx, is_input));
-                        if let Some(comp) = self.get_component(comp_id) {
-                            let (in_count, out_count) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
-                            let pos = if is_input {
-                                comp.input_port_pos(port_idx, in_count)
-                            } else {
-                                comp.output_port_pos(port_idx, out_count)
-                            };
-                            self.handle_canvas_left_press(pos);
-                        }
-                    } else {
-                        // Enter on a component: Toggle if it's an Input
-                        if let Some(comp) = self.get_component(comp_id) {
-                            if comp.comp_type == ComponentType::Input {
-                                if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&comp_id) {
-                                    let curr_val = self.engine.simulator.get_state(gate_idx);
-                                    self.engine.simulator.set_input(gate_idx, !curr_val);
-                                }
-                            }
-                        }
+            if is_key_pressed(KeyCode::Enter)
+                && let Some((comp_id, port_opt)) = self.canvas.tab_focus
+            {
+                if let Some((port_idx, is_input)) = port_opt {
+                    // Enter on a port: start or finish wiring
+                    self.canvas.hovered_port = Some((comp_id, port_idx, is_input));
+                    if let Some(comp) = self.get_component(comp_id) {
+                        let (in_count, out_count) = self.get_component_ports_count_with_width(
+                            comp.comp_type,
+                            Some(comp.bus_width()),
+                        );
+                        let pos = if is_input {
+                            comp.input_port_pos(port_idx, in_count)
+                        } else {
+                            comp.output_port_pos(port_idx, out_count)
+                        };
+                        self.handle_canvas_left_press(pos);
+                    }
+                } else {
+                    // Enter on a component: Toggle if it's an Input
+                    if let Some(comp) = self.get_component(comp_id)
+                        && comp.comp_type == ComponentType::Input
+                        && let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&comp_id)
+                    {
+                        let curr_val = self.engine.simulator.get_state(gate_idx);
+                        self.engine.simulator.set_input(gate_idx, !curr_val);
                     }
                 }
             }
@@ -105,7 +107,8 @@ impl Editor {
         let mut focusable = Vec::new();
         for comp in &self.circuit.components {
             focusable.push((comp.id, None));
-            let (in_count, out_count) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
+            let (in_count, out_count) =
+                self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
             for i in 0..in_count {
                 focusable.push((comp.id, Some((i, true))));
             }
@@ -121,19 +124,28 @@ impl Editor {
         };
 
         let next_idx = if reverse {
-            if current_idx == 0 { focusable.len() - 1 } else { current_idx - 1 }
+            if current_idx == 0 {
+                focusable.len() - 1
+            } else {
+                current_idx - 1
+            }
         } else {
-            if current_idx + 1 >= focusable.len() { 0 } else { current_idx + 1 }
+            if current_idx + 1 >= focusable.len() {
+                0
+            } else {
+                current_idx + 1
+            }
         };
 
         self.canvas.tab_focus = Some(focusable[next_idx]);
-        
+
         // Auto-pan to focused element
-        if let Some((comp_id, _)) = self.canvas.tab_focus {
-            if let Some(comp) = self.get_component(comp_id) {
-                let center = comp.pos + Vec2::new(comp.width / 2.0, comp.height / 2.0);
-                self.canvas.pan = Vec2::new(screen_width() / 2.0, screen_height() / 2.0) - center * self.canvas.zoom;
-            }
+        if let Some((comp_id, _)) = self.canvas.tab_focus
+            && let Some(comp) = self.get_component(comp_id)
+        {
+            let center = comp.pos + Vec2::new(comp.width / 2.0, comp.height / 2.0);
+            self.canvas.pan =
+                Vec2::new(screen_width() / 2.0, screen_height() / 2.0) - center * self.canvas.zoom;
         }
     }
 }

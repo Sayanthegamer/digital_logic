@@ -29,7 +29,11 @@ pub enum ComponentType {
 }
 
 impl ComponentType {
-    pub fn get_port_counts(&self, bus_width: Option<usize>, library: &[ChipBlueprint]) -> (usize, usize) {
+    pub fn get_port_counts(
+        &self,
+        bus_width: Option<usize>,
+        library: &[ChipBlueprint],
+    ) -> (usize, usize) {
         match self {
             ComponentType::Nand => (2, 1),
             ComponentType::Input => (0, 1),
@@ -57,7 +61,7 @@ pub struct Component {
     pub pos: (f32, f32),             // Visual layout position for inspection mode
     pub clock_period: Option<usize>, // Localized period in ticks (only for ComponentType::Clock)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub bus_width: Option<usize>,    // Width of the bus (only for BusJoiner/BusSplitter)
+    pub bus_width: Option<usize>, // Width of the bus (only for BusJoiner/BusSplitter)
 }
 
 impl Component {
@@ -110,10 +114,10 @@ pub enum OutputSource {
 
 impl OutputSource {
     pub fn apply_index_mapping(&mut self, mapping: &[usize]) {
-        if let OutputSource::DrivenByGate(idx) = self {
-            if *idx < mapping.len() {
-                *idx = mapping[*idx];
-            }
+        if let OutputSource::DrivenByGate(idx) = self
+            && *idx < mapping.len()
+        {
+            *idx = mapping[*idx];
         }
     }
 }
@@ -163,10 +167,10 @@ impl InstanceTree {
     }
 
     pub fn apply_index_mapping(&mut self, mapping: &[usize]) {
-        if let Some(ref mut idx) = self.gate_idx {
-            if *idx < mapping.len() {
-                *idx = mapping[*idx];
-            }
+        if let Some(ref mut idx) = self.gate_idx
+            && *idx < mapping.len()
+        {
+            *idx = mapping[*idx];
         }
         for output in &mut self.outputs {
             output.apply_index_mapping(mapping);

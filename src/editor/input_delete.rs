@@ -17,7 +17,8 @@ impl Editor {
         } else if !self.canvas.selected_comp_ids.is_empty()
             || !self.canvas.selected_connections.is_empty()
         {
-            self.circuit.components
+            self.circuit
+                .components
                 .retain(|c| !self.canvas.selected_comp_ids.contains(&c.id));
             self.circuit.connections.retain(|c| {
                 !self.canvas.selected_comp_ids.contains(&c.src_comp_id)
@@ -30,7 +31,8 @@ impl Editor {
             self.compile();
         } else if let Some(id) = self.canvas.selected_comp_id {
             self.circuit.components.retain(|c| c.id != id);
-            self.circuit.connections
+            self.circuit
+                .connections
                 .retain(|c| c.src_comp_id != id && c.tgt_comp_id != id);
             self.canvas.selected_comp_id = None;
             self.compile();

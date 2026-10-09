@@ -1,7 +1,7 @@
 pub mod compiler;
+pub mod profiler;
 pub mod simulator;
 pub mod types;
-pub mod profiler;
 
 #[cfg(test)]
 mod tests;

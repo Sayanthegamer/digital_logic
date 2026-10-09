@@ -1,15 +1,15 @@
-use crate::engine::ComponentType;
-use crate::editor::theme;
 use super::Editor;
+use crate::editor::theme;
+use crate::engine::ComponentType;
 
 #[cfg(target_os = "android")]
 use super::persistence::{get_android_external_files_dir, get_android_internal_files_dir};
 
 fn draw_seg(svg_str: &mut String, x1: f32, y1: f32, x2: f32, y2: f32, active: bool, thick: f32) {
-    let seg_color = if active { 
-        theme::COMP_SEVENSEG.to_hex() 
-    } else { 
-        format!("{}1A", theme::COMP_SEVENSEG.to_hex()) 
+    let seg_color = if active {
+        theme::COMP_SEVENSEG.to_hex()
+    } else {
+        format!("{}1A", theme::COMP_SEVENSEG.to_hex())
     };
     svg_str.push_str(&format!(
         r#"  <line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}" stroke-linecap="round" />
@@ -24,7 +24,7 @@ impl Editor {
         path: P,
     ) -> Result<(), Box<dyn std::error::Error>> {
         use std::io::Write;
-        
+
         if self.circuit.components.is_empty() {
             return Err("No components to export".into());
         }
@@ -93,14 +93,17 @@ impl Editor {
             let tgt_comp = self.get_component(wire.tgt_comp_id);
 
             if let (Some(src), Some(tgt)) = (src_comp, tgt_comp) {
-                let (_, src_outputs) = self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
-                let (tgt_inputs, _) = self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
+                let (_, src_outputs) =
+                    self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
+                let (tgt_inputs, _) =
+                    self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
 
                 let src_pos = src.output_port_pos(wire.src_port, src_outputs);
                 let tgt_pos = tgt.input_port_pos(wire.tgt_port, tgt_inputs);
 
                 let offset = self.get_connection_routing_offset(wire);
-                let segments = Self::compute_wire_segments_world(src_pos, tgt_pos, offset, wire.tgt_port);
+                let segments =
+                    Self::compute_wire_segments_world(src_pos, tgt_pos, offset, wire.tgt_port);
                 let is_bus = self.is_bus_connection(wire);
 
                 let wire_state = self.get_raw_wire_state(wire.src_comp_id, wire.src_port);
@@ -145,7 +148,10 @@ impl Editor {
             svg.push_str(&format!(
                 r#"  <rect x="{}" y="{}" width="{}" height="{}" fill="rgba(0,0,0,0.25)" rx="6" />
 "#,
-                cx + 3.0, cy + 3.0, comp.width, comp.height
+                cx + 3.0,
+                cy + 3.0,
+                comp.width,
+                comp.height
             ));
 
             // Component body
@@ -156,19 +162,26 @@ impl Editor {
             ));
 
             // Accent stripe
-            let accent_color = if let Some(c) = self.circuit.color_overrides.get_component_color(comp.id) {
+            let accent_color = if let Some(c) =
+                self.circuit.color_overrides.get_component_color(comp.id)
+            {
                 theme::ThemeColor::new(c.r, c.g, c.b, c.a).to_hex()
             } else {
                 let theme_color = match comp.comp_type {
                     ComponentType::Nand => theme::COMP_NAND,
                     ComponentType::Clock => theme::ACCENT_PRIMARY,
                     ComponentType::Input | ComponentType::Output => {
-                        let is_active = if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&comp.id) {
-                            self.engine.simulator.get_state(gate_idx)
+                        let is_active =
+                            if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&comp.id) {
+                                self.engine.simulator.get_state(gate_idx)
+                            } else {
+                                false
+                            };
+                        if is_active {
+                            theme::ACCENT_ACTIVE
                         } else {
-                            false
-                        };
-                        if is_active { theme::ACCENT_ACTIVE } else { theme::ACCENT_GENERIC }
+                            theme::ACCENT_GENERIC
+                        }
                     }
                     ComponentType::SubChip(_) => theme::COMP_SUBCHIP,
                     ComponentType::SevenSegment => theme::COMP_SEVENSEG,
@@ -202,13 +215,15 @@ impl Editor {
             }
 
             // Port circles
-            let (inputs_count, outputs_count) = self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
+            let (inputs_count, outputs_count) =
+                self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
             for i in 0..inputs_count {
                 let p = comp.input_port_pos(i, inputs_count);
                 svg.push_str(&format!(
                     r#"  <circle class="port" cx="{}" cy="{}" r="4" />
 "#,
-                    p.x - min_x, p.y - min_y
+                    p.x - min_x,
+                    p.y - min_y
                 ));
             }
             for o in 0..outputs_count {
@@ -216,7 +231,8 @@ impl Editor {
                 svg.push_str(&format!(
                     r#"  <circle class="port" cx="{}" cy="{}" r="4" />
 "#,
-                    p.x - min_x, p.y - min_y
+                    p.x - min_x,
+                    p.y - min_y
                 ));
             }
 
@@ -226,20 +242,32 @@ impl Editor {
             {
                 for i in 0..inputs_count {
                     let p = comp.input_port_pos(i, inputs_count);
-                    let name = bp.input_names.get(i).cloned().unwrap_or_else(|| format!("{}", i));
+                    let name = bp
+                        .input_names
+                        .get(i)
+                        .cloned()
+                        .unwrap_or_else(|| format!("{}", i));
                     svg.push_str(&format!(
                         r#"  <text class="port-label" x="{}" y="{}">{}</text>
 "#,
-                        p.x - min_x + 6.0, p.y - min_y + 3.0, name
+                        p.x - min_x + 6.0,
+                        p.y - min_y + 3.0,
+                        name
                     ));
                 }
                 for o in 0..outputs_count {
                     let p = comp.output_port_pos(o, outputs_count);
-                    let name = bp.output_names.get(o).cloned().unwrap_or_else(|| format!("{}", o));
+                    let name = bp
+                        .output_names
+                        .get(o)
+                        .cloned()
+                        .unwrap_or_else(|| format!("{}", o));
                     svg.push_str(&format!(
                         r#"  <text class="port-label" x="{}" y="{}" text-anchor="end">{}</text>
 "#,
-                        p.x - min_x - 6.0, p.y - min_y + 3.0, name
+                        p.x - min_x - 6.0,
+                        p.y - min_y + 3.0,
+                        name
                     ));
                 }
             }
@@ -247,16 +275,14 @@ impl Editor {
             // SevenSegment display segments
             if comp.comp_type == ComponentType::SevenSegment {
                 let mut seg_states = [false; 8];
-                for i in 0..inputs_count {
+                for (i, seg) in seg_states.iter_mut().enumerate().take(inputs_count) {
                     let mut input_active = false;
                     for wire in &self.circuit.connections {
                         if wire.tgt_comp_id == comp.id && wire.tgt_port == i {
                             input_active = self.get_wire_state(wire.src_comp_id, wire.src_port);
                         }
                     }
-                    if i < 8 {
-                        seg_states[i] = input_active;
-                    }
+                    *seg = input_active;
                 }
 
                 let cx_seg = cx + comp.width / 2.0;
@@ -265,14 +291,78 @@ impl Editor {
                 let h = 15.0;
                 let thick = 4.0;
 
-                draw_seg(&mut svg, cx_seg - w, cy_seg - 2.0 * h, cx_seg + w, cy_seg - 2.0 * h, seg_states[0], thick);
-                draw_seg(&mut svg, cx_seg + w, cy_seg - 2.0 * h, cx_seg + w, cy_seg, seg_states[1], thick);
-                draw_seg(&mut svg, cx_seg + w, cy_seg, cx_seg + w, cy_seg + 2.0 * h, seg_states[2], thick);
-                draw_seg(&mut svg, cx_seg - w, cy_seg + 2.0 * h, cx_seg + w, cy_seg + 2.0 * h, seg_states[3], thick);
-                draw_seg(&mut svg, cx_seg - w, cy_seg, cx_seg - w, cy_seg + 2.0 * h, seg_states[4], thick);
-                draw_seg(&mut svg, cx_seg - w, cy_seg - 2.0 * h, cx_seg - w, cy_seg, seg_states[5], thick);
-                draw_seg(&mut svg, cx_seg - w, cy_seg, cx_seg + w, cy_seg, seg_states[6], thick);
-                draw_seg(&mut svg, cx_seg - w - 20.0, cy_seg, cx_seg - w - 10.0, cy_seg, seg_states[7], thick);
+                draw_seg(
+                    &mut svg,
+                    cx_seg - w,
+                    cy_seg - 2.0 * h,
+                    cx_seg + w,
+                    cy_seg - 2.0 * h,
+                    seg_states[0],
+                    thick,
+                );
+                draw_seg(
+                    &mut svg,
+                    cx_seg + w,
+                    cy_seg - 2.0 * h,
+                    cx_seg + w,
+                    cy_seg,
+                    seg_states[1],
+                    thick,
+                );
+                draw_seg(
+                    &mut svg,
+                    cx_seg + w,
+                    cy_seg,
+                    cx_seg + w,
+                    cy_seg + 2.0 * h,
+                    seg_states[2],
+                    thick,
+                );
+                draw_seg(
+                    &mut svg,
+                    cx_seg - w,
+                    cy_seg + 2.0 * h,
+                    cx_seg + w,
+                    cy_seg + 2.0 * h,
+                    seg_states[3],
+                    thick,
+                );
+                draw_seg(
+                    &mut svg,
+                    cx_seg - w,
+                    cy_seg,
+                    cx_seg - w,
+                    cy_seg + 2.0 * h,
+                    seg_states[4],
+                    thick,
+                );
+                draw_seg(
+                    &mut svg,
+                    cx_seg - w,
+                    cy_seg - 2.0 * h,
+                    cx_seg - w,
+                    cy_seg,
+                    seg_states[5],
+                    thick,
+                );
+                draw_seg(
+                    &mut svg,
+                    cx_seg - w,
+                    cy_seg,
+                    cx_seg + w,
+                    cy_seg,
+                    seg_states[6],
+                    thick,
+                );
+                draw_seg(
+                    &mut svg,
+                    cx_seg - w - 20.0,
+                    cy_seg,
+                    cx_seg - w - 10.0,
+                    cy_seg,
+                    seg_states[7],
+                    thick,
+                );
             }
         }
 
@@ -301,16 +391,17 @@ impl Editor {
                 .add_filter("SVG Vector Graphics", &["svg"])
                 .set_directory(".")
                 .save_file()
+                && let Err(err) = self.export_svg_to_path(path)
             {
-                if let Err(err) = self.export_svg_to_path(path) {
-                    eprintln!("Failed to export SVG: {err}");
-                }
+                eprintln!("Failed to export SVG: {err}");
             }
         }
 
         #[cfg(target_os = "android")]
         {
-            if let Ok(dir) = get_android_external_files_dir().or_else(|_| get_android_internal_files_dir()) {
+            if let Ok(dir) =
+                get_android_external_files_dir().or_else(|_| get_android_internal_files_dir())
+            {
                 let mut path = dir;
                 path.push("project_export.svg");
                 if let Err(err) = self.export_svg_to_path(path) {

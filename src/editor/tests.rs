@@ -350,21 +350,36 @@ fn test_save_load_project() {
     assert!(load_success);
 
     // Verify properties
-    assert_eq!(loaded_editor.circuit.next_component_id, editor.circuit.next_component_id);
+    assert_eq!(
+        loaded_editor.circuit.next_component_id,
+        editor.circuit.next_component_id
+    );
     assert_eq!(loaded_editor.circuit.components.len(), 1);
     assert_eq!(loaded_editor.circuit.components[0].id, 1);
     assert_eq!(loaded_editor.circuit.components[0].label, "NAND_G");
-    assert_eq!(loaded_editor.circuit.components[0].pos, Vec2::new(10.0, 20.0));
+    assert_eq!(
+        loaded_editor.circuit.components[0].pos,
+        Vec2::new(10.0, 20.0)
+    );
 
     assert_eq!(loaded_editor.circuit.connections.len(), 1);
     assert_eq!(loaded_editor.circuit.connections[0].src_comp_id, 1);
     assert_eq!(loaded_editor.circuit.connections[0].tgt_comp_id, 2);
 
     assert_eq!(loaded_editor.circuit.annotations.len(), 1);
-    assert_eq!(loaded_editor.circuit.annotations[0].text, "Testing save load");
+    assert_eq!(
+        loaded_editor.circuit.annotations[0].text,
+        "Testing save load"
+    );
 
     // After import, the global library should contain the custom chip
-    assert!(loaded_editor.engine.library.iter().any(|bp| bp.name == "CustomChip"));
+    assert!(
+        loaded_editor
+            .engine
+            .library
+            .iter()
+            .any(|bp| bp.name == "CustomChip")
+    );
 
     // Clean up temporary file
     let _ = std::fs::remove_file(temp_path);
@@ -398,14 +413,12 @@ fn test_save_load_nested_project() {
         outputs: 1,
         input_names: vec!["IN".to_string()],
         output_names: vec!["OUT".to_string()],
-        components: vec![
-            crate::engine::Component {
-                component_type: ComponentType::SubChip(0), // References InnerChip
-                pos: (0.0, 0.0),
-                clock_period: None,
-                bus_width: None,
-            }
-        ],
+        components: vec![crate::engine::Component {
+            component_type: ComponentType::SubChip(0), // References InnerChip
+            pos: (0.0, 0.0),
+            clock_period: None,
+            bus_width: None,
+        }],
         connections: vec![],
     });
 
@@ -432,15 +445,18 @@ fn test_save_load_nested_project() {
     let mut loaded_editor = Editor::new();
     loaded_editor.global_library = crate::editor::global_library::GlobalLibrary::default();
     // Pre-populate global library with a dummy chip
-    loaded_editor.global_library.ungrouped.push(crate::engine::ChipBlueprint {
-        name: "DummyChip".to_string(),
-        inputs: 0,
-        outputs: 0,
-        input_names: vec![],
-        output_names: vec![],
-        components: vec![],
-        connections: vec![],
-    });
+    loaded_editor
+        .global_library
+        .ungrouped
+        .push(crate::engine::ChipBlueprint {
+            name: "DummyChip".to_string(),
+            inputs: 0,
+            outputs: 0,
+            input_names: vec![],
+            output_names: vec![],
+            components: vec![],
+            connections: vec![],
+        });
     loaded_editor.engine.library.clear();
     loaded_editor.circuit.components.clear();
     loaded_editor.circuit.connections.clear();
@@ -462,20 +478,29 @@ fn test_save_load_nested_project() {
     let load_success2 = loaded_editor.load_from_path(&temp_path);
     assert!(load_success2);
     let second_len = loaded_editor.global_library.to_flat_list().len();
-    assert_eq!(second_len, 3, "Global library should not duplicate chips on multiple loads when pre-populated!");
+    assert_eq!(
+        second_len, 3,
+        "Global library should not duplicate chips on multiple loads when pre-populated!"
+    );
 
     // Verify canvas components
     assert_eq!(loaded_editor.circuit.components.len(), 1);
     if let ComponentType::SubChip(new_idx) = loaded_editor.circuit.components[0].comp_type {
         // Find OuterChip index in the loaded flat library
-        let outer_idx = flat_lib.iter().position(|bp| bp.name == "OuterChip").unwrap();
+        let outer_idx = flat_lib
+            .iter()
+            .position(|bp| bp.name == "OuterChip")
+            .unwrap();
         assert_eq!(new_idx, outer_idx);
 
         // Verify the components inside OuterChip itself
         let outer_bp = &flat_lib[outer_idx];
         assert_eq!(outer_bp.components.len(), 1);
         if let ComponentType::SubChip(inner_idx) = outer_bp.components[0].component_type {
-            let real_inner_idx = flat_lib.iter().position(|bp| bp.name == "InnerChip").unwrap();
+            let real_inner_idx = flat_lib
+                .iter()
+                .position(|bp| bp.name == "InnerChip")
+                .unwrap();
             assert_eq!(inner_idx, real_inner_idx);
         } else {
             panic!("Expected InnerChip subchip component inside OuterChip blueprint");
@@ -528,7 +553,7 @@ fn test_bus_compilation_and_propagation() {
             label: format!("IN_{}", i),
             clock_period: None,
             color: None,
-        bus_width: None,
+            bus_width: None,
         });
     }
 
@@ -569,7 +594,7 @@ fn test_bus_compilation_and_propagation() {
             label: format!("OUT_{}", i),
             clock_period: None,
             color: None,
-        bus_width: None,
+            bus_width: None,
         });
     }
 
@@ -663,7 +688,7 @@ fn test_seven_segment_top_level_port_allocation() {
             label: format!("IN_{}", i - 1),
             clock_period: None,
             color: None,
-        bus_width: None,
+            bus_width: None,
         });
     }
 
@@ -685,7 +710,11 @@ fn test_seven_segment_top_level_port_allocation() {
 
     // Toggle 8th input (minus segment, port 7)
     let in_8_id = 8;
-    let sim_idx = *editor.engine.visual_to_sim_map.get(&in_8_id).expect("Input 8 not mapped");
+    let sim_idx = *editor
+        .engine
+        .visual_to_sim_map
+        .get(&in_8_id)
+        .expect("Input 8 not mapped");
     editor.engine.simulator.set_input(sim_idx, true);
 
     // Propagate signals
@@ -694,11 +723,17 @@ fn test_seven_segment_top_level_port_allocation() {
 
     // Verify that the minus segment (port index 7) state in the simulator is true.
     let dependents = &editor.engine.simulator.nodes[sim_idx].dependents;
-    assert!(!dependents.is_empty(), "Input 8 has no dependents wired up!");
-    
+    assert!(
+        !dependents.is_empty(),
+        "Input 8 has no dependents wired up!"
+    );
+
     let target_gate_idx = dependents[0];
     let state = editor.engine.simulator.get_state(target_gate_idx);
-    assert!(state, "The 8th input segment (minus sign) did not receive the signal!");
+    assert!(
+        state,
+        "The 8th input segment (minus sign) did not receive the signal!"
+    );
 }
 
 #[test]
@@ -747,25 +782,111 @@ fn test_svg_export() {
     // Export to temporary file path
     let mut svg_path = std::env::temp_dir();
     svg_path.push("test_logic_simulator_project_export.svg");
-    
+
     let res = editor.export_svg_to_path(&svg_path);
     assert!(res.is_ok(), "Failed to export SVG: {:?}", res);
 
     // Verify SVG file content
     assert!(svg_path.exists(), "SVG file does not exist");
     let svg_content = std::fs::read_to_string(&svg_path).expect("Failed to read SVG file");
-    
-    assert!(svg_content.starts_with("<svg"), "SVG should start with <svg tag");
-    assert!(svg_content.ends_with("</svg>\n") || svg_content.ends_with("</svg>"), "SVG should end with </svg>");
-    
+
+    assert!(
+        svg_content.starts_with("<svg"),
+        "SVG should start with <svg tag"
+    );
+    assert!(
+        svg_content.ends_with("</svg>\n") || svg_content.ends_with("</svg>"),
+        "SVG should end with </svg>"
+    );
+
     // Check for key elements
-    assert!(svg_content.contains("rect class=\"bg\""), "SVG should contain canvas background");
-    assert!(svg_content.contains("class=\"component\""), "SVG should contain component body");
-    assert!(svg_content.contains("class=\"wire\""), "SVG should contain wire path");
-    assert!(svg_content.contains("<circle class=\"port\""), "SVG should contain port circles");
-    assert!(svg_content.contains("NAND"), "SVG should contain text labels");
+    assert!(
+        svg_content.contains("rect class=\"bg\""),
+        "SVG should contain canvas background"
+    );
+    assert!(
+        svg_content.contains("class=\"component\""),
+        "SVG should contain component body"
+    );
+    assert!(
+        svg_content.contains("class=\"wire\""),
+        "SVG should contain wire path"
+    );
+    assert!(
+        svg_content.contains("<circle class=\"port\""),
+        "SVG should contain port circles"
+    );
+    assert!(
+        svg_content.contains("NAND"),
+        "SVG should contain text labels"
+    );
 
     // Clean up
     let _ = std::fs::remove_file(&svg_path);
 }
 
+#[test]
+fn test_spatial_hash_negative_dimensions() {
+    use crate::editor::spatial_hash::SpatialHashGrid;
+    let mut grid = SpatialHashGrid::new();
+
+    // Insert an item with negative width and height across cell boundaries (cell 1 down to cell 0)
+    let neg_rect = Rect::new(200.0, 200.0, -150.0, -150.0);
+    grid.insert(42usize, neg_rect);
+
+    // Query covering the region (50..200, 50..200)
+    let query_rect = Rect::new(40.0, 40.0, 170.0, 170.0);
+    let results = grid.query_rect(query_rect);
+
+    assert!(
+        results.contains(&42),
+        "SpatialHashGrid should index and find rects with negative width/height"
+    );
+}
+
+#[test]
+fn test_undo_redo_preserves_wire_nudges_and_offsets() {
+    let mut editor = Editor::new();
+    let conn = VisualConnection {
+        src_comp_id: 1,
+        src_port: 0,
+        tgt_comp_id: 2,
+        tgt_port: 0,
+    };
+    editor.circuit.connections.push(conn);
+    editor.circuit.wire_nudges.insert(conn, 45.0);
+    editor.circuit.wire_offsets.insert(conn, 12.0);
+
+    // Snapshot with initial nudges and offsets
+    editor.push_history_snapshot();
+
+    // Mutate the nudge and offset
+    editor.circuit.wire_nudges.insert(conn, 99.0);
+    editor.circuit.wire_offsets.insert(conn, 88.0);
+
+    // Undo should restore initial nudge and offset
+    editor.undo();
+    assert_eq!(
+        editor.circuit.wire_nudges.get(&conn).copied(),
+        Some(45.0),
+        "Undo must restore wire_nudges"
+    );
+    assert_eq!(
+        editor.circuit.wire_offsets.get(&conn).copied(),
+        Some(12.0),
+        "Undo must restore wire_offsets"
+    );
+
+    // Redo should restore the mutated nudge and offset
+    editor.redo();
+    assert_eq!(
+        editor.circuit.wire_nudges.get(&conn).copied(),
+        Some(99.0),
+        "Redo must restore wire_nudges"
+    );
+    assert_eq!(
+        editor.circuit.wire_offsets.get(&conn).copied(),
+        Some(88.0),
+        "Redo must restore wire_offsets"
+    );
+}

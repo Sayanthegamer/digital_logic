@@ -4,6 +4,7 @@ use macroquad::prelude::*;
 use super::Editor;
 
 impl Editor {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn draw_manhattan_wire(
         &self,
         src_pos: Vec2,
@@ -37,13 +38,9 @@ impl Editor {
             self.canvas.zoom,
         );
 
-        let mut final_segments = Vec::new();
-        let mut bridge_arcs = Vec::new();
-
-        // Zero-allocation pre-hoisted vectors
-        let mut holes: Vec<(f32, f32)> = Vec::with_capacity(gaps.len());
-        let mut merged_holes: Vec<(f32, f32)> = Vec::with_capacity(gaps.len());
-        let mut visible_intervals: Vec<(f32, f32)> = Vec::with_capacity(gaps.len() + 1);
+        let mut scratch_borrow = self.canvas.render_scratch.borrow_mut();
+        scratch_borrow.clear();
+        let scratch = &mut *scratch_borrow;
 
         for &(a, b) in &segments {
             let line_vec = b - a;
@@ -53,35 +50,40 @@ impl Editor {
             }
             let dir = line_vec / len;
 
-            holes.clear();
+            scratch.holes.clear();
             for &(gap, lower_thickness) in gaps {
                 let t = (gap - a).dot(dir);
                 let proj = a + dir * t;
                 // dynamic gap radius perfectly matches the lower wire plus a fixed clearance
                 let gap_radius = lower_thickness / 2.0 + 3.0 * self.canvas.zoom;
-                
-                if proj.distance(gap) < 2.0 * self.canvas.zoom && t > -gap_radius && t < len + gap_radius {
-                    holes.push((t - gap_radius, t + gap_radius));
+
+                if proj.distance(gap) < 2.0 * self.canvas.zoom
+                    && t > -gap_radius
+                    && t < len + gap_radius
+                {
+                    scratch.holes.push((t - gap_radius, t + gap_radius));
                 }
             }
 
-            holes.sort_by(|h1, h2| h1.0.partial_cmp(&h2.0).unwrap());
-            merged_holes.clear();
-            for h in &holes {
-                if let Some(last) = merged_holes.last_mut() {
-                    if h.0 <= last.1 {
-                        last.1 = last.1.max(h.1);
-                        continue;
-                    }
+            scratch
+                .holes
+                .sort_by(|h1, h2| h1.0.partial_cmp(&h2.0).unwrap());
+            scratch.merged_holes.clear();
+            for h in &scratch.holes {
+                if let Some(last) = scratch.merged_holes.last_mut()
+                    && h.0 <= last.1
+                {
+                    last.1 = last.1.max(h.1);
+                    continue;
                 }
-                merged_holes.push(*h);
+                scratch.merged_holes.push(*h);
             }
 
             let mut current_t: f32 = 0.0;
-            visible_intervals.clear();
-            for h in &merged_holes {
+            scratch.visible_intervals.clear();
+            for h in &scratch.merged_holes {
                 if h.0 > current_t {
-                    visible_intervals.push((current_t, h.0.min(len)));
+                    scratch.visible_intervals.push((current_t, h.0.min(len)));
                 }
                 current_t = current_t.max(h.1);
 
@@ -89,17 +91,19 @@ impl Editor {
                 let center_t = (h.0 + h.1) / 2.0;
                 let radius = (h.1 - h.0) / 2.0;
                 let center = a + dir * center_t;
-                bridge_arcs.push((center, radius, dir));
+                scratch.bridge_arcs.push((center, radius, dir));
             }
             if current_t < len {
-                visible_intervals.push((current_t, len));
+                scratch.visible_intervals.push((current_t, len));
             }
 
-            for &(t1, t2) in &visible_intervals {
+            for &(t1, t2) in &scratch.visible_intervals {
                 if t2 > t1 {
                     let draw_start = t1 == 0.0;
                     let draw_end = t2 == len;
-                    final_segments.push((a + dir * t1, a + dir * t2, draw_start, draw_end));
+                    scratch
+                        .final_segments
+                        .push((a + dir * t1, a + dir * t2, draw_start, draw_end));
                 }
             }
         }
@@ -114,22 +118,30 @@ impl Editor {
             let glow_color = Color::new(glow_color.r, glow_color.g, glow_color.b, 0.2);
             let glow_thickness =
                 thickness + (if is_selected { 6.0 } else { 4.0 }) * self.canvas.zoom;
-            for &(p1, p2, draw_start, draw_end) in &final_segments {
-                if draw_start { draw_circle(p1.x, p1.y, glow_thickness / 2.0, glow_color); }
-                if draw_end { draw_circle(p2.x, p2.y, glow_thickness / 2.0, glow_color); }
+            for &(p1, p2, draw_start, draw_end) in &scratch.final_segments {
+                if draw_start {
+                    draw_circle(p1.x, p1.y, glow_thickness / 2.0, glow_color);
+                }
+                if draw_end {
+                    draw_circle(p2.x, p2.y, glow_thickness / 2.0, glow_color);
+                }
                 draw_line(p1.x, p1.y, p2.x, p2.y, glow_thickness, glow_color);
             }
-            for &(center, radius, dir) in &bridge_arcs {
+            for &(center, radius, dir) in &scratch.bridge_arcs {
                 Self::draw_bridge_arc(center, radius, dir, glow_thickness, glow_color);
             }
         }
 
-        for &(p1, p2, draw_start, draw_end) in &final_segments {
-            if draw_start { draw_circle(p1.x, p1.y, thickness / 2.0, color); }
-            if draw_end { draw_circle(p2.x, p2.y, thickness / 2.0, color); }
+        for &(p1, p2, draw_start, draw_end) in &scratch.final_segments {
+            if draw_start {
+                draw_circle(p1.x, p1.y, thickness / 2.0, color);
+            }
+            if draw_end {
+                draw_circle(p2.x, p2.y, thickness / 2.0, color);
+            }
             draw_line(p1.x, p1.y, p2.x, p2.y, thickness, color);
         }
-        for &(center, radius, dir) in &bridge_arcs {
+        for &(center, radius, dir) in &scratch.bridge_arcs {
             Self::draw_bridge_arc(center, radius, dir, thickness, color);
         }
 
@@ -152,19 +164,11 @@ impl Editor {
         );
     }
 
-    fn draw_bridge_arc(
-        center: Vec2,
-        radius: f32,
-        dir: Vec2,
-        thickness: f32,
-        wire_color: Color,
-    ) {
-        let segments = 12 + (radius / 5.0) as usize; 
-        
+    fn draw_bridge_arc(center: Vec2, radius: f32, dir: Vec2, thickness: f32, wire_color: Color) {
+        let segments = 12 + (radius / 5.0) as usize;
+
         let mut normal = Vec2::new(dir.y, -dir.x);
-        if normal.y > 0.0 {
-            normal = -normal;
-        } else if normal.y == 0.0 && normal.x < 0.0 {
+        if normal.y > 0.0 || (normal.y == 0.0 && normal.x < 0.0) {
             normal = -normal;
         }
 
@@ -188,7 +192,8 @@ impl Editor {
         point: Vec2,
         threshold: f32,
     ) -> bool {
-        let segments = Self::compute_wire_segments_world(src_pos, tgt_pos, routing_offset, tgt_port);
+        let segments =
+            Self::compute_wire_segments_world(src_pos, tgt_pos, routing_offset, tgt_port);
 
         for (a, b) in segments {
             let line_vec = b - a;

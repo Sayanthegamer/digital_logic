@@ -1,5 +1,5 @@
-use macroquad::prelude::*;
 use super::Editor;
+use macroquad::prelude::*;
 
 impl Editor {
     pub fn handle_canvas_interactions(

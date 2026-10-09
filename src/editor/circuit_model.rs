@@ -1,7 +1,7 @@
-use crate::editor::types::{VisualComponent, VisualConnection, TextAnnotation};
 use crate::editor::color_coding::ColorOverrides;
-use std::collections::HashMap;
+use crate::editor::types::{TextAnnotation, VisualComponent, VisualConnection};
 use crate::editor::wire_junctions::VerticalSeg;
+use std::collections::HashMap;
 
 pub struct CircuitModel {
     pub components: Vec<VisualComponent>,

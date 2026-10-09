@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.3] - 2026-10-09
+
+### Fixed
+- **Rayon Concurrency Defeat (SCC Topological Depth Layering)**: Replaced sequential iteration over strongly connected components in `calculate_depths()` with true longest-path topological depth layering on the condensation DAG ($\text{depth}(v) = \max_{u \in \text{preds}}(\text{depth}(u) + 1)$). This eliminates serialization and allows parallel gates to evaluate concurrently across all CPU threads with Rayon.
+- **Sub-Chip Multi-Driver Bus Resolution**: Fixed bus overwriting when custom chips are instantiated. Rather than overwriting existing connection mappings, the compiler now detects multiple drivers to the same internal port and automatically synthesizes a `BusResolver` tree to resolve high-impedance (`0b00`) and contention (`0b11`) states.
+- **Upstream Feedback Loop Settling**: Fixed `propagate_events()` to rewind the depth pointer to the earliest non-empty queue slice whenever feedback loops trigger upstream gates, preventing event stalls and false oscillations.
+- **Negative Wire Bounding Box Clipping**: Fixed coordinate normalization in `SpatialHashGrid::get_cells_for_rect` using `min(x, x+w)` and `max(x, x+w)`, preventing wires with negative extents from vanishing during canvas panning and zooming.
+- **Undo/Redo & Sub-Chip State Preservation**: Added `wire_nudges` and `wire_offsets` to `CanvasSnapshot`. Undo, Redo, and returning from sub-chip inspection now accurately preserve manual wire routing offsets and nudges without visual resetting.
+
+### Optimized
+- **Zero-Allocation Wire Drawing Scratch Buffer**: Added `WireRenderScratch` with `RefCell` to `CanvasState`, eliminating intermediate heap vector allocations in `draw_manhattan_wire` and dropping ~150,000 allocations/second at 60 FPS.
+- **Viewport Wire Culling**: Upgraded `draw_wires` to iterate directly over visible wires returned by the spatial hash grid rather than performing an $O(N)$ linear scan over all circuit connections, and scoped temporary state map capacity strictly to the visible set.
+- **Incremental Wire Updates on Component Drag**: Tracked `item_cells` inside `SpatialHashGrid` for $O(1)$ removal and updated `update_wires_for_components` to selectively re-index only connections attached to moved components instead of rebuilding the entire project's wire grid on every mouse frame.
+- **Zero-Copy Cache Defragmentation**: Replaced full vector cloning in `defragment_and_sort_by_depth` with zero-allocation `std::mem::take` and early exit if nodes are already topologically sorted.
+
+### Changed
+- **Static Analysis & Formatting**: Resolved all Clippy warnings across the codebase and formatted code with `cargo fmt`.
+- **Pre-Commit Verification Hook**: Installed a robust pre-commit hook enforcing code formatting, zero Clippy warnings, and clean test execution before commits.
+
 ## [3.2.2] - 2026-07-21
 
 ### Changed

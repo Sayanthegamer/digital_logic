@@ -691,12 +691,7 @@ fn test_multi_domain_clocks() {
 
     let mut blueprint_stack = Vec::new();
     let (interface, _tree) = sim
-        .instantiate_chip_with_mapping(
-            0,
-            &library,
-            &mut active_clocks,
-            &mut blueprint_stack,
-        )
+        .instantiate_chip_with_mapping(0, &library, &mut active_clocks, &mut blueprint_stack)
         .expect("Failed to instantiate ClockChip");
 
     assert_eq!(active_clocks.len(), 1);
@@ -772,12 +767,8 @@ fn test_invalid_nested_component_compile_error() {
     let mut blueprint_stack = Vec::new();
 
     // Compiling BadInputChip should fail with the exact error message
-    let res_in = sim.instantiate_chip_with_mapping(
-        0,
-        &library,
-        &mut active_clocks,
-        &mut blueprint_stack,
-    );
+    let res_in =
+        sim.instantiate_chip_with_mapping(0, &library, &mut active_clocks, &mut blueprint_stack);
     assert!(res_in.is_err());
     assert_eq!(
         res_in.unwrap_err(),
@@ -786,12 +777,8 @@ fn test_invalid_nested_component_compile_error() {
 
     // Compiling BadOutputChip should also fail with the exact error message
     let mut blueprint_stack_2 = Vec::new();
-    let res_out = sim.instantiate_chip_with_mapping(
-        1,
-        &library,
-        &mut active_clocks,
-        &mut blueprint_stack_2,
-    );
+    let res_out =
+        sim.instantiate_chip_with_mapping(1, &library, &mut active_clocks, &mut blueprint_stack_2);
     assert!(res_out.is_err());
     assert_eq!(
         res_out.unwrap_err(),
@@ -945,4 +932,217 @@ fn test_seven_segment_8th_input_port_compiles() {
     assert_eq!(interface.inputs.len(), 8);
     // Ensure the 8th input (port 7) has a concrete target (the internal sink gate).
     assert_eq!(interface.inputs[7].len(), 1);
+}
+
+#[test]
+fn test_parallel_gates_share_topological_depth() {
+    let mut sim = Simulator::new();
+    let in_gate = sim.add_gate(GateType::Input);
+
+    let mut nand_gates = Vec::new();
+    for _ in 0..50 {
+        let nand = sim.add_gate(GateType::Nand);
+        sim.connect(in_gate, nand, 0);
+        sim.connect(in_gate, nand, 1);
+        nand_gates.push(nand);
+    }
+
+    sim.calculate_depths();
+
+    assert_eq!(
+        sim.nodes[in_gate].depth, 0,
+        "Input gate should have depth 0"
+    );
+
+    for &nand in &nand_gates {
+        assert_eq!(
+            sim.nodes[nand].depth, 1,
+            "Parallel NAND gate {} should have topological depth 1, but found {}",
+            nand, sim.nodes[nand].depth
+        );
+    }
+}
+
+#[test]
+fn test_subchip_multiple_tristate_drivers_resolve() {
+    let mut sim = Simulator::new();
+    let mut library = Vec::new();
+
+    // Blueprint with 4 inputs and 1 output:
+    // Comp 0: TriStateBuffer (Data=In0, En=In1)
+    // Comp 1: TriStateBuffer (Data=In2, En=In3)
+    // Both connect to ChipOutput(0)
+    let bp = ChipBlueprint {
+        name: "DualTriStateBus".to_string(),
+        inputs: 4,
+        outputs: 1,
+        input_names: vec![
+            "D1".to_string(),
+            "EN1".to_string(),
+            "D2".to_string(),
+            "EN2".to_string(),
+        ],
+        output_names: vec!["BusOut".to_string()],
+        components: vec![
+            Component {
+                component_type: ComponentType::TriStateBuffer,
+                pos: (0.0, 0.0),
+                clock_period: None,
+                bus_width: None,
+            },
+            Component {
+                component_type: ComponentType::TriStateBuffer,
+                pos: (0.0, 50.0),
+                clock_period: None,
+                bus_width: None,
+            },
+        ],
+        connections: vec![
+            // Comp 0: D1 -> Port 0, EN1 -> Port 1
+            Connection {
+                source: SourcePort::ChipInput(0),
+                target: TargetPort::ComponentInput {
+                    component_idx: 0,
+                    port_idx: 0,
+                },
+            },
+            Connection {
+                source: SourcePort::ChipInput(1),
+                target: TargetPort::ComponentInput {
+                    component_idx: 0,
+                    port_idx: 1,
+                },
+            },
+            // Comp 1: D2 -> Port 0, EN2 -> Port 1
+            Connection {
+                source: SourcePort::ChipInput(2),
+                target: TargetPort::ComponentInput {
+                    component_idx: 1,
+                    port_idx: 0,
+                },
+            },
+            Connection {
+                source: SourcePort::ChipInput(3),
+                target: TargetPort::ComponentInput {
+                    component_idx: 1,
+                    port_idx: 1,
+                },
+            },
+            // BOTH outputs drive ChipOutput(0)
+            Connection {
+                source: SourcePort::ComponentOutput {
+                    component_idx: 0,
+                    port_idx: 0,
+                },
+                target: TargetPort::ChipOutput(0),
+            },
+            Connection {
+                source: SourcePort::ComponentOutput {
+                    component_idx: 1,
+                    port_idx: 0,
+                },
+                target: TargetPort::ChipOutput(0),
+            },
+        ],
+    };
+    library.push(bp);
+
+    let mut active_clocks = Vec::new();
+    let mut blueprint_stack = Vec::new();
+    let (interface, _tree) = sim
+        .instantiate_chip_with_mapping(0, &library, &mut active_clocks, &mut blueprint_stack)
+        .expect("Failed to instantiate DualTriStateBus");
+
+    let in_d1 = sim.add_gate(GateType::Input);
+    let in_en1 = sim.add_gate(GateType::Input);
+    let in_d2 = sim.add_gate(GateType::Input);
+    let in_en2 = sim.add_gate(GateType::Input);
+    let out = sim.add_gate(GateType::Output);
+
+    // Wire inputs to the chip's internal target gates
+    for &(g_idx, port) in &interface.inputs[0] {
+        sim.connect(in_d1, g_idx, port);
+    }
+    for &(g_idx, port) in &interface.inputs[1] {
+        sim.connect(in_en1, g_idx, port);
+    }
+    for &(g_idx, port) in &interface.inputs[2] {
+        sim.connect(in_d2, g_idx, port);
+    }
+    for &(g_idx, port) in &interface.inputs[3] {
+        sim.connect(in_en2, g_idx, port);
+    }
+
+    // Wire the chip output to our external output gate
+    match interface.outputs[0] {
+        OutputSource::DrivenByGate(g_idx) => {
+            sim.connect(g_idx, out, 0);
+        }
+        _ => panic!(
+            "Expected chip output 0 to be DrivenByGate, found {:?}",
+            interface.outputs[0]
+        ),
+    }
+
+    // Scenario 1: Buffer 1 enabled (High), Buffer 2 disabled -> BusOut = High (0b10)
+    sim.set_input(in_d1, true);
+    sim.set_input(in_en1, true);
+    sim.set_input(in_d2, false);
+    sim.set_input(in_en2, false);
+    assert!(sim.propagate_events(100).is_ok());
+    assert_eq!(
+        sim.get_raw_state(out),
+        0b10,
+        "Buffer 1 alone should drive BusOut to High"
+    );
+
+    // Scenario 2: Buffer 1 disabled, Buffer 2 enabled (Low) -> BusOut = Low (0b01)
+    sim.set_input(in_en1, false);
+    sim.set_input(in_en2, true);
+    assert!(sim.propagate_events(100).is_ok());
+    assert_eq!(
+        sim.get_raw_state(out),
+        0b01,
+        "Buffer 2 alone should drive BusOut to Low"
+    );
+
+    // Scenario 3: Contention! Both enabled with opposing levels (D1=High, D2=Low)
+    sim.set_input(in_en1, true);
+    sim.set_input(in_en2, true);
+    assert!(sim.propagate_events(100).is_ok());
+    assert_eq!(
+        sim.get_raw_state(out),
+        0b11,
+        "Simultaneous conflicting drivers must produce Bus Contention (0b11)"
+    );
+}
+
+#[test]
+fn test_feedback_loop_drains_upstream_events_in_single_pass() {
+    let mut sim = Simulator::new();
+
+    // Inverter 1 -> Inverter 2 -> Inverter 3 -> Inverter 1 (3-stage ring oscillator)
+    let inv1 = sim.add_gate(GateType::Nand);
+    let inv2 = sim.add_gate(GateType::Nand);
+    let inv3 = sim.add_gate(GateType::Nand);
+
+    // Wire inverters (input a and input b connected to same driver)
+    sim.connect(inv1, inv2, 0);
+    sim.connect(inv1, inv2, 1);
+
+    sim.connect(inv2, inv3, 0);
+    sim.connect(inv2, inv3, 1);
+
+    sim.connect(inv3, inv1, 0);
+    sim.connect(inv3, inv1, 1);
+
+    // Explicitly give inv3 a higher depth than inv1 if manual depths are set
+    sim.nodes[inv1].depth = 0;
+    sim.nodes[inv2].depth = 1;
+    sim.nodes[inv3].depth = 2;
+
+    // Propagation MUST detect the oscillation and drain upstream events
+    let res = sim.propagate_events(10);
+    assert!(res.is_err());
+    assert!(res.unwrap_err().contains("Oscillation detected"));
 }

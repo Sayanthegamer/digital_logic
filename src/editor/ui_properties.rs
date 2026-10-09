@@ -52,7 +52,8 @@ impl Editor {
                     .clicked()
                 {
                     self.push_history_snapshot();
-                    self.circuit.components
+                    self.circuit
+                        .components
                         .retain(|c| !self.canvas.selected_comp_ids.contains(&c.id));
                     self.circuit.connections.retain(|c| {
                         !self.canvas.selected_comp_ids.contains(&c.src_comp_id)
@@ -196,10 +197,10 @@ impl Editor {
                 && let Some(sel_id) = self.canvas.selected_comp_id
             {
                 let mut size_changed = false;
-                if let Some(ref l) = new_label {
-                    if let Some(c) = self.get_component_mut(sel_id) {
-                        c.label = l.clone();
-                    }
+                if let Some(ref l) = new_label
+                    && let Some(c) = self.get_component_mut(sel_id)
+                {
+                    c.label = l.clone();
                 }
                 if let Some(p) = new_period {
                     if let Some(c) = self.get_component_mut(sel_id) {
@@ -225,7 +226,10 @@ impl Editor {
 
                 if size_changed {
                     let (ins, outs) = if let Some(comp) = self.get_component(sel_id) {
-                        self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()))
+                        self.get_component_ports_count_with_width(
+                            comp.comp_type,
+                            Some(comp.bus_width()),
+                        )
                     } else {
                         (0, 0)
                     };
@@ -300,7 +304,9 @@ impl Editor {
                             self.push_history_snapshot();
                             // Add to global library and sync
                             self.global_library.ungrouped.push(new_bp);
-                            crate::editor::global_library::save_global_library(&self.global_library);
+                            crate::editor::global_library::save_global_library(
+                                &self.global_library,
+                            );
                             self.engine.library = self.global_library.to_flat_list();
                             self.circuit.components.clear();
                             self.circuit.connections.clear();

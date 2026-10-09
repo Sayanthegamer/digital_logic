@@ -48,7 +48,8 @@ impl Editor {
             match node {
                 TraceNode::ChipInput(idx) => {
                     let inputs: Vec<&super::types::VisualComponent> = self
-                        .circuit.components
+                        .circuit
+                        .components
                         .iter()
                         .filter(|c| c.comp_type == ComponentType::Input)
                         .collect();
@@ -75,7 +76,8 @@ impl Editor {
                     port_idx,
                 } => {
                     if let Some(conn) = self
-                        .circuit.connections
+                        .circuit
+                        .connections
                         .iter()
                         .find(|c| c.tgt_comp_id == *component_idx && c.tgt_port == *port_idx)
                     {
@@ -120,7 +122,8 @@ impl Editor {
             match node {
                 TraceNode::ChipInput(idx) => {
                     let inputs: Vec<&super::types::VisualComponent> = self
-                        .circuit.components
+                        .circuit
+                        .components
                         .iter()
                         .filter(|c| c.comp_type == ComponentType::Input)
                         .collect();
@@ -147,7 +150,8 @@ impl Editor {
                     port_idx,
                 } => {
                     if let Some(conn) = self
-                        .circuit.connections
+                        .circuit
+                        .connections
                         .iter()
                         .find(|c| c.tgt_comp_id == *component_idx && c.tgt_port == *port_idx)
                     {

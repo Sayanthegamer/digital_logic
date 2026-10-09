@@ -1,7 +1,7 @@
+use super::Editor;
+use super::types::*;
 use crate::engine::ComponentType;
 use macroquad::prelude::*;
-use super::types::*;
-use super::Editor;
 
 fn get_wire_bounds(src_pos: Vec2, tgt_pos: Vec2, offset: f32, tgt_port: usize) -> Rect {
     let segments = Editor::compute_wire_segments_world(src_pos, tgt_pos, offset, tgt_port);
@@ -53,14 +53,11 @@ impl Editor {
                 let box_rect = Rect::new(x_min, y_min, box_w, box_h);
 
                 for comp in &self.circuit.components {
-                    let comp_rect =
-                        Rect::new(comp.pos.x, comp.pos.y, comp.width, comp.height);
+                    let comp_rect = Rect::new(comp.pos.x, comp.pos.y, comp.width, comp.height);
                     if comp_rect.overlaps(&box_rect) {
                         self.canvas.selected_comp_ids.insert(comp.id);
                     }
                 }
-
-
 
                 let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
                     self.circuit.components.iter().map(|c| (c.id, c)).collect();
@@ -70,8 +67,14 @@ impl Editor {
                         comp_by_id.get(&conn.tgt_comp_id),
                     );
                     if let (Some(&src), Some(&tgt)) = (src_comp_opt, tgt_comp_opt) {
-                        let (_, outputs) = self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
-                        let (inputs, _) = self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
+                        let (_, outputs) = self.get_component_ports_count_with_width(
+                            src.comp_type,
+                            Some(src.bus_width()),
+                        );
+                        let (inputs, _) = self.get_component_ports_count_with_width(
+                            tgt.comp_type,
+                            Some(tgt.bus_width()),
+                        );
                         let src_pos = src.output_port_pos(conn.src_port, outputs);
                         let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
 
@@ -121,12 +124,15 @@ impl Editor {
                 };
 
                 self.push_history_snapshot();
-                let is_junction = self.get_component(in_id).map_or(false, |c| c.comp_type == crate::engine::ComponentType::Junction);
+                let is_junction = self
+                    .get_component(in_id)
+                    .is_some_and(|c| c.comp_type == crate::engine::ComponentType::Junction);
                 if !is_junction {
-                    self.circuit.connections
+                    self.circuit
+                        .connections
                         .retain(|c| !(c.tgt_comp_id == in_id && c.tgt_port == in_port));
                 }
-                
+
                 // Deduplicate connection
                 self.circuit.connections.retain(|c| {
                     !(c.src_comp_id == out_id

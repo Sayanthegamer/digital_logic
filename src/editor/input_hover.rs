@@ -1,6 +1,6 @@
+use super::Editor;
 use crate::engine::ComponentType;
 use macroquad::prelude::*;
-use super::Editor;
 
 impl Editor {
     pub fn update_hovered_port(
@@ -49,7 +49,9 @@ impl Editor {
                         if dist < closest_dist {
                             closest_dist = dist;
                             // When dragging a wire, prefer target ports of the opposite type.
-                            let want_input = if let Some((_, _, start_is_input)) = self.canvas.active_wire_drag {
+                            let want_input = if let Some((_, _, start_is_input)) =
+                                self.canvas.active_wire_drag
+                            {
                                 !start_is_input
                             } else {
                                 false
@@ -59,8 +61,10 @@ impl Editor {
                         continue;
                     }
 
-                    let (inputs_count, outputs_count) =
-                        self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
+                    let (inputs_count, outputs_count) = self.get_component_ports_count_with_width(
+                        comp.comp_type,
+                        Some(comp.bus_width()),
+                    );
 
                     // Check inputs
                     for i in 0..inputs_count {

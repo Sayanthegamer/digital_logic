@@ -193,8 +193,11 @@ impl Editor {
 
                             // Show ungrouped chips first
                             if ungrouped_count > 0 {
-                                for (ug_idx, bp) in self.global_library.ungrouped.iter().enumerate() {
-                                    if !search.is_empty() && !bp.name.to_lowercase().contains(&search) {
+                                for (ug_idx, bp) in self.global_library.ungrouped.iter().enumerate()
+                                {
+                                    if !search.is_empty()
+                                        && !bp.name.to_lowercase().contains(&search)
+                                    {
                                         continue;
                                     }
                                     // Find the flat engine library index for this chip
@@ -225,15 +228,29 @@ impl Editor {
                                         if ui.rect_contains_pointer(response.rect) {
                                             self.ui.drag_hovered_idx = Some(flat_idx);
                                         }
-                                        if self.ui.drag_hovered_idx == Some(flat_idx) && dragged_idx != flat_idx {
+                                        if self.ui.drag_hovered_idx == Some(flat_idx)
+                                            && dragged_idx != flat_idx
+                                        {
                                             let rect = response.rect;
-                                            let y = if flat_idx > dragged_idx { rect.max.y } else { rect.min.y };
+                                            let y = if flat_idx > dragged_idx {
+                                                rect.max.y
+                                            } else {
+                                                rect.min.y
+                                            };
                                             let gap_rect = egui::Rect::from_min_size(
                                                 egui::pos2(rect.min.x, y - rect.height() / 2.0),
                                                 egui::vec2(rect.width(), rect.height()),
                                             );
-                                            ui.painter().rect_filled(gap_rect, 2.0, egui::Color32::from_white_alpha(30));
-                                            ui.painter().hline(rect.min.x..=rect.max.x, y, (2.0, egui::Color32::WHITE));
+                                            ui.painter().rect_filled(
+                                                gap_rect,
+                                                2.0,
+                                                egui::Color32::from_white_alpha(30),
+                                            );
+                                            ui.painter().hline(
+                                                rect.min.x..=rect.max.x,
+                                                y,
+                                                (2.0, egui::Color32::WHITE),
+                                            );
                                         }
                                     }
 
@@ -248,7 +265,7 @@ impl Editor {
 
                             // Show folder-grouped chips
                             let mut folder_offset = ungrouped_count;
-                            for (_fi, folder) in self.global_library.folders.iter().enumerate() {
+                            for folder in self.global_library.folders.iter() {
                                 if folder.chips.is_empty() && !search.is_empty() {
                                     folder_offset += folder.chips.len();
                                     continue;
@@ -270,14 +287,20 @@ impl Editor {
                                         ui.painter().rect_filled(rect, 2.0, c);
                                     }
                                     ui.label(
-                                        egui::RichText::new(format!("{} {}", theme::ICON_FOLDER, folder.name))
-                                            .small()
-                                            .color(theme::TEXT_SECONDARY.egui()),
+                                        egui::RichText::new(format!(
+                                            "{} {}",
+                                            theme::ICON_FOLDER,
+                                            folder.name
+                                        ))
+                                        .small()
+                                        .color(theme::TEXT_SECONDARY.egui()),
                                     );
                                 });
 
                                 for (ci, bp) in folder.chips.iter().enumerate() {
-                                    if !search.is_empty() && !bp.name.to_lowercase().contains(&search) {
+                                    if !search.is_empty()
+                                        && !bp.name.to_lowercase().contains(&search)
+                                    {
                                         continue;
                                     }
                                     let flat_idx = folder_offset + ci;
@@ -307,15 +330,29 @@ impl Editor {
                                         if ui.rect_contains_pointer(response.rect) {
                                             self.ui.drag_hovered_idx = Some(flat_idx);
                                         }
-                                        if self.ui.drag_hovered_idx == Some(flat_idx) && dragged_idx != flat_idx {
+                                        if self.ui.drag_hovered_idx == Some(flat_idx)
+                                            && dragged_idx != flat_idx
+                                        {
                                             let rect = response.rect;
-                                            let y = if flat_idx > dragged_idx { rect.max.y } else { rect.min.y };
+                                            let y = if flat_idx > dragged_idx {
+                                                rect.max.y
+                                            } else {
+                                                rect.min.y
+                                            };
                                             let gap_rect = egui::Rect::from_min_size(
                                                 egui::pos2(rect.min.x, y - rect.height() / 2.0),
                                                 egui::vec2(rect.width(), rect.height()),
                                             );
-                                            ui.painter().rect_filled(gap_rect, 2.0, egui::Color32::from_white_alpha(30));
-                                            ui.painter().hline(rect.min.x..=rect.max.x, y, (2.0, egui::Color32::WHITE));
+                                            ui.painter().rect_filled(
+                                                gap_rect,
+                                                2.0,
+                                                egui::Color32::from_white_alpha(30),
+                                            );
+                                            ui.painter().hline(
+                                                rect.min.x..=rect.max.x,
+                                                y,
+                                                (2.0, egui::Color32::WHITE),
+                                            );
                                         }
                                     }
 

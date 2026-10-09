@@ -33,7 +33,7 @@ pub struct VisualComponent {
     pub label: String,
     pub clock_period: Option<usize>, // Localized period in ticks (only for Clock)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub bus_width: Option<usize>,    // Width of the bus (only for BusJoiner/BusSplitter)
+    pub bus_width: Option<usize>, // Width of the bus (only for BusJoiner/BusSplitter)
     /// Per-component colour override (RGBA). None = use theme default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<[f32; 4]>,
@@ -90,7 +90,6 @@ pub struct VisualConnection {
     pub tgt_comp_id: usize,
     pub tgt_port: usize,
 }
-
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ActiveTool {

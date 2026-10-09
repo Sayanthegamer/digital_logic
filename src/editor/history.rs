@@ -12,6 +12,8 @@ impl Editor {
             next_component_id: self.circuit.next_component_id,
             pan: self.canvas.pan,
             zoom: self.canvas.zoom,
+            wire_nudges: self.circuit.wire_nudges.clone(),
+            wire_offsets: self.circuit.wire_offsets.clone(),
         };
 
         self.history.undo_stack.push_back(snapshot);
@@ -36,6 +38,8 @@ impl Editor {
                 next_component_id: self.circuit.next_component_id,
                 pan: self.canvas.pan,
                 zoom: self.canvas.zoom,
+                wire_nudges: self.circuit.wire_nudges.clone(),
+                wire_offsets: self.circuit.wire_offsets.clone(),
             };
             self.history.redo_stack.push_back(current_snapshot);
 
@@ -46,9 +50,16 @@ impl Editor {
             self.circuit.next_component_id = prev_state.next_component_id;
             self.canvas.pan = prev_state.pan;
             self.canvas.zoom = prev_state.zoom;
+            self.circuit.wire_nudges = prev_state.wire_nudges.clone();
+            self.circuit.wire_offsets = prev_state.wire_offsets.clone();
 
             // Recompile the simulation engine
             self.compile();
+
+            // Re-apply preserved wire nudges and offsets after compile
+            self.circuit.wire_nudges = prev_state.wire_nudges;
+            self.circuit.wire_offsets = prev_state.wire_offsets;
+            self.rebuild_spatial_grid();
 
             // Clear any lingering selection or interactions
             self.canvas.selected_comp_id = None;
@@ -72,6 +83,8 @@ impl Editor {
                 next_component_id: self.circuit.next_component_id,
                 pan: self.canvas.pan,
                 zoom: self.canvas.zoom,
+                wire_nudges: self.circuit.wire_nudges.clone(),
+                wire_offsets: self.circuit.wire_offsets.clone(),
             };
             self.history.undo_stack.push_back(current_snapshot);
 
@@ -82,9 +95,16 @@ impl Editor {
             self.circuit.next_component_id = next_state.next_component_id;
             self.canvas.pan = next_state.pan;
             self.canvas.zoom = next_state.zoom;
+            self.circuit.wire_nudges = next_state.wire_nudges.clone();
+            self.circuit.wire_offsets = next_state.wire_offsets.clone();
 
             // Recompile the simulation engine
             self.compile();
+
+            // Re-apply preserved wire nudges and offsets after compile
+            self.circuit.wire_nudges = next_state.wire_nudges;
+            self.circuit.wire_offsets = next_state.wire_offsets;
+            self.rebuild_spatial_grid();
 
             // Clear any lingering selection or interactions
             self.canvas.selected_comp_id = None;

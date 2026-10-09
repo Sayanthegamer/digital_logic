@@ -1,8 +1,8 @@
 #![allow(clippy::collapsible_if)]
 use super::Editor;
 use super::state::AppMode;
-use crate::editor::theme;
 use crate::editor::global_library;
+use crate::editor::theme;
 
 impl Editor {
     pub(crate) fn draw_global_library_manager(&mut self, ctx: &egui::Context) {
@@ -56,11 +56,16 @@ impl Editor {
                                     .button(format!("{} New Folder", theme::ICON_ADD))
                                     .clicked()
                                 {
-                                    self.global_library.folders.push(global_library::ChipFolder {
-                                        name: format!("Folder {}", self.global_library.folders.len() + 1),
-                                        color: None,
-                                        chips: Vec::new(),
-                                    });
+                                    self.global_library
+                                        .folders
+                                        .push(global_library::ChipFolder {
+                                            name: format!(
+                                                "Folder {}",
+                                                self.global_library.folders.len() + 1
+                                            ),
+                                            color: None,
+                                            chips: Vec::new(),
+                                        });
                                     global_library::save_global_library(&self.global_library);
                                 }
 
@@ -71,11 +76,16 @@ impl Editor {
                                     .id_salt("global_lib_folders")
                                     .max_height(panel_height - 80.0)
                                     .show(ui, |ui| {
-                                        let is_ungrouped_selected = self.ui.global_lib_selected_folder.is_none();
+                                        let is_ungrouped_selected =
+                                            self.ui.global_lib_selected_folder.is_none();
                                         if ui
                                             .selectable_label(
                                                 is_ungrouped_selected,
-                                                format!("{} Ungrouped ({})", theme::ICON_FOLDER, self.global_library.ungrouped.len()),
+                                                format!(
+                                                    "{} Ungrouped ({})",
+                                                    theme::ICON_FOLDER,
+                                                    self.global_library.ungrouped.len()
+                                                ),
                                             )
                                             .clicked()
                                         {
@@ -85,7 +95,9 @@ impl Editor {
                                         ui.add_space(3.0);
 
                                         let mut folder_to_delete = None;
-                                        for (fi, folder) in self.global_library.folders.iter().enumerate() {
+                                        for (fi, folder) in
+                                            self.global_library.folders.iter().enumerate()
+                                        {
                                             ui.horizontal(|ui| {
                                                 // Color swatch
                                                 if let Some(col) = folder.color {
@@ -102,11 +114,16 @@ impl Editor {
                                                     ui.painter().rect_filled(rect, 3.0, c);
                                                 }
 
-                                                let selected = self.ui.global_lib_selected_folder == Some(fi);
+                                                let selected =
+                                                    self.ui.global_lib_selected_folder == Some(fi);
                                                 if ui
                                                     .selectable_label(
                                                         selected,
-                                                        format!("{} ({} chips)", folder.name, folder.chips.len()),
+                                                        format!(
+                                                            "{} ({} chips)",
+                                                            folder.name,
+                                                            folder.chips.len()
+                                                        ),
                                                     )
                                                     .clicked()
                                                 {
@@ -118,7 +135,9 @@ impl Editor {
                                                         egui::RichText::new(theme::ICON_DELETE)
                                                             .color(theme::ACCENT_ERROR.egui()),
                                                     )
-                                                    .on_hover_text("Delete folder (chips move to Ungrouped)")
+                                                    .on_hover_text(
+                                                        "Delete folder (chips move to Ungrouped)",
+                                                    )
                                                     .clicked()
                                                 {
                                                     folder_to_delete = Some(fi);
@@ -128,14 +147,17 @@ impl Editor {
 
                                         if let Some(fi) = folder_to_delete {
                                             // Move chips to ungrouped before deleting
-                                            let chips = self.global_library.folders[fi].chips.clone();
+                                            let chips =
+                                                self.global_library.folders[fi].chips.clone();
                                             self.global_library.ungrouped.extend(chips);
                                             self.global_library.folders.remove(fi);
                                             if self.ui.global_lib_selected_folder == Some(fi) {
                                                 self.ui.global_lib_selected_folder = None;
                                             }
                                             self.sync_engine_library();
-                                            global_library::save_global_library(&self.global_library);
+                                            global_library::save_global_library(
+                                                &self.global_library,
+                                            );
                                         }
                                     });
                             });
@@ -148,17 +170,25 @@ impl Editor {
                                 ui.set_width(right_w);
                                 ui.set_max_height(panel_height);
 
-                                let (folder_name, chips_ref_len) = match self.ui.global_lib_selected_folder {
-                                    Some(fi) if fi < self.global_library.folders.len() => {
-                                        (self.global_library.folders[fi].name.clone(), self.global_library.folders[fi].chips.len())
-                                    }
-                                    _ => ("Ungrouped".to_string(), self.global_library.ungrouped.len()),
-                                };
+                                let (folder_name, chips_ref_len) =
+                                    match self.ui.global_lib_selected_folder {
+                                        Some(fi) if fi < self.global_library.folders.len() => (
+                                            self.global_library.folders[fi].name.clone(),
+                                            self.global_library.folders[fi].chips.len(),
+                                        ),
+                                        _ => (
+                                            "Ungrouped".to_string(),
+                                            self.global_library.ungrouped.len(),
+                                        ),
+                                    };
 
                                 ui.heading(
-                                    egui::RichText::new(format!("{} — {} chips", folder_name, chips_ref_len))
-                                        .size(20.0)
-                                        .color(theme::TEXT_PRIMARY.egui()),
+                                    egui::RichText::new(format!(
+                                        "{} — {} chips",
+                                        folder_name, chips_ref_len
+                                    ))
+                                    .size(20.0)
+                                    .color(theme::TEXT_PRIMARY.egui()),
                                 );
                                 ui.add_space(5.0);
 
@@ -167,10 +197,13 @@ impl Editor {
                                     if fi < self.global_library.folders.len() {
                                         ui.horizontal(|ui| {
                                             ui.label("Rename:");
-                                            let mut name = self.global_library.folders[fi].name.clone();
+                                            let mut name =
+                                                self.global_library.folders[fi].name.clone();
                                             if ui.text_edit_singleline(&mut name).changed() {
                                                 self.global_library.folders[fi].name = name;
-                                                global_library::save_global_library(&self.global_library);
+                                                global_library::save_global_library(
+                                                    &self.global_library,
+                                                );
                                             }
                                         });
 
@@ -180,13 +213,20 @@ impl Editor {
                                             let mut col = self.global_library.folders[fi]
                                                 .color
                                                 .unwrap_or([0.4, 0.45, 0.85, 1.0]);
-                                            if ui.color_edit_button_rgba_unmultiplied(&mut col).changed() {
+                                            if ui
+                                                .color_edit_button_rgba_unmultiplied(&mut col)
+                                                .changed()
+                                            {
                                                 self.global_library.folders[fi].color = Some(col);
-                                                global_library::save_global_library(&self.global_library);
+                                                global_library::save_global_library(
+                                                    &self.global_library,
+                                                );
                                             }
                                             if ui.small_button("Reset").clicked() {
                                                 self.global_library.folders[fi].color = None;
-                                                global_library::save_global_library(&self.global_library);
+                                                global_library::save_global_library(
+                                                    &self.global_library,
+                                                );
                                             }
                                         });
 
@@ -198,23 +238,25 @@ impl Editor {
                                     .id_salt("global_lib_chips")
                                     .max_height(panel_height - 120.0)
                                     .show(ui, |ui| {
-                                        let chips: Vec<(String, usize, usize)> = match self.ui.global_lib_selected_folder {
+                                        let chips: Vec<(String, usize, usize)> = match self
+                                            .ui
+                                            .global_lib_selected_folder
+                                        {
                                             Some(fi) if fi < self.global_library.folders.len() => {
                                                 self.global_library.folders[fi]
                                                     .chips
                                                     .iter()
-                                                    .enumerate()
-                                                    .map(|(_ci, bp)| (bp.name.clone(), bp.inputs, bp.outputs))
+                                                    .map(|bp| {
+                                                        (bp.name.clone(), bp.inputs, bp.outputs)
+                                                    })
                                                     .collect()
                                             }
-                                            _ => {
-                                                self.global_library
-                                                    .ungrouped
-                                                    .iter()
-                                                    .enumerate()
-                                                    .map(|(_ci, bp)| (bp.name.clone(), bp.inputs, bp.outputs))
-                                                    .collect()
-                                            }
+                                            _ => self
+                                                .global_library
+                                                .ungrouped
+                                                .iter()
+                                                .map(|bp| (bp.name.clone(), bp.inputs, bp.outputs))
+                                                .collect(),
                                         };
 
                                         if chips.is_empty() {
@@ -227,23 +269,32 @@ impl Editor {
                                         let mut chip_to_delete = None;
                                         let mut chip_to_move = None;
 
-                                        for (ci, (name, inputs, outputs)) in chips.iter().enumerate() {
+                                        for (ci, (name, inputs, outputs)) in
+                                            chips.iter().enumerate()
+                                        {
                                             ui.horizontal(|ui| {
                                                 ui.label(
-                                                    egui::RichText::new(&format!(
+                                                    egui::RichText::new(format!(
                                                         "{} {} ({}->{})",
-                                                        theme::ICON_SETTINGS, name, inputs, outputs
+                                                        theme::ICON_SETTINGS,
+                                                        name,
+                                                        inputs,
+                                                        outputs
                                                     ))
                                                     .color(theme::TEXT_PRIMARY.egui()),
                                                 );
 
                                                 ui.with_layout(
-                                                    egui::Layout::right_to_left(egui::Align::Center),
+                                                    egui::Layout::right_to_left(
+                                                        egui::Align::Center,
+                                                    ),
                                                     |ui| {
                                                         if ui
                                                             .small_button(
-                                                                egui::RichText::new(theme::ICON_DELETE)
-                                                                    .color(theme::ACCENT_ERROR.egui()),
+                                                                egui::RichText::new(
+                                                                    theme::ICON_DELETE,
+                                                                )
+                                                                .color(theme::ACCENT_ERROR.egui()),
                                                             )
                                                             .on_hover_text("Delete chip")
                                                             .clicked()
@@ -252,23 +303,52 @@ impl Editor {
                                                         }
 
                                                         // Move to folder button
-                                                        egui::ComboBox::from_id_salt(format!("move_chip_{}", ci))
-                                                            .selected_text("Move to...")
-                                                            .width(100.0)
-                                                            .show_ui(ui, |ui| {
-                                                                if self.ui.global_lib_selected_folder.is_some() {
-                                                                    if ui.selectable_label(false, "Ungrouped").clicked() {
-                                                                        chip_to_move = Some((ci, None));
+                                                        egui::ComboBox::from_id_salt(format!(
+                                                            "move_chip_{}",
+                                                            ci
+                                                        ))
+                                                        .selected_text("Move to...")
+                                                        .width(100.0)
+                                                        .show_ui(ui, |ui| {
+                                                            if self
+                                                                .ui
+                                                                .global_lib_selected_folder
+                                                                .is_some()
+                                                            {
+                                                                if ui
+                                                                    .selectable_label(
+                                                                        false,
+                                                                        "Ungrouped",
+                                                                    )
+                                                                    .clicked()
+                                                                {
+                                                                    chip_to_move = Some((ci, None));
+                                                                }
+                                                            }
+                                                            for (fi, folder) in self
+                                                                .global_library
+                                                                .folders
+                                                                .iter()
+                                                                .enumerate()
+                                                            {
+                                                                if self
+                                                                    .ui
+                                                                    .global_lib_selected_folder
+                                                                    != Some(fi)
+                                                                {
+                                                                    if ui
+                                                                        .selectable_label(
+                                                                            false,
+                                                                            &folder.name,
+                                                                        )
+                                                                        .clicked()
+                                                                    {
+                                                                        chip_to_move =
+                                                                            Some((ci, Some(fi)));
                                                                     }
                                                                 }
-                                                                for (fi, folder) in self.global_library.folders.iter().enumerate() {
-                                                                    if self.ui.global_lib_selected_folder != Some(fi) {
-                                                                        if ui.selectable_label(false, &folder.name).clicked() {
-                                                                            chip_to_move = Some((ci, Some(fi)));
-                                                                        }
-                                                                    }
-                                                                }
-                                                            });
+                                                            }
+                                                        });
                                                     },
                                                 );
                                             });
@@ -278,9 +358,17 @@ impl Editor {
                                         // Process delete
                                         if let Some(ci) = chip_to_delete {
                                             match self.ui.global_lib_selected_folder {
-                                                Some(fi) if fi < self.global_library.folders.len() => {
-                                                    if ci < self.global_library.folders[fi].chips.len() {
-                                                        self.global_library.folders[fi].chips.remove(ci);
+                                                Some(fi)
+                                                    if fi < self.global_library.folders.len() =>
+                                                {
+                                                    if ci
+                                                        < self.global_library.folders[fi]
+                                                            .chips
+                                                            .len()
+                                                    {
+                                                        self.global_library.folders[fi]
+                                                            .chips
+                                                            .remove(ci);
                                                     }
                                                 }
                                                 _ => {
@@ -290,22 +378,38 @@ impl Editor {
                                                 }
                                             }
                                             self.sync_engine_library();
-                                            global_library::save_global_library(&self.global_library);
+                                            global_library::save_global_library(
+                                                &self.global_library,
+                                            );
                                         }
 
                                         // Process move
                                         if let Some((ci, target_folder)) = chip_to_move {
                                             let chip = match self.ui.global_lib_selected_folder {
-                                                Some(fi) if fi < self.global_library.folders.len() => {
-                                                    if ci < self.global_library.folders[fi].chips.len() {
-                                                        Some(self.global_library.folders[fi].chips.remove(ci))
+                                                Some(fi)
+                                                    if fi < self.global_library.folders.len() =>
+                                                {
+                                                    if ci
+                                                        < self.global_library.folders[fi]
+                                                            .chips
+                                                            .len()
+                                                    {
+                                                        Some(
+                                                            self.global_library.folders[fi]
+                                                                .chips
+                                                                .remove(ci),
+                                                        )
                                                     } else {
                                                         None
                                                     }
                                                 }
                                                 _ => {
                                                     if ci < self.global_library.ungrouped.len() {
-                                                        Some(self.global_library.ungrouped.remove(ci))
+                                                        Some(
+                                                            self.global_library
+                                                                .ungrouped
+                                                                .remove(ci),
+                                                        )
                                                     } else {
                                                         None
                                                     }
@@ -314,8 +418,13 @@ impl Editor {
 
                                             if let Some(chip) = chip {
                                                 match target_folder {
-                                                    Some(fi) if fi < self.global_library.folders.len() => {
-                                                        self.global_library.folders[fi].chips.push(chip);
+                                                    Some(fi)
+                                                        if fi
+                                                            < self.global_library.folders.len() =>
+                                                    {
+                                                        self.global_library.folders[fi]
+                                                            .chips
+                                                            .push(chip);
                                                     }
                                                     _ => {
                                                         self.global_library.ungrouped.push(chip);
@@ -323,7 +432,9 @@ impl Editor {
                                                 }
                                             }
                                             self.sync_engine_library();
-                                            global_library::save_global_library(&self.global_library);
+                                            global_library::save_global_library(
+                                                &self.global_library,
+                                            );
                                         }
                                     });
                             });
@@ -344,9 +455,12 @@ impl Editor {
                             .add_sized(
                                 [200.0, 45.0],
                                 egui::Button::new(
-                                    egui::RichText::new(format!("{} Import from Project", theme::ICON_FOLDER))
-                                        .size(18.0)
-                                        .color(theme::TEXT_PRIMARY.egui()),
+                                    egui::RichText::new(format!(
+                                        "{} Import from Project",
+                                        theme::ICON_FOLDER
+                                    ))
+                                    .size(18.0)
+                                    .color(theme::TEXT_PRIMARY.egui()),
                                 )
                                 .fill(theme::BG_CANVAS.egui()),
                             )

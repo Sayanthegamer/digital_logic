@@ -11,6 +11,7 @@ struct LayoutNode {
     children: Vec<usize>,
 }
 
+#[allow(clippy::needless_range_loop)]
 pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualConnection]) {
     if components.is_empty() {
         return;
@@ -27,10 +28,9 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
         if let (Some(&src_idx), Some(&tgt_idx)) = (
             id_to_idx.get(&conn.src_comp_id),
             id_to_idx.get(&conn.tgt_comp_id),
-        ) {
-            if !adj[src_idx].contains(&tgt_idx) {
-                adj[src_idx].push(tgt_idx);
-            }
+        ) && !adj[src_idx].contains(&tgt_idx)
+        {
+            adj[src_idx].push(tgt_idx);
         }
     }
 
@@ -60,7 +60,7 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
             if i < adj[u].len() {
                 let v = adj[u][i];
                 stack.push((u, i + 1));
-                
+
                 if !visited[v] {
                     visited[v] = true;
                     rec_stack[v] = true;
@@ -104,7 +104,7 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
 
     // 4. Augmented Graph with Dummy Nodes
     let mut nodes = Vec::new();
-    
+
     for i in 0..components.len() {
         nodes.push(LayoutNode {
             comp_idx: Some(i),
@@ -169,10 +169,16 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
                     sum += node_pos[parent] as f32;
                     count += 1;
                 }
-                barycenters[node] = if count == 0 { 0.0 } else { sum / (count as f32) };
+                barycenters[node] = if count == 0 {
+                    0.0
+                } else {
+                    sum / (count as f32)
+                };
             }
             layers[l].sort_by(|&a, &b| {
-                barycenters[a].partial_cmp(&barycenters[b]).unwrap_or(std::cmp::Ordering::Equal)
+                barycenters[a]
+                    .partial_cmp(&barycenters[b])
+                    .unwrap_or(std::cmp::Ordering::Equal)
             });
             for (i, &node) in layers[l].iter().enumerate() {
                 node_pos[node] = i;
@@ -188,10 +194,16 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
                     sum += node_pos[child] as f32;
                     count += 1;
                 }
-                barycenters[node] = if count == 0 { 0.0 } else { sum / (count as f32) };
+                barycenters[node] = if count == 0 {
+                    0.0
+                } else {
+                    sum / (count as f32)
+                };
             }
             layers[l].sort_by(|&a, &b| {
-                barycenters[a].partial_cmp(&barycenters[b]).unwrap_or(std::cmp::Ordering::Equal)
+                barycenters[a]
+                    .partial_cmp(&barycenters[b])
+                    .unwrap_or(std::cmp::Ordering::Equal)
             });
             for (i, &node) in layers[l].iter().enumerate() {
                 node_pos[node] = i;
@@ -209,10 +221,16 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
                 sum += node_pos[parent] as f32;
                 count += 1;
             }
-            barycenters[node] = if count == 0 { 0.0 } else { sum / (count as f32) };
+            barycenters[node] = if count == 0 {
+                0.0
+            } else {
+                sum / (count as f32)
+            };
         }
         layers[l].sort_by(|&a, &b| {
-            barycenters[a].partial_cmp(&barycenters[b]).unwrap_or(std::cmp::Ordering::Equal)
+            barycenters[a]
+                .partial_cmp(&barycenters[b])
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
         for (i, &node) in layers[l].iter().enumerate() {
             node_pos[node] = i;
@@ -222,17 +240,17 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
     // 6. Smart Y-Coordinate Assignment
     let x_gap: f32 = 200.0;
     let y_gap: f32 = 60.0;
-    
+
     let mut y_positions = vec![0.0_f32; nodes.len()];
     let mut current_x: f32 = 100.0;
 
     for l in 0..=max_layer {
         let mut layer_max_width: f32 = 0.0;
         let mut current_y: f32 = 100.0; // Minimum Y for this layer
-        
+
         for &idx in &layers[l] {
             layer_max_width = layer_max_width.max(nodes[idx].width);
-            
+
             // Calculate ideal Y based on parents' actual Y positions
             let mut sum_y = 0.0;
             let mut count = 0;
@@ -240,16 +258,16 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
                 sum_y += y_positions[parent];
                 count += 1;
             }
-            
+
             let mut ideal_y = if count > 0 {
                 sum_y / (count as f32)
             } else {
                 current_y // No parents, just use the current running Y
             };
-            
+
             // We cannot place it higher than current_y to prevent overlapping with the node above it
             ideal_y = ideal_y.max(current_y);
-            
+
             y_positions[idx] = ideal_y;
             current_y = ideal_y + nodes[idx].height + y_gap;
         }
@@ -259,17 +277,15 @@ pub fn auto_arrange(components: &mut [VisualComponent], connections: &[VisualCon
             if let Some(comp_idx) = nodes[idx].comp_idx {
                 let mut final_x = current_x;
                 let mut final_y = y_positions[idx];
-                
+
                 // Snap to 20px grid for clean editor alignment
                 final_x = (final_x / 20.0_f32).round() * 20.0_f32;
                 final_y = (final_y / 20.0_f32).round() * 20.0_f32;
-                
+
                 components[comp_idx].pos = Vec2::new(final_x, final_y);
             }
         }
-        
+
         current_x += layer_max_width + x_gap;
     }
 }
-
-

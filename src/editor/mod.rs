@@ -1,6 +1,7 @@
-pub mod circuit_model;
 mod canvas;
+pub mod circuit_model;
 pub mod color_coding;
+pub mod constants;
 mod drawing;
 mod drawing_shapes;
 mod drawing_wires;
@@ -8,22 +9,24 @@ pub mod global_library;
 pub mod gui;
 mod history;
 mod input;
-pub mod constants;
 mod input_context_menu;
+mod input_delete;
+mod input_down;
 mod input_hover;
 mod input_interactions;
-mod input_press;
-mod input_down;
-mod input_release;
-mod input_delete;
 mod input_keyboard;
 mod input_navigation;
+mod input_press;
+mod input_release;
 mod input_simulation;
 mod inspection_logic;
 mod inspection_ui;
 mod layout;
 mod persistence;
+mod spatial_hash;
 pub mod state;
+mod stress_test;
+pub mod svg_exporter;
 pub mod theme;
 pub mod types;
 mod ui_catalog;
@@ -31,9 +34,6 @@ mod ui_global_library;
 mod ui_main_menu;
 mod ui_properties;
 mod wire_junctions;
-mod stress_test;
-mod spatial_hash;
-pub mod svg_exporter;
 
 #[cfg(test)]
 mod tests;
@@ -92,7 +92,9 @@ impl Editor {
         if editor.global_library.to_flat_list().is_empty() {
             editor.setup_default_library();
             // Save default chips to global library
-            editor.global_library.import_from_project(&editor.engine.library);
+            editor
+                .global_library
+                .import_from_project(&editor.engine.library);
             global_library::save_global_library(&editor.global_library);
         } else {
             editor.engine.library = editor.global_library.to_flat_list();
@@ -732,20 +734,20 @@ impl Editor {
 
         // Remap in main canvas
         for comp in &mut self.circuit.components {
-            if let ComponentType::SubChip(ref mut idx) = comp.comp_type {
-                if let Some(&new_idx) = map.get(*idx) {
-                    *idx = new_idx;
-                }
+            if let ComponentType::SubChip(ref mut idx) = comp.comp_type
+                && let Some(&new_idx) = map.get(*idx)
+            {
+                *idx = new_idx;
             }
         }
 
         // Remap in library blueprints
         for bp in &mut self.engine.library {
             for comp in &mut bp.components {
-                if let ComponentType::SubChip(ref mut idx) = comp.component_type {
-                    if let Some(&new_idx) = map.get(*idx) {
-                        *idx = new_idx;
-                    }
+                if let ComponentType::SubChip(ref mut idx) = comp.component_type
+                    && let Some(&new_idx) = map.get(*idx)
+                {
+                    *idx = new_idx;
                 }
             }
         }
@@ -765,8 +767,10 @@ impl Editor {
         src: &types::VisualComponent,
         tgt: &types::VisualComponent,
     ) -> (Vec2, Vec2) {
-        let (_, src_outputs) = self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
-        let (tgt_inputs, _) = self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
+        let (_, src_outputs) =
+            self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
+        let (tgt_inputs, _) =
+            self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
 
         let src_is_junc = src.comp_type == ComponentType::Junction;
         let tgt_is_junc = tgt.comp_type == ComponentType::Junction;

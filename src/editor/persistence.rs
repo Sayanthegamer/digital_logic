@@ -1,7 +1,6 @@
-use crate::engine::{ChipBlueprint, ComponentType};
 use crate::editor::color_coding::ColorOverrides;
 use crate::editor::global_library;
-
+use crate::engine::{ChipBlueprint, ComponentType};
 
 use super::Editor;
 use super::types::*;
@@ -68,13 +67,19 @@ impl Editor {
             {
                 // MIGRATION STEP: clock_period to bus_width for BusJoiner/BusSplitter
                 for comp in &mut project.components {
-                    if (comp.comp_type == ComponentType::BusJoiner || comp.comp_type == ComponentType::BusSplitter) && comp.bus_width.is_none() {
+                    if (comp.comp_type == ComponentType::BusJoiner
+                        || comp.comp_type == ComponentType::BusSplitter)
+                        && comp.bus_width.is_none()
+                    {
                         comp.bus_width = comp.clock_period;
                     }
                 }
                 for bp in &mut project.library {
                     for comp in &mut bp.components {
-                        if (comp.component_type == ComponentType::BusJoiner || comp.component_type == ComponentType::BusSplitter) && comp.bus_width.is_none() {
+                        if (comp.component_type == ComponentType::BusJoiner
+                            || comp.component_type == ComponentType::BusSplitter)
+                            && comp.bus_width.is_none()
+                        {
                             comp.bus_width = comp.clock_period;
                         }
                     }
@@ -91,10 +96,10 @@ impl Editor {
 
                 // Remap subchip indices of loaded components to match the new flat library indices
                 for comp in &mut self.circuit.components {
-                    if let ComponentType::SubChip(ref mut sub_idx) = comp.comp_type {
-                        if let Some(&new_sub_idx) = index_map.get(sub_idx) {
-                            *sub_idx = new_sub_idx;
-                        }
+                    if let ComponentType::SubChip(ref mut sub_idx) = comp.comp_type
+                        && let Some(&new_sub_idx) = index_map.get(sub_idx)
+                    {
+                        *sub_idx = new_sub_idx;
                     }
                 }
 
@@ -120,20 +125,18 @@ impl Editor {
                 .add_filter("Logic Simulator Projects", &["logic", "json"])
                 .set_directory(".")
                 .save_file()
+                && let Err(err) = self.save_to_path(path)
             {
-                if let Err(err) = self.save_to_path(path) {
-                    eprintln!("Failed to save project: {err}");
-                }
+                eprintln!("Failed to save project: {err}");
             }
         }
 
         #[cfg(target_os = "android")]
         {
-            let path = match get_android_external_files_dir()
-                .or_else(|ext_err| {
-                    eprintln!("Failed to resolve external files dir: {ext_err}");
-                    get_android_internal_files_dir()
-                }) {
+            let path = match get_android_external_files_dir().or_else(|ext_err| {
+                eprintln!("Failed to resolve external files dir: {ext_err}");
+                get_android_internal_files_dir()
+            }) {
                 Ok(dir) => dir,
                 Err(err) => {
                     eprintln!("Failed to resolve Android files dir: {err}");
@@ -220,7 +223,8 @@ impl Editor {
 }
 
 #[cfg(target_os = "android")]
-pub(crate) fn get_android_external_files_dir() -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+pub(crate) fn get_android_external_files_dir()
+-> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     use jni::objects::{JObject, JValue};
 
     let env_ptr = unsafe { miniquad::native::android::attach_jni_env() };
@@ -255,7 +259,8 @@ pub(crate) fn get_android_external_files_dir() -> Result<std::path::PathBuf, Box
 }
 
 #[cfg(target_os = "android")]
-pub(crate) fn get_android_internal_files_dir() -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+pub(crate) fn get_android_internal_files_dir()
+-> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     use jni::objects::JObject;
 
     let env_ptr = unsafe { miniquad::native::android::attach_jni_env() };

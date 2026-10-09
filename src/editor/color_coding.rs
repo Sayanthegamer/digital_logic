@@ -6,8 +6,8 @@ use super::types::VisualConnection;
 /// What the right-click context menu is targeting.
 #[derive(Clone, Debug)]
 pub enum ContextMenuTarget {
-    Component(usize),          // visual component ID
-    Wire(VisualConnection),    // the connection
+    Component(usize),       // visual component ID
+    Wire(VisualConnection), // the connection
 }
 
 /// Stores per-component and per-wire colour overrides.

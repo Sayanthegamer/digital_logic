@@ -1,9 +1,13 @@
-use macroquad::prelude::*;
-use super::types::VisualComponent;
 use super::Editor;
+use super::types::VisualComponent;
+use macroquad::prelude::*;
 
 impl Editor {
-    pub fn handle_right_click_context_menu(&mut self, mouse_pos_world: Vec2, egui_wants_pointer: bool) {
+    pub fn handle_right_click_context_menu(
+        &mut self,
+        mouse_pos_world: Vec2,
+        egui_wants_pointer: bool,
+    ) {
         if egui_wants_pointer || !self.canvas.inspection_path.is_empty() {
             return;
         }
@@ -20,7 +24,8 @@ impl Editor {
                     self.ui.context_menu_pos = (screen_pos.x, screen_pos.y);
                     // Initialize picker with current override or default
                     self.ui.context_menu_color = self
-                        .circuit.color_overrides
+                        .circuit
+                        .color_overrides
                         .get_component_color(comp.id)
                         .map(|c| [c.r, c.g, c.b, c.a])
                         .unwrap_or([0.4, 0.45, 0.85, 1.0]);
@@ -40,8 +45,10 @@ impl Editor {
                     comp_by_id.get(&conn.tgt_comp_id),
                 );
                 if let (Some(&src), Some(&tgt)) = (src_comp_opt, tgt_comp_opt) {
-                    let (_, outputs) = self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
-                    let (inputs, _) = self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
+                    let (_, outputs) = self
+                        .get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
+                    let (inputs, _) = self
+                        .get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
                     let src_pos = src.output_port_pos(conn.src_port, outputs);
                     let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
 
@@ -57,13 +64,13 @@ impl Editor {
                         let screen_pos = self.to_screen_space(mouse_pos_world);
                         self.ui.context_menu_pos = (screen_pos.x, screen_pos.y);
                         self.ui.context_menu_color = self
-                            .circuit.color_overrides
+                            .circuit
+                            .color_overrides
                             .get_wire_color(conn)
                             .map(|c| [c.r, c.g, c.b, c.a])
                             .unwrap_or([0.4, 0.45, 0.85, 1.0]);
-                        self.ui.show_context_menu = Some(
-                            crate::editor::color_coding::ContextMenuTarget::Wire(*conn),
-                        );
+                        self.ui.show_context_menu =
+                            Some(crate::editor::color_coding::ContextMenuTarget::Wire(*conn));
                         return;
                     }
                 }

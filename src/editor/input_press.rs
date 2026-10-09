@@ -1,7 +1,7 @@
+use super::Editor;
+use super::types::*;
 use crate::engine::ComponentType;
 use macroquad::prelude::*;
-use super::types::*;
-use super::Editor;
 
 impl Editor {
     pub fn handle_canvas_left_press(&mut self, mouse_pos_world: Vec2) {
@@ -14,9 +14,7 @@ impl Editor {
             || is_key_down(KeyCode::RightControl);
 
         // Check ports first (wiring starts here)
-        if !bypass_wiring
-            && let Some((comp_id, port_idx, is_input)) = self.canvas.hovered_port
-        {
+        if !bypass_wiring && let Some((comp_id, port_idx, is_input)) = self.canvas.hovered_port {
             self.canvas.active_wire_drag = Some((comp_id, port_idx, is_input));
             clicked_something = true;
         }
@@ -43,9 +41,7 @@ impl Editor {
                 // Handle multi-selection tracking
                 if self.canvas.selected_comp_ids.contains(&comp.id) {
                     // Already selected, keep multi-selection
-                } else if is_key_down(KeyCode::LeftShift)
-                    || is_key_down(KeyCode::RightShift)
-                {
+                } else if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) {
                     self.canvas.selected_comp_ids.insert(comp.id);
                 } else {
                     self.canvas.selected_comp_ids.clear();
@@ -63,7 +59,9 @@ impl Editor {
                 self.canvas.drag_start_positions.clear();
                 self.canvas.drag_start_sizes.clear();
                 for &id in &self.canvas.selected_comp_ids {
-                    let comp_data = self.get_component(id).map(|c| (c.pos, Vec2::new(c.width, c.height)));
+                    let comp_data = self
+                        .get_component(id)
+                        .map(|c| (c.pos, Vec2::new(c.width, c.height)));
                     if let Some((pos, size)) = comp_data {
                         self.canvas.drag_start_positions.insert(id, pos);
                         self.canvas.drag_start_sizes.insert(id, size);
@@ -75,8 +73,7 @@ impl Editor {
                 let mut clicked_ann = None;
                 for (idx, ann) in self.circuit.annotations.iter().enumerate() {
                     let text_w = measure_text(&ann.text, self.font.as_ref(), 15, 1.0).width;
-                    let rect =
-                        Rect::new(ann.pos.x - 5.0, ann.pos.y - 14.0, text_w + 10.0, 20.0);
+                    let rect = Rect::new(ann.pos.x - 5.0, ann.pos.y - 14.0, text_w + 10.0, 20.0);
                     if rect.contains(mouse_pos_world) {
                         clicked_ann = Some(idx);
                         break;
@@ -118,10 +115,14 @@ impl Editor {
                                 comp_by_id.get(&conn.tgt_comp_id),
                             );
                             if let (Some(&src), Some(&tgt)) = (src_comp_opt, tgt_comp_opt) {
-                                let (_, outputs) =
-                                    self.get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
-                                let (inputs, _) =
-                                    self.get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
+                                let (_, outputs) = self.get_component_ports_count_with_width(
+                                    src.comp_type,
+                                    Some(src.bus_width()),
+                                );
+                                let (inputs, _) = self.get_component_ports_count_with_width(
+                                    tgt.comp_type,
+                                    Some(tgt.bus_width()),
+                                );
                                 let src_pos = src.output_port_pos(conn.src_port, outputs);
                                 let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
 
@@ -141,9 +142,7 @@ impl Editor {
                         }
 
                         if let Some(wire) = clicked_wire {
-                            if is_key_down(KeyCode::LeftShift)
-                                || is_key_down(KeyCode::RightShift)
-                            {
+                            if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) {
                                 self.canvas.selected_connections.insert(wire);
                             } else {
                                 self.canvas.selected_comp_ids.clear();

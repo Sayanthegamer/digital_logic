@@ -14,6 +14,8 @@ pub struct CanvasSnapshot {
     pub next_component_id: usize,
     pub pan: Vec2,
     pub zoom: f32,
+    pub wire_nudges: HashMap<VisualConnection, f32>,
+    pub wire_offsets: HashMap<VisualConnection, f32>,
 }
 
 pub struct HistoryManager {
@@ -101,7 +103,7 @@ pub struct UiState {
     pub catalog_search_text: String,
     pub egui_wants_pointer: bool,
     pub egui_wants_keyboard: bool,
-    
+
     pub show_android_file_dialog: Option<AndroidFileDialogMode>,
     pub android_file_dialog_input: String,
     pub android_file_dialog_status: String,
@@ -158,7 +160,7 @@ impl Default for UiState {
             show_android_file_dialog: None,
             android_file_dialog_input: "my_project.logic".to_string(),
             android_file_dialog_status: String::new(),
-            
+
             show_debug_suite: false,
             debug_cull_bounds: false,
             debug_single_thread: false,
@@ -188,7 +190,8 @@ pub struct CanvasState {
     pub pan: Vec2,
     pub zoom: f32,
     pub spatial_grid: crate::editor::spatial_hash::SpatialHashGrid<usize>,
-    pub wire_spatial_grid: crate::editor::spatial_hash::SpatialHashGrid<crate::editor::types::VisualConnection>,
+    pub wire_spatial_grid:
+        crate::editor::spatial_hash::SpatialHashGrid<crate::editor::types::VisualConnection>,
     pub last_mouse_pos: Vec2,
     pub selected_tool: Option<ActiveTool>,
     pub active_wire_drag: Option<(usize, usize, bool)>,
@@ -229,6 +232,26 @@ pub struct CanvasState {
     // Right-click context menu detection
     pub right_drag_dist: f32,
     pub alignment_guides: Vec<(Vec2, Vec2)>,
+    pub render_scratch: std::cell::RefCell<WireRenderScratch>,
+}
+
+#[derive(Default)]
+pub struct WireRenderScratch {
+    pub final_segments: Vec<(Vec2, Vec2, bool, bool)>,
+    pub bridge_arcs: Vec<(Vec2, f32, Vec2)>,
+    pub holes: Vec<(f32, f32)>,
+    pub merged_holes: Vec<(f32, f32)>,
+    pub visible_intervals: Vec<(f32, f32)>,
+}
+
+impl WireRenderScratch {
+    pub fn clear(&mut self) {
+        self.final_segments.clear();
+        self.bridge_arcs.clear();
+        self.holes.clear();
+        self.merged_holes.clear();
+        self.visible_intervals.clear();
+    }
 }
 
 impl Default for CanvasState {
@@ -238,6 +261,7 @@ impl Default for CanvasState {
             zoom: 1.0,
             spatial_grid: crate::editor::spatial_hash::SpatialHashGrid::new(),
             wire_spatial_grid: crate::editor::spatial_hash::SpatialHashGrid::new(),
+            render_scratch: std::cell::RefCell::new(WireRenderScratch::default()),
             last_mouse_pos: Vec2::new(0.0, 0.0),
             selected_tool: None,
             active_wire_drag: None,
@@ -310,4 +334,3 @@ impl CanvasState {
         self.drag_snapshot_pushed = false;
     }
 }
-

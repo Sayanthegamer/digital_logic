@@ -1,7 +1,7 @@
 use crate::engine::ChipBlueprint;
+use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::collections::HashMap;
 
 /// A folder within the global chip library for organisation.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -60,7 +60,10 @@ impl GlobalLibrary {
 
     /// Import chips from a project's library, mapping and remapping their sub-chip dependencies.
     /// Returns the index mapping (old index -> new flat index).
-    pub fn import_from_project(&mut self, project_chips: &[ChipBlueprint]) -> HashMap<usize, usize> {
+    pub fn import_from_project(
+        &mut self,
+        project_chips: &[ChipBlueprint],
+    ) -> HashMap<usize, usize> {
         let mut index_map = HashMap::new();
 
         let existing_flat = self.to_flat_list();
@@ -69,10 +72,8 @@ impl GlobalLibrary {
             .map(|bp| Self::blueprint_hash(bp, &HashMap::new()))
             .collect();
 
-        let mut existing_names: Vec<String> = existing_flat
-            .iter()
-            .map(|bp| bp.name.clone())
-            .collect();
+        let mut existing_names: Vec<String> =
+            existing_flat.iter().map(|bp| bp.name.clone()).collect();
 
         let mut new_imports = Vec::new();
         let new_flat_len = existing_flat.len();
@@ -112,10 +113,10 @@ impl GlobalLibrary {
         // 2. Remap all internal components of the newly imported chips
         for chip in &mut new_imports {
             for comp in &mut chip.components {
-                if let crate::engine::ComponentType::SubChip(ref mut sub_idx) = comp.component_type {
-                    if let Some(&new_sub_idx) = index_map.get(sub_idx) {
-                        *sub_idx = new_sub_idx;
-                    }
+                if let crate::engine::ComponentType::SubChip(ref mut sub_idx) = comp.component_type
+                    && let Some(&new_sub_idx) = index_map.get(sub_idx)
+                {
+                    *sub_idx = new_sub_idx;
                 }
             }
         }
@@ -217,13 +218,13 @@ pub fn load_global_library() -> GlobalLibrary {
     #[cfg(not(target_os = "android"))]
     {
         let path = get_global_library_path();
-        if path.exists() {
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                if let Ok(lib) = serde_json::from_str::<GlobalLibrary>(&content) {
-                    return lib;
-                } else {
-                    eprintln!("Failed to parse global library at {:?}", path);
-                }
+        if path.exists()
+            && let Ok(content) = std::fs::read_to_string(&path)
+        {
+            if let Ok(lib) = serde_json::from_str::<GlobalLibrary>(&content) {
+                return lib;
+            } else {
+                eprintln!("Failed to parse global library at {:?}", path);
             }
         }
     }
