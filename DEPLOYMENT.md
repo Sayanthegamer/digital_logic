@@ -28,7 +28,7 @@ cargo test
 
 ## Production / Release Build
 
-For maximum performance (crucial when testing large circuits like the 8-bit or 16-bit CPUs), you **must** build in release mode. The release mode enables heavy compiler optimizations.
+For maximum performance (crucial when testing large circuits like the 32-bit CPU, multi-bank RAM, or mega-scale pure-NAND networks), you **must** build in release mode. The release mode enables heavy compiler optimizations.
 
 ```bash
 cargo build --release

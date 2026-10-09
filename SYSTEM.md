@@ -39,7 +39,8 @@ The following core libraries are utilized (see `Cargo.toml` for exact versions):
 - `egui`: Immediate mode GUI for editor interfaces.
 - `egui-macroquad`: Binding layer between Macroquad and egui.
 - `serde` & `serde_json`: Serialization and deserialization for saving/loading `.logic` blueprint files.
-- `slab`: Dense, cache-friendly node slab allocation (`Slab<GateNode>`) for $O(1)$ gate lookups.
+- `fixedbitset`: Bit-packed set tracking pending queue membership (`in_queue: FixedBitSet`) and dense latch hibernation bit-arrays for sleep domains.
+- `slab`: Pre-allocated generational slot indexing and freelist management.
 - `rayon`: Work-stealing threadpool and data-parallel iterators for topological depth evaluation.
 - `rfd`: Native desktop file dialogs for cross-platform project saving/loading (`cfg(not(target_os = "android"))`).
 - `ndk-context`, `jni`, `miniquad`: Android JNI lifecycle glue and rendering bindings (`cfg(target_os = "android")`).

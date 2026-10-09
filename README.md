@@ -61,7 +61,10 @@ The goal, stated plainly: **run a real 8-bit (eventually 16-bit) CPU, built enti
 
 | | |
 |---|---|
-| 🚀 **Massive Scale Engine** | Uses Tarjan's Strongly Connected Components (SCC) algorithm for O(V+E) zero-clone depth scheduling, and Spatial Hashing for O(1) wire deduplication. Engineered to crunch 100,000+ gate CPUs in real-time at 60 FPS without breaking a sweat. |
+| 🚀 **Massive Scale Engine** | Uses a compact Struct-of-Arrays (SoA) Bit-Slab (14.16 bytes/gate) and Tarjan's Strongly Connected Components (SCC) algorithm for O(V+E) zero-clone depth scheduling. Crunches 100,000+ gate circuits in real-time at 60 FPS in only 1.38 MB of RAM. |
+| 💤 **Activity-Gated Sleep Domains** | Dormant RAM banks and subchips automatically hibernate into dense bit-arrays, skipping gate evaluations on inactive memory banks and eliminating CPU cache thrashing. |
+| 🧠 **Topological Auto-Gating** | Discovers Chip-Select and Write-Enable lines topologically via Tarjan SCC feedback analysis and fan-out asymmetry ($2N$ vs $1$), providing automatic sleep-gating even with arbitrary or default pin names. |
+| ⚡ **Subchip Template Caching** | Prototypes are pre-compiled and cloned during canvas instantiation, eliminating UI freeze when placing large ALUs or memory blocks. |
 | 🔌 **Event-Driven Simulation** | Gates only re-evaluate when their inputs actually change — not every frame. Oscillation detection stops runaway feedback loops (e.g. an inverter wired to itself) from freezing the app. |
 | 🎮 **App Mode Routing** | Navigate seamlessly through a dedicated Main Menu, Project Manager, Settings Overlay, and Credits, keeping the Editor clean and focused. |
 | 🧩 **Custom Chips (Sub-Chips)** | Package any circuit into a named, reusable chip with custom input/output labels. Drop it into future circuits like any primitive. |
@@ -264,7 +267,7 @@ cargo run
 cargo run --release
 ```
 
-Run the test suite (39 unit/integration tests running in <0.3s — NAND truth tables, SR latches, multi-domain clocks, nested-chip compilation, out-of-bounds safety, and serialization round-trips):
+Run the test suite (55 unit/integration tests running in <0.9s — NAND truth tables, SR latches, multi-domain clocks, nested-chip compilation, 32-bit CPU pure-NAND arithmetic, multi-bank activity-gated RAM, topological sleep-gating detection, and SoA storage benchmarks):
 
 ```bash
 cargo test
@@ -326,7 +329,9 @@ digital_logic/
 ├── src/
 │   ├── engine/              # Pure simulation core — no rendering, no UI
 │   │   ├── simulator.rs     # Event-driven propagation, SCC depth layering, defragmentation
-│   │   ├── compiler.rs      # Flattens nested chip hierarchies → raw gates
+│   │   ├── storage.rs       # Compact Struct-of-Arrays (SoA) gate memory Bit-Slab
+│   │   ├── sleep.rs         # Activity-gated sleep domains & bit-packed latch arrays
+│   │   ├── compiler.rs      # Flattens nested chips, template caching, topological gating
 │   │   ├── types.rs         # GateType, ChipBlueprint, Connection, etc.
 │   │   ├── profiler.rs      # Calibrates the parallel-vs-sequential crossover threshold
 │   │   └── tests.rs         # Truth-table, latch, clock, compilation tests

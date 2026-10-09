@@ -15,14 +15,36 @@ Instead of a naive tick-based evaluation where every gate is processed every fra
 5. **Hardware Profiler & Safe Fallback**: The dynamic crossover threshold is calibrated once at startup via `detect_parallel_crossover_threshold()` and cached in a `OnceLock`. If parallel evaluation fails to beat sequential execution up to 16,000 gates (such as on single-core or constrained mobile devices), the threshold defaults to `usize::MAX`, safely disabling parallel thread dispatch to prevent performance regressions.
 6. **Oscillation Budget Scaling**: The evaluation step cap scales linearly as $\text{capacity} \times \text{multiplier}$ (defaulting to 100), preventing quadratic execution explosions on large circuits while terminating genuine zero-delay feedback loops in bounded time.
 
-### Flat Compilation
-The most critical architectural decision for performance is how custom chips (sub-chips) are handled.
-- In many visual simulators, nested chips result in tree-walking or virtual function calls at runtime.
-- In this project, the `Compiler` natively *flattens* the hierarchy during instantiation.
-- Deeply nested components (e.g., CPU -> ALU -> Adder -> XOR -> NAND) are unwrapped. The compiler wires the raw primitive gates (NAND, Input, Output, TriStateBuffer, and `BusResolver` where several drivers share a net) directly to each other. A `Clock` component compiles to an `Input` gate that the editor's tick loop toggles.
-- At runtime, the `Simulator` only sees a single flat `Slab<GateNode>` of primitive gates. Each `GateNode` holds the gate type and its two input sources, a `u8` 4-state signal value, its `dependents` list, an `in_queue` flag and its `depth`. Gates are addressed by plain `usize` index, so lookups are O(1).
+### Compact Struct-of-Arrays (SoA) Node Storage (`src/engine/storage.rs`)
+The simulator stores gates in a high-density, cache-aligned Struct-of-Arrays (`GateStorage`) structure:
+- **`states: Vec<u8>`**: Hot simulation signal states (`0b00` Floating, `0b01` Low, `0b10` High, `0b11` Contention). Stored contiguously in cache lines for lightning-fast reads during gate evaluation.
+- **`gate_types: Vec<GateType>`**: Gate enum primitive per index.
+- **`sources: Vec<[u32; 2]>`**: Flattened static topology connections (`input_a`, `input_b`), using `NO_SOURCE` (`u32::MAX`) sentinels.
+- **`dependents: Vec<Vec<u32>>`**: Forward adjacency lists of gates triggered by state transitions.
+- **`in_queue: FixedBitSet`**: Bit-packed set tracking pending queue membership, replacing byte/word booleans.
+- **Memory Density**: Drops the memory footprint from ~150 bytes per gate down to **14.16 bytes per gate** (100,000 gates consume only 1.38 MB, fitting inside host CPU L2/L3 caches).
+
+### Hierarchical Subchip Template Caching (`src/engine/compiler.rs`)
+To prevent multi-second UI freezing when placing complex subchips (e.g. 32-bit ALUs or register banks) on the canvas, the compiler utilizes template caching:
+- `compile_subchip_template()` pre-compiles a chip blueprint into a reusable `SubchipTemplate` containing local gate types, internal connections, interface offsets, and relative clocks/sleep domains.
+- Instantiating identical chips clones the template into the simulator via `instantiate_into()` with simple base offset arithmetic, avoiding repeated recursive blueprint flattening.
+
+### Activity-Gated Subchip Hibernation (Sleep Domains, `src/engine/sleep.rs`)
+In large architectures (such as 64 KB RAM containing 524,288 latches), only a single word changes state on any given clock cycle:
+- The compiler registers `SleepDomain` boundaries for gated subchips, controlled by a driving gate (`control_gate`) and active polarity.
+- When inactive (`should_sleep()`), the domain enters hibernation: its latch states are compacted into dense bit-arrays (`latch_bits: FixedBitSet`, 1 bit per latch), and all internal gates are removed from active event queues.
+- When awakened, `wake()` restores the latch states and schedules gates for normal evaluation.
+
+### Automatic Topological Sleep-Gating Detection (`find_gating_input`)
+The compiler automatically identifies Chip-Select / Enable control lines even when circuits have arbitrary or default pin names:
+1. **Nominal Fast-Path**: Matches explicit pin labels (`"cs"`, `"en"`, `"enable"`, `"we"`, etc.).
+2. **Subchip Gating Fan-Out**: Scores inputs by the number of nested subchip gating ports they drive.
+3. **Primitive Latch Core SCC Analysis**: Uses Tarjan's SCC algorithm on raw components to discover bistable feedback latch cores and scores inputs by their fan-out to the gating stages ($2N$ fan-out for enable vs $1$ for data).
+4. **Combinational Immunity**: Purely combinational circuits have zero feedback cycles and return `None`, guaranteeing zero false-positive sleep domains.
+
+### Safe Compilation & Cache Defragmentation
 - **Safe Compilation Boundary**: `instantiate_chip_with_mapping` enforces upfront index and port bounds checking across all connections prior to compilation. Malformed topologies return structured `Result::Err` errors rather than panicking.
-- **Cache Defragmentation**: After flattening, `defragment_and_sort_by_depth` runs an $O(N \log N)$ sort and re-inserts every node into a fresh slab in depth order, remapping all source, dependent and queued indices (it returns early if the slab is already compact and sorted). Gates of the same depth end up in a contiguous index range, which improves locality when a layer is evaluated.
+- **Topological Sorting & Dynamic Remapping**: After flattening, `defragment_and_sort_by_depth` sorts gates strictly by topological depth and packs them contiguously. It simultaneously remaps all `domain.gates`, `domain.control_gate`, and `domain.latch_indices` across the reordering, maximizing memory locality and hardware prefetcher saturation.
 
 ## Editor UI (`src/editor/`)
 

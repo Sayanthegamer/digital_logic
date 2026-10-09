@@ -16,14 +16,15 @@ The simulator core (`GateType`) understands five primitive gates:
 
 At the editor/blueprint level (`ComponentType`) there are also **Clock**, an autonomous component that flips after a localized number of simulation ticks (its `period`) and compiles to an Input gate, plus display and bus-routing components (`SevenSegment`, `Junction`, `BusJoiner`, `BusSplitter`) and `SubChip` references.
 
-## Event Propagation
+## Event Propagation & Activity-Gating
 
 - The simulator uses a `Vec<Vec<usize>>` (`event_queue`) to queue primitive indices that require evaluation, one queue per topological depth. Depths come from Tarjan's SCC algorithm followed by longest-path layering over the condensation DAG, so every gate in a feedback loop shares one depth.
-- When an Input state changes (or a Clock ticks), its immediate dependents are pushed to the queue. A gate is queued at most once at a time (`in_queue`).
+- When an Input state changes (or a Clock ticks), its immediate dependents are pushed to the queue. A gate is queued at most once at a time (`in_queue: FixedBitSet`).
 - **Parallel Evaluation**: During `propagate_events`, the engine loops through the depth layers in order. For each layer it first computes all new states from the current node states, then applies the changes and enqueues dependents of every gate whose state changed. When the layer's queue is at least `dynamic_threshold` long (calibrated once per process by a hardware profiler), the compute pass runs on `rayon::par_iter()`; otherwise it runs sequentially. Results are collected in order, so processing is deterministic. If a change re-enqueues a gate at an earlier depth, the events are picked up once the loop runs past the last non-empty layer.
-- **Oscillation Detection**: To prevent infinite loops caused by zero-delay feedback loops (e.g., an inverter connected to itself), `propagate_events(budget_multiplier)` computes a budget of `node_slab_capacity × max(budget_multiplier, 100)` gate evaluations, counted cumulatively across the whole propagation pass. The editor passes `100` as the budget multiplier by default (scaling the step budget linearly to `node_slab_capacity × 100`), preventing runaway delay spikes on wide networks while quickly catching genuine oscillations. If the total exceeds the budget, it returns an `Oscillation detected` error, halting the loop and displaying an error in the UI.
+- **Activity-Gated Sleep Domains (`SleepDomain`)**: Deeply nested repetitive subchips (such as RAM banks and register files) register sleep domains with a controlling driver gate (`control_gate`). When the control signal transitions to inactive, the domain hibernates: its bistable latch gates are compressed into bitsets (`FixedBitSet`), and internal gates are skipped during event scheduling. When re-enabled, the domain wakes up and restores latch states.
+- **Oscillation Detection**: To prevent infinite loops caused by zero-delay feedback loops (e.g., an inverter connected to itself), `propagate_events(budget_multiplier)` computes a budget of `capacity × max(budget_multiplier, 100)` gate evaluations, counted cumulatively across the whole propagation pass. The editor passes `100` as the budget multiplier by default (scaling the step budget linearly to `capacity × 100`), preventing runaway delay spikes on wide networks while quickly catching genuine oscillations. If the total exceeds the budget, it returns an `Oscillation detected` error, halting the loop and displaying an error in the UI.
 
-## Custom Chips (Sub-Chips)
+## Custom Chips (Sub-Chips) & Hierarchical Templates
 
 Custom chips are stored in a blueprint `library`. A `ChipBlueprint` consists of:
 - `name`: Chip identifier string.
@@ -36,6 +37,8 @@ Custom chips are stored in a blueprint `library`. A `ChipBlueprint` consists of:
 
 When instantiated:
 - **Upfront Bounds Validation**: The compiler validates that all connection source/target components and port indices exist within valid bounds of the component definitions and subchip blueprint interfaces before instantiation begins, returning an explicit `Err` on malformed blueprints to prevent index out-of-bounds panics.
+- **Subchip Template Caching**: Rather than repeatedly flattening identical nested blueprints, `compile_subchip_template` caches compiled prototype graphs (`SubchipTemplate`). Subsequent instantiations clone the template via `instantiate_into` with index base offsets, eliminating canvas freeze.
+- **Automatic Topological Sleep-Gating**: `find_gating_input` inspects blueprints to discover Chip-Select / Enable pins. If pins lack nominal labels (`"cs"`, `"en"`), it performs Tarjan SCC feedback loop analysis on primitive components to locate cross-coupled latch cores and identifies control lines by fan-out asymmetry ($2N$ vs $1$). Circuits with zero feedback cycles (Adders, Multiplexers) return `None`, guaranteeing zero false sleep domains.
 - The compiler traces connections backward from targets to their absolute "root driver" (a primitive gate).
 - Ports mapped merely to pass-through a signal (Input -> Output) are mathematically resolved without allocating a physical "buffer" gate in the array.
 - If several drivers feed the same internal port, the compiler synthesizes a `BusResolver` tree so High/Low conflicts surface as Contention instead of one driver silently overwriting the other.
