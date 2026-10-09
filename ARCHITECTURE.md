@@ -8,18 +8,18 @@ The simulation backend is completely decoupled from the UI. It operates on a fla
 
 ### Event-Driven Simulation
 Instead of a naive tick-based evaluation where every gate is processed every frame, the `Simulator` uses an event-driven queue (`event_queue`).
-1. **Topological Depth Sorting**: Using Kahn's algorithm, the simulator guarantees deterministic execution by scheduling gates according to their logical depth in the circuit.
+1. **Topological Depth Layering (Tarjan SCC)**: `calculate_depths()` runs Tarjan's algorithm to find strongly connected components, collapses each one (feedback structures such as latches become a single node) into a condensation DAG, and assigns every component its longest-path depth (`depth(v) = max(depth(u) + 1)` over its predecessors). All gates in one SCC share a depth. Pending work is held in per-depth queues (`event_queue: Vec<Vec<usize>>`), so execution order is deterministic.
 2. When an input changes, only the gates directly dependent on that input are queued for re-evaluation.
-3. The `propagate_events` loop processes this queue using a **two-pass Map-Reduce** pattern. Utilizing `rayon::par_iter()`, all gates occupying the exact same topological depth are evaluated concurrently across all CPU cores. Because gates on the same depth layer have no data dependencies on each other, this completely avoids data races while maximizing throughput.
-4. This prevents unnecessary calculations and allows the simulator to handle 100,000+ gate CPUs in real-time.
+3. The `propagate_events` loop walks the depth layers in order and processes each layer in **two passes**. Pass 1 computes each queued gate's new state from a read-only view of the node array. When the layer's queue length reaches a hardware-calibrated threshold (`dynamic_threshold`), this runs on `rayon::par_iter()` across all cores; smaller layers run sequentially. Pass 2 applies the changed states sequentially and enqueues the dependents of every gate that changed. Because pass 1 only reads and pass 2 only writes, there are no data races, and results are identical whether or not the layer ran in parallel. If a changed gate re-enqueues a gate at an earlier depth (a feedback loop), the loop rewinds to the earliest non-empty layer.
+4. This prevents unnecessary calculations and is what lets the simulator target 100,000+ gate CPUs in real time. Parallelism only helps when a layer is wide; long narrow chains (e.g. a ripple-carry adder) are evaluated layer by layer on one thread.
 
 ### Flat Compilation
 The most critical architectural decision for performance is how custom chips (sub-chips) are handled.
 - In many visual simulators, nested chips result in tree-walking or virtual function calls at runtime.
 - In this project, the `Compiler` natively *flattens* the hierarchy during instantiation.
-- Deeply nested components (e.g., CPU -> ALU -> Adder -> XOR -> NAND) are unwrapped. The compiler wires the raw primitive gates (NAND, Input, Output) directly to each other.
-- At runtime, the `Simulator` only sees a single, flat array of primitive gates, ensuring continuous memory layout (`Vec<bool>`, `Vec<usize>`) and O(1) index lookups.
-- **L1/L2 Cache Defragmentation**: After flattening, the array undergoes an $O(N \log N)$ sorting pass. Gates are physically relocated in memory to match their topological depth. This ensures that when the Rayon thread pool evaluates a depth layer, it reads a perfectly contiguous block of memory, completely eliminating cache misses and feeding the hardware pre-fetcher at maximum speed.
+- Deeply nested components (e.g., CPU -> ALU -> Adder -> XOR -> NAND) are unwrapped. The compiler wires the raw primitive gates (NAND, Input, Output, TriStateBuffer, and `BusResolver` where several drivers share a net) directly to each other. A `Clock` component compiles to an `Input` gate that the editor's tick loop toggles.
+- At runtime, the `Simulator` only sees a single flat `Slab<GateNode>` of primitive gates. Each `GateNode` holds the gate type and its two input sources, a `u8` 4-state signal value, its `dependents` list, an `in_queue` flag and its `depth`. Gates are addressed by plain `usize` index, so lookups are O(1).
+- **Cache Defragmentation**: After flattening, `defragment_and_sort_by_depth` runs an $O(N \log N)$ sort and re-inserts every node into a fresh slab in depth order, remapping all source, dependent and queued indices (it returns early if the slab is already compact and sorted). Gates of the same depth end up in a contiguous index range, which improves locality when a layer is evaluated.
 
 ## Editor UI (`src/editor/`)
 
