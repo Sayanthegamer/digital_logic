@@ -21,17 +21,21 @@ At the editor/blueprint level (`ComponentType`) there are also **Clock**, an aut
 - The simulator uses a `Vec<Vec<usize>>` (`event_queue`) to queue primitive indices that require evaluation, one queue per topological depth. Depths come from Tarjan's SCC algorithm followed by longest-path layering over the condensation DAG, so every gate in a feedback loop shares one depth.
 - When an Input state changes (or a Clock ticks), its immediate dependents are pushed to the queue. A gate is queued at most once at a time (`in_queue`).
 - **Parallel Evaluation**: During `propagate_events`, the engine loops through the depth layers in order. For each layer it first computes all new states from the current node states, then applies the changes and enqueues dependents of every gate whose state changed. When the layer's queue is at least `dynamic_threshold` long (calibrated once per process by a hardware profiler), the compute pass runs on `rayon::par_iter()`; otherwise it runs sequentially. Results are collected in order, so processing is deterministic. If a change re-enqueues a gate at an earlier depth, the events are picked up once the loop runs past the last non-empty layer.
-- **Oscillation Detection**: To prevent infinite loops caused by zero-delay feedback loops (e.g., an inverter connected to itself), `propagate_events(max_steps_multiplier)` computes a budget of `node_slab_capacity × max(multiplier, 100)` gate evaluations, counted cumulatively across the whole propagation pass. The editor passes `max(10 × node_count, 1000)` as the multiplier. If the total exceeds the budget, it returns an `Oscillation detected` error, halting the loop and displaying an error in the UI.
+- **Oscillation Detection**: To prevent infinite loops caused by zero-delay feedback loops (e.g., an inverter connected to itself), `propagate_events(budget_multiplier)` computes a budget of `node_slab_capacity × max(budget_multiplier, 100)` gate evaluations, counted cumulatively across the whole propagation pass. The editor passes `100` as the budget multiplier by default (scaling the step budget linearly to `node_slab_capacity × 100`), preventing runaway delay spikes on wide networks while quickly catching genuine oscillations. If the total exceeds the budget, it returns an `Oscillation detected` error, halting the loop and displaying an error in the UI.
 
 ## Custom Chips (Sub-Chips)
 
 Custom chips are stored in a blueprint `library`. A `ChipBlueprint` consists of:
+- `name`: Chip identifier string.
 - `inputs`: Number of external input ports.
 - `outputs`: Number of external output ports.
+- `input_names`: Labels for custom input pins.
+- `output_names`: Labels for custom output pins.
 - `components`: A list of internals (primitives such as Nands and Clocks, display and bus-routing components, or nested Sub-chips referencing other blueprints).
 - `connections`: Abstract links between component ports.
 
 When instantiated:
+- **Upfront Bounds Validation**: The compiler validates that all connection source/target components and port indices exist within valid bounds of the component definitions and subchip blueprint interfaces before instantiation begins, returning an explicit `Err` on malformed blueprints to prevent index out-of-bounds panics.
 - The compiler traces connections backward from targets to their absolute "root driver" (a primitive gate).
 - Ports mapped merely to pass-through a signal (Input -> Output) are mathematically resolved without allocating a physical "buffer" gate in the array.
 - If several drivers feed the same internal port, the compiler synthesizes a `BusResolver` tree so High/Low conflicts surface as Contention instead of one driver silently overwriting the other.

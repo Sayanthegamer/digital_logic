@@ -19,9 +19,9 @@ We have heavily optimized the compiler pipeline. While the engine still recompil
 
 ### The Resolution
 The simulator historically suffered from thread-pool overhead and data race constraints which confined event propagation to a single core. This bottleneck has been completely bypassed:
-- **Intelligent Hardware Profiler**: A dynamic runtime calibrator tests the host machine on startup to calculate the exact Rayon crossover threshold where parallelization beats single-threaded execution. 
+- **Intelligent Hardware Profiler**: A dynamic runtime calibrator tests the host machine on startup to calculate the exact Rayon crossover threshold where parallelization beats single-threaded execution. If parallelization never outperforms sequential execution up to 16,000 gates (e.g. low-core environments or mobile devices), it falls back to `usize::MAX`, disabling parallel dispatch to avoid thread-pool scheduling penalties.
 - **Topological Map-Reduce**: Gates inside the same topological depth layer are safely evaluated concurrently via `rayon::par_iter()`. We guarantee strict deterministic event processing ordering under high optimization by using an `IndexedParallelIterator` (`.map().collect()`) followed by a sequential `.flatten()`, completely resolving subtle `filter_map` chunking race conditions while maintaining extreme throughput.
-- **Oscillation Budget & Feedback Settling**: The oscillation budget in `propagate_events` is `node_slab_capacity × max(multiplier, 100)` evaluations, counted cumulatively over one propagation pass (the engine passes 100 as the multiplier by default), so wide non-oscillating networks do not trip it. When a state change re-enqueues a gate at an earlier depth, the events are picked up once the loop runs past the last non-empty layer.
+- **Oscillation Budget & Feedback Settling**: The oscillation budget in `propagate_events` is `node_slab_capacity × max(multiplier, 100)` evaluations, counted cumulatively over one propagation pass (the editor passes 100 as the multiplier by default). This scales the step limit linearly ($O(N)$) rather than quadratically ($O(N^2)$), ensuring wide non-oscillating networks do not trip false stalls while terminating runaway oscillations in low milliseconds. When a state change re-enqueues a gate at an earlier depth, the events are picked up once the loop runs past the last non-empty layer.
 - **Profiler Caching**: Optimized the calibration logic by caching the crossover threshold via `std::sync::OnceLock`. This completely avoids re-running the profiling benchmark on every compilation step (which triggers on every canvas edit/move/wiring action).
 
 ---
@@ -67,3 +67,12 @@ This layout clutter issue has been fully resolved.
 ### The Resolution
 1. **World-Space Spatial Grid Invariance**: Verified and documented that `SpatialHashGrid` indexes components and wires using world-space bounding boxes (`comp.pos`), rendering camera pan/zoom queries $O(1)$ without grid invalidation.
 2. **Canvas Tool State Abstraction**: Added `CanvasToolMode` state abstraction to `CanvasState` in `state.rs`, providing safe modal state queries (`tool_mode()`) and unified tool resets (`clear_interaction_modes()`).
+
+---
+
+## 8. Corrupt Blueprint Bounds & Persistence Poisoning [SOLVED]
+
+### The Resolution
+Hand-edited or corrupted `.logic` files previously posed risk of out-of-bounds panics during compilation and persistent storage corruption:
+1. **Upfront Bounds Checking**: `instantiate_chip_with_mapping` now verifies all connection indices against component count and input/output port counts upfront. Invalid connections immediately fail compilation with descriptive `Err` strings rather than causing index out-of-bounds panics.
+2. **Persistence Validation Barrier**: `load_project()` now validates the entire imported blueprint library using a scratch simulator prior to mutating `global_library` or overwriting the canvas circuit, completely preventing corrupted files from poisoning user state.

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.2.4] - Unreleased
 
+### Documentation
+- **Repository Documentation Modernization**: Synchronized `SPEC.md`, `ARCHITECTURE.md`, `SCALE_BREAKING_POINTS.md`, `DESIGN.md`, `SYSTEM.md`, and `README.md` to document the linear oscillation budget ($100 \times N$), upfront compiler connection bounds checking, persistence validation barrier, profiler fallback (`usize::MAX`), and updated test performance metrics (39 tests in <0.3s).
+
 ### Fixed
 - **Oscillation Budget Scaling**: Changed the oscillation budget to scale linearly with circuit size (100 * N) instead of quadratically, preventing false stalls on extremely large circuits.
 - **Parallel Profiler Fallback**: Fixed the `detect_parallel_crossover_threshold` fallback to return `usize::MAX` (disabling parallel) if it never beats sequential execution during testing, rather than a fixed 10000 that would incorrectly force parallel mode.

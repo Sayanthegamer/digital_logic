@@ -211,7 +211,7 @@ sequenceDiagram
 
 Wires carry a **4-state signal** rather than a plain boolean — `Floating (00)`, `Low (01)`, `High (10)`, and `Contention (11)` — which is what makes bus junctions, tri-state buffers, and "why is this pin doing nothing" debugging actually possible.
 
-To stop a zero-delay feedback loop (e.g. an inverter wired directly back to itself) from freezing the app in an infinite evaluation loop, `propagate_events` enforces a cumulative evaluation budget for each propagation pass. Blow past it and the engine reports an `Oscillation detected` error instead of hanging your session.
+To stop a zero-delay feedback loop (e.g. an inverter wired directly back to itself) from freezing the app in an infinite evaluation loop, `propagate_events` enforces a linear evaluation budget ($100 \times \text{capacity}$) for each propagation pass. Blow past it and the engine reports an `Oscillation detected` error instead of hanging your session.
 
 ## 🚀 Quick Start
 
@@ -264,7 +264,7 @@ cargo run
 cargo run --release
 ```
 
-Run the test suite (engine layer has solid coverage — NAND truth tables, SR latches, multi-domain clocks, nested-chip compilation, serialization round-trips):
+Run the test suite (39 unit/integration tests running in <0.3s — NAND truth tables, SR latches, multi-domain clocks, nested-chip compilation, out-of-bounds safety, and serialization round-trips):
 
 ```bash
 cargo test

@@ -11,7 +11,7 @@ Many logic simulators use an Object-Oriented approach where every gate and wire 
 ## Our Solution: Data-Oriented Design
 
 ### 1. The NAND Core
-At the mathematical base of the simulator, all combinational logic resolves down to a single operator: the NAND gate. Inputs and Outputs act as state injection and observation points (a Clock compiles to an Input that the editor toggles), while `TriStateBuffer` and `BusResolver` primitives exist to model shared buses. By standardizing the logic operator, the execution loop stays small and uniform.
+At the mathematical base of the simulator, all combinational logic resolves down to a single operator: the NAND gate. Inputs and Outputs act as state injection and observation points (a Clock compiles to an Input that the editor toggles), while `TriStateBuffer` and `BusResolver` primitives exist to model shared buses. By standardizing the logic operator, the execution loop stays small and uniform. When multiple drivers connect to a shared net, synthesized `BusResolver` primitives merge signals via a bitwise OR (`val_a | val_b`): Floating (`0b00`) yields transparently to active drivers, while simultaneous High (`0b10`) and Low (`0b01`) drive produces Contention (`0b11`).
 
 ### 2. Flat, Index-Based Node Storage
 Instead of heap-allocated gate objects that point at each other, the `Simulator` keeps every primitive in one `slab::Slab<GateNode>` and refers to gates by `usize` index:
@@ -34,3 +34,9 @@ When a user builds a complex chip (like an ALU) from smaller sub-chips (like Add
 - The `Compiler` resolves the absolute primitive pathways during the "packaging" phase.
 - It bypasses the abstract boundaries of sub-chips. If an input pin on the top level connects through 5 nested layers down to a specific primitive NAND gate, the compiler wires the top-level simulator directly to that specific primitive.
 - As a result, nesting depth has **zero runtime cost**. A CPU built of 10,000 nested chips runs exactly as fast as 10,000 raw NAND gates laid out flat.
+
+### 4. Error-Resilient Compilation Boundaries
+While the runtime simulation loop relies on unchecked direct indexing for raw throughput, the compilation and deserialization boundaries are strictly defensive:
+- Blueprints are validated upfront for out-of-bounds component indices and port counts before memory allocation.
+- Compilation errors return informative `Result<..., String>` diagnostics to the editor rather than crashing the process.
+- The persistence layer verifies blueprints via a sandboxed scratch simulator before committing changes to the user's permanent chip library.
