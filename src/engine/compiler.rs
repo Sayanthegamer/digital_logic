@@ -1,6 +1,210 @@
 use super::simulator::Simulator;
+use super::sleep::SleepDomain;
 use super::types::*;
 use std::collections::{HashMap, HashSet};
+
+pub fn find_gating_input(blueprint: &ChipBlueprint, library: &[ChipBlueprint]) -> Option<usize> {
+    // Stage 1: Explicit Pin Name (Fast-Path)
+    if let Some(pos) = blueprint.input_names.iter().position(|name| {
+        let lower = name.trim().to_ascii_lowercase();
+        lower == "cs"
+            || lower == "chip_select"
+            || lower == "chipselect"
+            || lower == "ce"
+            || lower == "enable"
+            || lower == "en"
+            || lower == "we"
+            || lower == "write_enable"
+    }) {
+        return Some(pos);
+    }
+
+    if blueprint.inputs == 0 {
+        return None;
+    }
+
+    // Stage 2: Topological Graph Analysis
+
+    // Case A: Hierarchical Subchip Gating Analysis
+    // Count how many subchip gating ports are driven by each ChipInput
+    let mut subchip_gating_fanout = vec![0usize; blueprint.inputs];
+    let mut has_subchips_with_gating = false;
+
+    for conn in &blueprint.connections {
+        if let (
+            SourcePort::ChipInput(chip_in),
+            TargetPort::ComponentInput {
+                component_idx,
+                port_idx,
+            },
+        ) = (conn.source, conn.target)
+            && chip_in < blueprint.inputs
+            && component_idx < blueprint.components.len()
+            && let ComponentType::SubChip(sub_idx) =
+                blueprint.components[component_idx].component_type
+            && let Some(sub_bp) = library.get(sub_idx)
+            && let Some(sub_gating_port) = find_gating_input(sub_bp, library)
+        {
+            has_subchips_with_gating = true;
+            if port_idx == sub_gating_port {
+                subchip_gating_fanout[chip_in] += 1;
+            }
+        }
+    }
+
+    if has_subchips_with_gating
+        && let Some((best_idx, &max_fanout)) = subchip_gating_fanout
+            .iter()
+            .enumerate()
+            .max_by_key(|entry| entry.1)
+        && max_fanout > 0
+    {
+        return Some(best_idx);
+    }
+
+    // Case B: Primitive Feedback Cycle (SCC) Analysis for Raw Gate Latches
+    let num_components = blueprint.components.len();
+    if num_components == 0 {
+        return None;
+    }
+
+    // Build adjacency list between components
+    let mut adj = vec![Vec::new(); num_components];
+    for conn in &blueprint.connections {
+        if let (
+            SourcePort::ComponentOutput {
+                component_idx: src, ..
+            },
+            TargetPort::ComponentInput {
+                component_idx: tgt, ..
+            },
+        ) = (conn.source, conn.target)
+            && src < num_components
+            && tgt < num_components
+        {
+            adj[src].push(tgt);
+        }
+    }
+
+    struct TarjanState {
+        indices: Vec<usize>,
+        lowlink: Vec<usize>,
+        on_stack: Vec<bool>,
+        stack: Vec<usize>,
+        index: usize,
+        sccs: Vec<Vec<usize>>,
+    }
+
+    impl TarjanState {
+        fn strongconnect(&mut self, v: usize, adj: &[Vec<usize>]) {
+            self.indices[v] = self.index;
+            self.lowlink[v] = self.index;
+            self.index += 1;
+            self.stack.push(v);
+            self.on_stack[v] = true;
+
+            for &w in &adj[v] {
+                if self.indices[w] == usize::MAX {
+                    self.strongconnect(w, adj);
+                    self.lowlink[v] = self.lowlink[v].min(self.lowlink[w]);
+                } else if self.on_stack[w] {
+                    self.lowlink[v] = self.lowlink[v].min(self.indices[w]);
+                }
+            }
+
+            if self.lowlink[v] == self.indices[v] {
+                let mut scc = Vec::new();
+                while let Some(w) = self.stack.pop() {
+                    self.on_stack[w] = false;
+                    scc.push(w);
+                    if w == v {
+                        break;
+                    }
+                }
+                self.sccs.push(scc);
+            }
+        }
+    }
+
+    let mut state = TarjanState {
+        indices: vec![usize::MAX; num_components],
+        lowlink: vec![usize::MAX; num_components],
+        on_stack: vec![false; num_components],
+        stack: Vec::new(),
+        index: 0,
+        sccs: Vec::new(),
+    };
+
+    for v in 0..num_components {
+        if state.indices[v] == usize::MAX {
+            state.strongconnect(v, &adj);
+        }
+    }
+
+    // Filter SCCs that represent feedback loops (size >= 2 or self-loops)
+    let mut latch_core_nodes = HashSet::new();
+    for scc in state.sccs {
+        if scc.len() >= 2 {
+            latch_core_nodes.extend(scc);
+        } else if scc.len() == 1 {
+            let node = scc[0];
+            if adj[node].contains(&node) {
+                latch_core_nodes.insert(node);
+            }
+        }
+    }
+
+    if latch_core_nodes.is_empty() {
+        return None; // Pure combinational circuit (DAG) -> Zero false positives!
+    }
+
+    // Identify gating components: components OUTSIDE the feedback core that drive nodes inside the core
+    let mut gating_components = HashSet::new();
+    for conn in &blueprint.connections {
+        if let (
+            SourcePort::ComponentOutput {
+                component_idx: src, ..
+            },
+            TargetPort::ComponentInput {
+                component_idx: tgt, ..
+            },
+        ) = (conn.source, conn.target)
+            && !latch_core_nodes.contains(&src)
+            && latch_core_nodes.contains(&tgt)
+        {
+            gating_components.insert(src);
+        }
+    }
+
+    // Score each ChipInput by its fan-out to gating_components (or directly into latch_core_nodes)
+    let mut latch_input_fanout = vec![0usize; blueprint.inputs];
+    for conn in &blueprint.connections {
+        if let (
+            SourcePort::ChipInput(chip_in),
+            TargetPort::ComponentInput {
+                component_idx: tgt, ..
+            },
+        ) = (conn.source, conn.target)
+            && chip_in < blueprint.inputs
+            && (gating_components.contains(&tgt) || latch_core_nodes.contains(&tgt))
+        {
+            latch_input_fanout[chip_in] += 1;
+        }
+    }
+
+    // The enable pin in a latch must control multiple gating arms (fanout >= 2),
+    // unlike data inputs which only connect to a single arm (fanout = 1).
+    if let Some((best_idx, &max_fanout)) = latch_input_fanout
+        .iter()
+        .enumerate()
+        .max_by_key(|entry| entry.1)
+        && max_fanout >= 2
+    {
+        return Some(best_idx);
+    }
+
+    None
+}
 
 struct CompilerContext<'a> {
     blueprint: &'a ChipBlueprint,
@@ -225,6 +429,7 @@ impl Simulator {
 
         let mut component_ports = Vec::new();
         let mut tree = InstanceTree::default();
+        let mut subchip_sleep_info = Vec::new();
 
         for (comp_idx, component) in blueprint.components.iter().enumerate() {
             let mut sub_node = InstanceTree::default();
@@ -282,12 +487,34 @@ impl Simulator {
                     component_ports.push((inputs, vec![]));
                 }
                 ComponentType::SubChip(sub_idx) => {
+                    let start_gate_idx = self.nodes.len();
                     let (sub_interface, sub_tree) = self.instantiate_chip_with_mapping(
                         *sub_idx,
                         library,
                         active_clocks,
                         blueprint_stack,
                     )?;
+                    let end_gate_idx = self.nodes.len();
+
+                    if let Some(sub_bp) = library.get(*sub_idx)
+                        && let Some(gating_port) = find_gating_input(sub_bp, library)
+                    {
+                        let latches: Vec<usize> = (start_gate_idx..end_gate_idx)
+                            .filter(|&g| {
+                                g < self.nodes.gate_types.len()
+                                    && self.nodes.gate_types[g] == GateType::Nand
+                            })
+                            .collect();
+                        if !latches.is_empty() {
+                            subchip_sleep_info.push((
+                                comp_idx,
+                                gating_port,
+                                (start_gate_idx..end_gate_idx).collect::<Vec<_>>(),
+                                latches,
+                            ));
+                        }
+                    }
+
                     sub_node = sub_tree;
                     component_ports.push((sub_interface.inputs, sub_interface.outputs));
                 }
@@ -386,6 +613,21 @@ impl Simulator {
                     for &(tgt_g_idx, tgt_port) in targets {
                         self.connect(src_g_idx, tgt_g_idx, tgt_port);
                     }
+
+                    for &(s_comp_idx, s_gating_port, ref gates, ref latches) in &subchip_sleep_info
+                    {
+                        if s_comp_idx == comp_idx && s_gating_port == port_idx {
+                            let domain_id = self.sleep_domains.len();
+                            let domain = SleepDomain::new(
+                                domain_id,
+                                src_g_idx,
+                                true,
+                                gates.clone(),
+                                latches.clone(),
+                            );
+                            self.register_sleep_domain(domain);
+                        }
+                    }
                 }
             }
         }
@@ -445,4 +687,129 @@ impl Simulator {
         )
         .map(|(interface, _)| interface)
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct SubchipTemplate {
+    pub gate_types: Vec<GateType>,
+    pub internal_connections: Vec<(usize, usize, u8)>, // (local_src, local_tgt, port)
+    pub interface: InstantiatedInterface,
+    pub instance_tree: InstanceTree,
+    pub relative_clocks: Vec<(usize, usize)>, // (local_gate_idx, period)
+    pub sleep_domains: Vec<(usize, Vec<usize>, Vec<usize>)>, // (local_ctrl, local_gates, local_latches)
+}
+
+impl SubchipTemplate {
+    pub fn instantiate_into(
+        &self,
+        sim: &mut Simulator,
+        active_clocks: &mut Vec<CompiledClock>,
+    ) -> (InstantiatedInterface, InstanceTree) {
+        let base_idx = sim.nodes.len();
+
+        // 1. Allocate all gates
+        for &gt in &self.gate_types {
+            sim.add_gate(gt);
+        }
+
+        // 2. Wire up internal connections
+        for &(src, tgt, port) in &self.internal_connections {
+            sim.connect(base_idx + src, base_idx + tgt, port);
+        }
+
+        // 3. Offset clocks
+        for &(local_gate, period) in &self.relative_clocks {
+            active_clocks.push(CompiledClock {
+                gate_idx: base_idx + local_gate,
+                period,
+                counter: 0,
+                visual_id: None,
+            });
+        }
+
+        // 4. Offset sleep domains
+        for (local_ctrl, local_gates, local_latches) in &self.sleep_domains {
+            let domain_id = sim.sleep_domains.len();
+            let remapped_gates = local_gates.iter().map(|&g| base_idx + g).collect();
+            let remapped_latches = local_latches.iter().map(|&l| base_idx + l).collect();
+            let domain = SleepDomain::new(
+                domain_id,
+                base_idx + local_ctrl,
+                true,
+                remapped_gates,
+                remapped_latches,
+            );
+            sim.register_sleep_domain(domain);
+        }
+
+        // 5. Offset interface
+        let mut interface = self.interface.clone();
+        for targets in &mut interface.inputs {
+            for (tgt_gate, _) in targets {
+                *tgt_gate += base_idx;
+            }
+        }
+        for out in &mut interface.outputs {
+            if let OutputSource::DrivenByGate(g) = out {
+                *g += base_idx;
+            }
+        }
+
+        // 6. Offset instance tree
+        let mut tree = self.instance_tree.clone();
+        tree.apply_offset(base_idx);
+
+        (interface, tree)
+    }
+}
+
+pub fn compile_subchip_template(
+    blueprint_idx: usize,
+    library: &[ChipBlueprint],
+) -> Result<SubchipTemplate, String> {
+    let mut scratch_sim = Simulator::new();
+    let mut active_clocks = Vec::new();
+    let mut blueprint_stack = Vec::new();
+
+    let (interface, instance_tree) = scratch_sim.instantiate_chip_with_mapping(
+        blueprint_idx,
+        library,
+        &mut active_clocks,
+        &mut blueprint_stack,
+    )?;
+
+    let num_gates = scratch_sim.nodes.len();
+    let gate_types = scratch_sim.nodes.gate_types[..num_gates].to_vec();
+
+    let mut internal_connections = Vec::new();
+    for tgt in 0..num_gates {
+        let src_a = scratch_sim.nodes.sources[tgt][0];
+        let src_b = scratch_sim.nodes.sources[tgt][1];
+        if src_a != crate::engine::storage::NO_SOURCE {
+            internal_connections.push((src_a as usize, tgt, 0));
+        }
+        if src_b != crate::engine::storage::NO_SOURCE {
+            internal_connections.push((src_b as usize, tgt, 1));
+        }
+    }
+
+    let relative_clocks = active_clocks
+        .iter()
+        .map(|c| (c.gate_idx, c.period))
+        .collect();
+
+    let sleep_domains = scratch_sim
+        .sleep_domains
+        .iter()
+        .map(|d| (d.control_gate, d.gates.clone(), d.latch_indices.clone()))
+        .collect();
+
+    Ok(SubchipTemplate {
+        gate_types,
+        internal_connections,
+        interface,
+        instance_tree,
+        relative_clocks,
+        sleep_domains,
+    })
 }

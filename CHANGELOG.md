@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-10-09
+
+### Added
+- **Compact Struct-of-Arrays (SoA) Storage Engine**: Replaced pointer-heavy `Slab<GateNode>` allocations with cache-aligned, contiguous SoA vectors (`states: Vec<u8>`, `gate_types: Vec<GateType>`, `sources: Vec<[u32; 2]>`, `dependents: Vec<Vec<u32>>`, and bit-packed `in_queue: FixedBitSet`). Reduces gate memory footprint from ~150 bytes down to 14.16 bytes per gate, fitting 100,000 gates in 1.38 MB.
+- **Automatic Topological Sleep-Gating Detection (Lazy-Mode Gating)**: Implemented graph analysis to automatically identify Chip-Select and Write-Enable control lines without requiring manual pin naming (`find_gating_input`). Uses Tarjan's Strongly Connected Components (SCC) to discover bistable feedback latch cores and scores inputs by latch control fan-out asymmetry ($2N$ vs $1$). Guarantees zero false positives on combinational circuits (Adders, Multiplexers, Decoders).
+- **Activity-Gated Hibernation (Sleep Domains)**: Dormant subchip banks pack internal latch states into dense bit-arrays and skip gate evaluations during live simulation ticks, eliminating cache pollution on dormant RAM banks.
+- **Subchip Template Caching**: Introduced `SubchipTemplate` and `compile_subchip_template` to pre-compile and clone nested chip blueprints, eliminating multi-second freezing during canvas component placement.
+- **Depth Defragmentation Mapping**: Upgraded `Simulator::defragment_and_sort_by_depth` to remap dynamic `SleepDomain` gate sets, control lines, and latches across longest-path topological depth reordering.
+- **Mega-Scale Pure-NAND Verification Suite**: Added comprehensive integration test suites verifying 32-bit ripple-carry adders, 32-word pure-NAND register files, multi-bank activity-gated RAM, and automatic topological gating detection on unnamed components.
+
 ## [3.2.4] - 2026-10-09
 
 ### Documentation

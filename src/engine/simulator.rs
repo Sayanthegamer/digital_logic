@@ -1,19 +1,15 @@
+use super::sleep::SleepDomain;
+use super::storage::{NO_SOURCE, SoAGateStorage};
 use super::types::*;
+use fixedbitset::FixedBitSet;
 use rayon::prelude::*;
 
-#[derive(Debug, Clone)]
-pub struct GateNode {
-    pub gate: PrimitiveGate,
-    pub state: u8,
-    pub dependents: Vec<usize>,
-    pub in_queue: bool,
-    pub depth: usize,
-}
-
 pub struct Simulator {
-    pub nodes: slab::Slab<GateNode>,
+    pub nodes: SoAGateStorage,
     pub event_queue: Vec<Vec<usize>>,
     pub dynamic_threshold: usize,
+    pub sleep_domains: Vec<SleepDomain>,
+    pub sleeping_gates: FixedBitSet,
 }
 
 impl Default for Simulator {
@@ -25,15 +21,19 @@ impl Default for Simulator {
 impl Simulator {
     pub fn new() -> Self {
         Self {
-            nodes: slab::Slab::new(),
+            nodes: SoAGateStorage::new(),
             event_queue: Vec::new(),
             dynamic_threshold: crate::engine::profiler::detect_parallel_crossover_threshold(),
+            sleep_domains: Vec::new(),
+            sleeping_gates: FixedBitSet::new(),
         }
     }
 
     pub fn clear(&mut self) {
         self.nodes.clear();
         self.event_queue.clear();
+        self.sleep_domains.clear();
+        self.sleeping_gates.clear();
     }
 
     pub fn set_single_threaded(&mut self, single: bool) {
@@ -44,33 +44,38 @@ impl Simulator {
         }
     }
 
+    pub fn register_sleep_domain(&mut self, mut domain: SleepDomain) {
+        if domain.control_gate < self.nodes.states.len() {
+            let ctrl_val = self.nodes.states[domain.control_gate];
+            if domain.should_sleep(ctrl_val) {
+                domain.hibernate(self);
+            }
+        }
+        self.sleep_domains.push(domain);
+    }
+
+    pub fn is_domain_sleeping(&self, domain_id: usize) -> bool {
+        self.sleep_domains
+            .iter()
+            .find(|d| d.id == domain_id)
+            .map(|d| d.is_sleeping)
+            .unwrap_or(false)
+    }
+
     /// Adds a gate of a specific type to the simulator.
     /// Inputs are initially set to None (floating).
     /// Returns the unique index of the added gate.
     pub fn add_gate(&mut self, gate_type: GateType) -> usize {
-        // Removing event_queue.clear() to preserve `in_queue` invariants for existing gates.
-
         // 0b00 = Floating, 0b01 = Low, 0b10 = High, 0b11 = Contention
         let initial_state = match gate_type {
             GateType::Nand => 0b10,
             GateType::Input | GateType::Output => 0b01,
-            GateType::TriStateBuffer => 0b00,
-            GateType::BusResolver => 0b00,
+            GateType::TriStateBuffer | GateType::BusResolver => 0b00,
         };
 
-        let node = GateNode {
-            gate: PrimitiveGate {
-                gate_type,
-                input_a_source: None,
-                input_b_source: None,
-            },
-            state: initial_state,
-            dependents: Vec::new(),
-            in_queue: true,
-            depth: 0,
-        };
+        let index = self.nodes.insert(gate_type, initial_state);
+        self.nodes.in_queue.set(index, true);
 
-        let index = self.nodes.insert(node);
         if self.event_queue.is_empty() {
             self.event_queue.push(Vec::new());
         }
@@ -85,18 +90,18 @@ impl Simulator {
             return;
         }
 
-        // Removing event_queue.clear() to preserve `in_queue` invariants for existing gates.
         // 1. Tell all dependents to forget about us
-        let deps = self.nodes[gate_idx].dependents.clone();
-        for dep_idx in deps {
+        let deps = self.nodes.dependents[gate_idx].clone();
+        for dep_u32 in deps {
+            let dep_idx = dep_u32 as usize;
             let mut needs_enqueue = false;
-            if let Some(dep_node) = self.nodes.get_mut(dep_idx) {
-                if dep_node.gate.input_a_source == Some(gate_idx) {
-                    dep_node.gate.input_a_source = None;
+            if self.nodes.contains(dep_idx) {
+                if self.nodes.sources[dep_idx][0] == gate_idx as u32 {
+                    self.nodes.sources[dep_idx][0] = NO_SOURCE;
                     needs_enqueue = true;
                 }
-                if dep_node.gate.input_b_source == Some(gate_idx) {
-                    dep_node.gate.input_b_source = None;
+                if self.nodes.sources[dep_idx][1] == gate_idx as u32 {
+                    self.nodes.sources[dep_idx][1] = NO_SOURCE;
                     needs_enqueue = true;
                 }
             }
@@ -106,18 +111,14 @@ impl Simulator {
         }
 
         // 2. Tell our sources to stop tracking us as a dependent
-        let a_src = self.nodes[gate_idx].gate.input_a_source;
-        let b_src = self.nodes[gate_idx].gate.input_b_source;
+        let a_src = self.nodes.sources[gate_idx][0];
+        let b_src = self.nodes.sources[gate_idx][1];
 
-        if let Some(s_idx) = a_src
-            && let Some(src_node) = self.nodes.get_mut(s_idx)
-        {
-            src_node.dependents.retain(|&x| x != gate_idx);
+        if a_src != NO_SOURCE && self.nodes.contains(a_src as usize) {
+            self.nodes.dependents[a_src as usize].retain(|&x| x != gate_idx as u32);
         }
-        if let Some(s_idx) = b_src
-            && let Some(src_node) = self.nodes.get_mut(s_idx)
-        {
-            src_node.dependents.retain(|&x| x != gate_idx);
+        if b_src != NO_SOURCE && self.nodes.contains(b_src as usize) {
+            self.nodes.dependents[b_src as usize].retain(|&x| x != gate_idx as u32);
         }
 
         self.nodes.remove(gate_idx);
@@ -126,28 +127,7 @@ impl Simulator {
     /// Connects the output of source_idx to target_idx on the specified port.
     /// port is 0 for input_a_source, 1 for input_b_source.
     pub fn connect(&mut self, source_idx: usize, target_idx: usize, port: u8) {
-        // Removing event_queue.clear() to preserve `in_queue` invariants for existing gates.
-
-        assert!(
-            self.nodes.contains(source_idx),
-            "Source gate index out of bounds: {}",
-            source_idx
-        );
-        assert!(
-            self.nodes.contains(target_idx),
-            "Target gate index out of bounds: {}",
-            target_idx
-        );
-
-        let target_node = &mut self.nodes[target_idx];
-        if port == 0 {
-            target_node.gate.input_a_source = Some(source_idx);
-        } else {
-            target_node.gate.input_b_source = Some(source_idx);
-        }
-
-        self.nodes[source_idx].dependents.push(target_idx);
-
+        self.nodes.connect(source_idx, target_idx, port);
         // Queue the target gate because its connection just changed
         self.enqueue(target_idx);
     }
@@ -161,31 +141,63 @@ impl Simulator {
             gate_idx
         );
         assert!(
-            self.nodes[gate_idx].gate.gate_type == GateType::Input,
+            self.nodes.gate_types[gate_idx] == GateType::Input,
             "Cannot set input on a non-Input gate: {:?}",
-            self.nodes[gate_idx].gate.gate_type
+            self.nodes.gate_types[gate_idx]
         );
 
         let new_state = if value { 0b10 } else { 0b01 };
-        if self.nodes[gate_idx].state != new_state {
-            self.nodes[gate_idx].state = new_state;
-            let deps = self.nodes[gate_idx].dependents.clone();
-            for dep_idx in deps {
-                self.enqueue(dep_idx);
+        if self.nodes.states[gate_idx] != new_state {
+            self.nodes.states[gate_idx] = new_state;
+
+            // Trigger sleep domain state transitions if this gate controls a domain
+            self.sync_sleep_domains_for_control_gate(gate_idx, new_state);
+
+            let deps = self.nodes.dependents[gate_idx].clone();
+            for dep_u32 in deps {
+                self.enqueue(dep_u32 as usize);
             }
         }
     }
 
+    pub fn enqueue_internal(&mut self, gate_idx: usize) {
+        self.enqueue(gate_idx);
+    }
+
     fn enqueue(&mut self, gate_idx: usize) {
-        if let Some(node) = self.nodes.get_mut(gate_idx)
-            && !node.in_queue
-        {
-            node.in_queue = true;
-            let depth = node.depth;
+        // Gates inside sleeping domains are skipped from scheduling
+        if gate_idx < self.sleeping_gates.len() && self.sleeping_gates.contains(gate_idx) {
+            return;
+        }
+
+        if self.nodes.contains(gate_idx) && !self.nodes.in_queue.contains(gate_idx) {
+            self.nodes.in_queue.set(gate_idx, true);
+            let depth = self.nodes.depths[gate_idx] as usize;
             if self.event_queue.len() <= depth {
                 self.event_queue.resize(depth + 1, Vec::new());
             }
             self.event_queue[depth].push(gate_idx);
+        }
+    }
+
+    fn sync_sleep_domains_for_control_gate(&mut self, ctrl_gate_idx: usize, new_state: u8) {
+        if self.sleep_domains.is_empty() {
+            return;
+        }
+
+        for d_idx in 0..self.sleep_domains.len() {
+            if self.sleep_domains[d_idx].control_gate == ctrl_gate_idx {
+                let should_sleep = self.sleep_domains[d_idx].should_sleep(new_state);
+                if should_sleep && !self.sleep_domains[d_idx].is_sleeping {
+                    let mut d = self.sleep_domains[d_idx].clone();
+                    d.hibernate(self);
+                    self.sleep_domains[d_idx] = d;
+                } else if !should_sleep && self.sleep_domains[d_idx].is_sleeping {
+                    let mut d = self.sleep_domains[d_idx].clone();
+                    d.wake(self);
+                    self.sleep_domains[d_idx] = d;
+                }
+            }
         }
     }
 
@@ -221,11 +233,11 @@ impl Simulator {
                 }
 
                 let mut returned = false;
-                let dependents_len = self.nodes[v].dependents.len();
+                let dependents_len = self.nodes.dependents[v].len();
 
                 let mut current_edge = edge_idx;
                 while current_edge < dependents_len {
-                    let w = self.nodes[v].dependents[current_edge];
+                    let w = self.nodes.dependents[v][current_edge] as usize;
                     if !self.nodes.contains(w) {
                         current_edge += 1;
                         continue;
@@ -280,13 +292,12 @@ impl Simulator {
         for scc_idx in 0..num_sccs {
             let current_depth = scc_depth[scc_idx];
             for &node in &sccs[scc_idx] {
-                if let Some(n) = self.nodes.get(node) {
-                    for &dep in &n.dependents {
-                        if dep < num_nodes {
-                            let dep_scc = node_to_scc[dep];
-                            if dep_scc != usize::MAX && dep_scc != scc_idx {
-                                scc_depth[dep_scc] = scc_depth[dep_scc].max(current_depth + 1);
-                            }
+                for &dep_u32 in &self.nodes.dependents[node] {
+                    let dep = dep_u32 as usize;
+                    if dep < num_nodes {
+                        let dep_scc = node_to_scc[dep];
+                        if dep_scc != usize::MAX && dep_scc != scc_idx {
+                            scc_depth[dep_scc] = scc_depth[dep_scc].max(current_depth + 1);
                         }
                     }
                 }
@@ -294,57 +305,82 @@ impl Simulator {
         }
 
         for (scc_idx, scc) in sccs.iter().enumerate() {
-            let depth = scc_depth[scc_idx];
+            let depth = scc_depth[scc_idx] as u32;
             for &node in scc {
-                if let Some(n) = self.nodes.get_mut(node) {
-                    n.depth = depth;
-                }
+                self.nodes.depths[node] = depth;
             }
         }
+
+        // Re-bucket all currently queued gates into their newly calculated topological depth queues
+        let mut queued = Vec::new();
+        for q in &mut self.event_queue {
+            queued.append(q);
+        }
+        for idx in queued {
+            self.nodes.in_queue.set(idx, false);
+            self.enqueue(idx);
+        }
+    }
+
+    /// Enqueues all active gates and runs event propagation to settle the circuit into stable rest state
+    pub fn settle(&mut self) -> Result<usize, String> {
+        for idx in 0..self.nodes.len() {
+            if self.nodes.contains(idx) {
+                self.enqueue(idx);
+            }
+        }
+        self.propagate_events(200)
     }
 
     pub fn defragment_and_sort_by_depth(&mut self) -> Vec<usize> {
         let capacity = self.nodes.capacity();
 
-        let is_already_compact_and_sorted = self.nodes.len() == capacity
-            && self
-                .nodes
-                .iter()
-                .zip(self.nodes.iter().skip(1))
-                .all(|((_, a), (_, b))| a.depth <= b.depth);
+        let is_already_compact_and_sorted =
+            self.nodes.len() == capacity && self.nodes.depths.windows(2).all(|w| w[0] <= w[1]);
 
         if is_already_compact_and_sorted {
             return (0..capacity).collect();
         }
 
         let mut old_to_new = vec![usize::MAX; capacity];
-        let old_nodes = std::mem::take(&mut self.nodes);
-        let mut valid_nodes: Vec<(usize, GateNode)> = old_nodes.into_iter().collect();
+        let mut valid_nodes: Vec<usize> = (0..capacity)
+            .filter(|&idx| self.nodes.contains(idx))
+            .collect();
 
-        valid_nodes.sort_by_key(|(_, node)| node.depth);
+        valid_nodes.sort_by_key(|&idx| self.nodes.depths[idx]);
 
-        let mut new_slab = slab::Slab::with_capacity(valid_nodes.len());
-        for (old_idx, node) in valid_nodes {
-            let new_idx = new_slab.insert(node);
+        let mut new_storage = SoAGateStorage::with_capacity(valid_nodes.len());
+        for &old_idx in &valid_nodes {
+            let new_idx =
+                new_storage.insert(self.nodes.gate_types[old_idx], self.nodes.states[old_idx]);
+            new_storage.depths[new_idx] = self.nodes.depths[old_idx];
             old_to_new[old_idx] = new_idx;
         }
 
-        for (_, node) in new_slab.iter_mut() {
-            if let Some(src) = node.gate.input_a_source
-                && src < old_to_new.len()
-                && old_to_new[src] != usize::MAX
-            {
-                node.gate.input_a_source = Some(old_to_new[src]);
+        for (new_idx, &old_idx) in valid_nodes.iter().enumerate() {
+            let src_a = self.nodes.sources[old_idx][0];
+            let src_b = self.nodes.sources[old_idx][1];
+
+            if src_a != NO_SOURCE && (src_a as usize) < old_to_new.len() {
+                let remapped = old_to_new[src_a as usize];
+                if remapped != usize::MAX {
+                    new_storage.sources[new_idx][0] = remapped as u32;
+                }
             }
-            if let Some(src) = node.gate.input_b_source
-                && src < old_to_new.len()
-                && old_to_new[src] != usize::MAX
-            {
-                node.gate.input_b_source = Some(old_to_new[src]);
+            if src_b != NO_SOURCE && (src_b as usize) < old_to_new.len() {
+                let remapped = old_to_new[src_b as usize];
+                if remapped != usize::MAX {
+                    new_storage.sources[new_idx][1] = remapped as u32;
+                }
             }
-            for dep in &mut node.dependents {
-                if *dep < old_to_new.len() && old_to_new[*dep] != usize::MAX {
-                    *dep = old_to_new[*dep];
+
+            for &dep_u32 in &self.nodes.dependents[old_idx] {
+                let dep = dep_u32 as usize;
+                if dep < old_to_new.len() {
+                    let remapped = old_to_new[dep];
+                    if remapped != usize::MAX {
+                        new_storage.dependents[new_idx].push(remapped as u32);
+                    }
                 }
             }
         }
@@ -357,14 +393,52 @@ impl Simulator {
             }
         }
 
-        self.nodes = new_slab;
+        // Remap sleep domains
+        for domain in &mut self.sleep_domains {
+            if domain.control_gate < old_to_new.len()
+                && old_to_new[domain.control_gate] != usize::MAX
+            {
+                domain.control_gate = old_to_new[domain.control_gate];
+            }
+            for g in &mut domain.gates {
+                if *g < old_to_new.len() && old_to_new[*g] != usize::MAX {
+                    *g = old_to_new[*g];
+                }
+            }
+            for latch in &mut domain.latch_indices {
+                if *latch < old_to_new.len() && old_to_new[*latch] != usize::MAX {
+                    *latch = old_to_new[*latch];
+                }
+            }
+        }
 
+        self.nodes = new_storage;
         old_to_new
     }
 
     pub fn propagate_events(&mut self, budget_multiplier: usize) -> Result<usize, String> {
         let mut total_steps = 0;
-        let max_steps = self.nodes.capacity() * budget_multiplier.max(100);
+        let max_steps = self.nodes.capacity().max(1) * budget_multiplier.max(100);
+
+        // Synchronize all sleep domains with current control values
+        if !self.sleep_domains.is_empty() {
+            for d_idx in 0..self.sleep_domains.len() {
+                let ctrl_gate = self.sleep_domains[d_idx].control_gate;
+                if ctrl_gate < self.nodes.states.len() {
+                    let ctrl_val = self.nodes.states[ctrl_gate];
+                    let should_sleep = self.sleep_domains[d_idx].should_sleep(ctrl_val);
+                    if should_sleep && !self.sleep_domains[d_idx].is_sleeping {
+                        let mut d = self.sleep_domains[d_idx].clone();
+                        d.hibernate(self);
+                        self.sleep_domains[d_idx] = d;
+                    } else if !should_sleep && self.sleep_domains[d_idx].is_sleeping {
+                        let mut d = self.sleep_domains[d_idx].clone();
+                        d.wake(self);
+                        self.sleep_domains[d_idx] = d;
+                    }
+                }
+            }
+        }
 
         let mut depth = 0;
         while depth < self.event_queue.len() {
@@ -375,33 +449,36 @@ impl Simulator {
 
             let current_queue = std::mem::take(&mut self.event_queue[depth]);
             for &idx in &current_queue {
-                if let Some(node) = self.nodes.get_mut(idx) {
-                    node.in_queue = false;
-                }
+                self.nodes.in_queue.set(idx, false);
             }
 
-            let nodes = &self.nodes;
+            let states = &self.nodes.states;
+            let gate_types = &self.nodes.gate_types;
+            let sources = &self.nodes.sources;
+            let allocated = &self.nodes.allocated;
+
             let compute_state = |&idx: &usize| -> Option<(usize, u8)> {
-                if !nodes.contains(idx) {
+                if idx >= states.len() || !allocated.contains(idx) {
                     return None;
                 }
 
-                let val_a = nodes[idx]
-                    .gate
-                    .input_a_source
-                    .and_then(|s_idx| nodes.get(s_idx))
-                    .map(|s_node| s_node.state)
-                    .unwrap_or(0b00);
-                let val_b = nodes[idx]
-                    .gate
-                    .input_b_source
-                    .and_then(|s_idx| nodes.get(s_idx))
-                    .map(|s_node| s_node.state)
-                    .unwrap_or(0b00);
+                let src_a = sources[idx][0];
+                let val_a = if src_a != NO_SOURCE && (src_a as usize) < states.len() {
+                    states[src_a as usize]
+                } else {
+                    0b00
+                };
 
-                let node = &nodes[idx];
-                let new_state = match node.gate.gate_type {
-                    GateType::Input => node.state,
+                let src_b = sources[idx][1];
+                let val_b = if src_b != NO_SOURCE && (src_b as usize) < states.len() {
+                    states[src_b as usize]
+                } else {
+                    0b00
+                };
+
+                let curr_state = states[idx];
+                let new_state = match gate_types[idx] {
+                    GateType::Input => curr_state,
                     GateType::Output => val_a,
                     GateType::Nand => {
                         let a_bool = (val_a & 0b10) != 0;
@@ -420,7 +497,7 @@ impl Simulator {
                     GateType::BusResolver => val_a | val_b,
                 };
 
-                if new_state != node.state {
+                if new_state != curr_state {
                     Some((idx, new_state))
                 } else {
                     None
@@ -428,8 +505,6 @@ impl Simulator {
             };
 
             let updates: Vec<(usize, u8)> = if current_queue.len() >= self.dynamic_threshold {
-                // Use .map().collect() to force IndexedParallelIterator, preserving EXACT deterministic order,
-                // then flatten sequentially. This prevents Rayon's filter_map chunking from causing non-deterministic event loops.
                 current_queue
                     .par_iter()
                     .map(compute_state)
@@ -443,8 +518,11 @@ impl Simulator {
 
             let mut next_enqueues = Vec::with_capacity(updates.len());
             for (idx, new_state) in updates {
-                self.nodes[idx].state = new_state;
+                self.nodes.states[idx] = new_state;
                 next_enqueues.push(idx);
+
+                // Update sleep domains if a control gate state changed
+                self.sync_sleep_domains_for_control_gate(idx, new_state);
             }
 
             total_steps += current_queue.len();
@@ -456,11 +534,10 @@ impl Simulator {
             }
 
             for idx in next_enqueues {
-                let deps = std::mem::take(&mut self.nodes[idx].dependents);
-                for &dep_idx in &deps {
-                    self.enqueue(dep_idx);
+                let deps = self.nodes.dependents[idx].clone();
+                for dep_u32 in deps {
+                    self.enqueue(dep_u32 as usize);
                 }
-                self.nodes[idx].dependents = deps;
             }
 
             if self.event_queue[depth].is_empty() {
@@ -478,16 +555,18 @@ impl Simulator {
     }
 
     pub fn get_raw_state(&self, gate_idx: usize) -> u8 {
-        self.nodes
-            .get(gate_idx)
-            .map(|node| node.state)
-            .unwrap_or(0b00)
+        if self.nodes.contains(gate_idx) {
+            self.nodes.states[gate_idx]
+        } else {
+            0b00
+        }
     }
 
     pub fn get_state(&self, gate_idx: usize) -> bool {
-        self.nodes
-            .get(gate_idx)
-            .map(|node| node.state == 0b10)
-            .unwrap_or(false)
+        if self.nodes.contains(gate_idx) {
+            self.nodes.states[gate_idx] == 0b10
+        } else {
+            false
+        }
     }
 }

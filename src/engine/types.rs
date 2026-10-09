@@ -179,4 +179,18 @@ impl InstanceTree {
             sub.apply_index_mapping(mapping);
         }
     }
+
+    pub fn apply_offset(&mut self, offset: usize) {
+        if let Some(ref mut idx) = self.gate_idx {
+            *idx += offset;
+        }
+        for output in &mut self.outputs {
+            if let OutputSource::DrivenByGate(idx) = output {
+                *idx += offset;
+            }
+        }
+        for sub in self.sub_instances.values_mut() {
+            sub.apply_offset(offset);
+        }
+    }
 }

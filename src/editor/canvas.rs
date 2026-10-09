@@ -129,12 +129,14 @@ impl Editor {
         let mut active_clocks = Vec::new();
 
         // 1. Allocate all visual components in the simulator
+        let mut top_level_sleep_info = Vec::new();
         self.allocate_visual_components(
             &mut sim,
             &mut visual_to_sim_map,
             &mut component_ports,
             &mut instance_tree,
             &mut active_clocks,
+            &mut top_level_sleep_info,
         );
 
         self.update_expanded_connections();
@@ -150,7 +152,13 @@ impl Editor {
 
         // 2. Wire up all component inputs on the canvas in the simulator
         let mut net_cache = HashMap::new();
-        self.wire_up_component_inputs(&mut sim, &conn_map, &component_ports, &mut net_cache);
+        self.wire_up_component_inputs(
+            &mut sim,
+            &conn_map,
+            &component_ports,
+            &mut net_cache,
+            &top_level_sleep_info,
+        );
 
         // 3. Resolve the visual output port states map
         let mut port_to_sim_gate_map = self.resolve_port_to_sim_gate_map(
@@ -210,7 +218,10 @@ impl Editor {
         component_ports: &mut HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
         instance_tree: &mut crate::engine::types::InstanceTree,
         active_clocks: &mut Vec<CompiledClock>,
+        top_level_sleep_info: &mut Vec<(usize, usize, Vec<usize>, Vec<usize>)>,
     ) {
+        let mut template_cache: HashMap<usize, crate::engine::compiler::SubchipTemplate> =
+            HashMap::new();
         for comp in &self.circuit.components {
             match comp.comp_type {
                 ComponentType::Nand => {
@@ -325,13 +336,45 @@ impl Editor {
                     component_ports.insert(comp.id, (inputs, vec![]));
                 }
                 ComponentType::SubChip(sub_idx) => {
-                    let mut blueprint_stack = Vec::new();
-                    if let Ok((sub_interface, sub_tree)) = sim.instantiate_chip_with_mapping(
+                    let template = if let Some(tmpl) = template_cache.get(&sub_idx) {
+                        Some(tmpl)
+                    } else if let Ok(tmpl) = crate::engine::compiler::compile_subchip_template(
                         sub_idx,
                         &self.engine.library,
-                        active_clocks,
-                        &mut blueprint_stack,
                     ) {
+                        template_cache.insert(sub_idx, tmpl);
+                        template_cache.get(&sub_idx)
+                    } else {
+                        None
+                    };
+
+                    if let Some(tmpl) = template {
+                        let start_gate_idx = sim.nodes.len();
+                        let (sub_interface, sub_tree) = tmpl.instantiate_into(sim, active_clocks);
+                        let end_gate_idx = sim.nodes.len();
+
+                        if let Some(sub_bp) = self.engine.library.get(sub_idx)
+                            && let Some(gating_port) = crate::engine::compiler::find_gating_input(
+                                sub_bp,
+                                &self.engine.library,
+                            )
+                        {
+                            let latches: Vec<usize> = (start_gate_idx..end_gate_idx)
+                                .filter(|&g| {
+                                    g < sim.nodes.gate_types.len()
+                                        && sim.nodes.gate_types[g] == GateType::Nand
+                                })
+                                .collect();
+                            if !latches.is_empty() {
+                                top_level_sleep_info.push((
+                                    comp.id,
+                                    gating_port,
+                                    (start_gate_idx..end_gate_idx).collect::<Vec<_>>(),
+                                    latches,
+                                ));
+                            }
+                        }
+
                         component_ports
                             .insert(comp.id, (sub_interface.inputs, sub_interface.outputs));
                         instance_tree.sub_instances.insert(comp.id, sub_tree);
@@ -347,6 +390,7 @@ impl Editor {
         conn_map: &HashMap<(usize, usize), Vec<&VisualConnection>>,
         component_ports: &HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
         net_cache: &mut HashMap<Vec<usize>, OutputSource>,
+        top_level_sleep_info: &[(usize, usize, Vec<usize>, Vec<usize>)],
     ) {
         for comp in &self.circuit.components {
             let (inputs_count, _) =
@@ -367,6 +411,21 @@ impl Editor {
                     let targets = &inputs[port_idx];
                     for &(tgt_g_idx, tgt_port) in targets {
                         sim.connect(src_g_idx, tgt_g_idx, tgt_port);
+                    }
+
+                    for &(s_comp_id, s_gating_port, ref gates, ref latches) in top_level_sleep_info
+                    {
+                        if s_comp_id == comp.id && s_gating_port == port_idx {
+                            let domain_id = sim.sleep_domains.len();
+                            let domain = crate::engine::sleep::SleepDomain::new(
+                                domain_id,
+                                src_g_idx,
+                                true,
+                                gates.clone(),
+                                latches.clone(),
+                            );
+                            sim.register_sleep_domain(domain);
+                        }
                     }
                 }
             }

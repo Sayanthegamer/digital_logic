@@ -722,13 +722,13 @@ fn test_seven_segment_top_level_port_allocation() {
     assert!(propagate_ok);
 
     // Verify that the minus segment (port index 7) state in the simulator is true.
-    let dependents = &editor.engine.simulator.nodes[sim_idx].dependents;
+    let dependents = &editor.engine.simulator.nodes.dependents[sim_idx];
     assert!(
         !dependents.is_empty(),
         "Input 8 has no dependents wired up!"
     );
 
-    let target_gate_idx = dependents[0];
+    let target_gate_idx = dependents[0] as usize;
     let state = editor.engine.simulator.get_state(target_gate_idx);
     assert!(
         state,

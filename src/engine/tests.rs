@@ -950,15 +950,15 @@ fn test_parallel_gates_share_topological_depth() {
     sim.calculate_depths();
 
     assert_eq!(
-        sim.nodes[in_gate].depth, 0,
+        sim.nodes.depths[in_gate], 0,
         "Input gate should have depth 0"
     );
 
     for &nand in &nand_gates {
         assert_eq!(
-            sim.nodes[nand].depth, 1,
+            sim.nodes.depths[nand], 1,
             "Parallel NAND gate {} should have topological depth 1, but found {}",
-            nand, sim.nodes[nand].depth
+            nand, sim.nodes.depths[nand]
         );
     }
 }
@@ -1137,9 +1137,9 @@ fn test_feedback_loop_drains_upstream_events_in_single_pass() {
     sim.connect(inv3, inv1, 1);
 
     // Explicitly give inv3 a higher depth than inv1 if manual depths are set
-    sim.nodes[inv1].depth = 0;
-    sim.nodes[inv2].depth = 1;
-    sim.nodes[inv3].depth = 2;
+    sim.nodes.depths[inv1] = 0;
+    sim.nodes.depths[inv2] = 1;
+    sim.nodes.depths[inv3] = 2;
 
     // Propagation MUST detect the oscillation and drain upstream events
     let res = sim.propagate_events(10);
