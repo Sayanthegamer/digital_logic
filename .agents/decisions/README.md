@@ -4,4 +4,4 @@ This directory contains permanent, ratified Architectural Decision Records gover
 
 | ADR | Title | Status | Date |
 |---|---|---|---|
-<!-- New ADRs generated via /cad-decide are recorded here -->
+| [ADR-0001](ADR-0001-hybrid-compact-soa-and-activity-gated-simulation.md) | Hybrid Compact SoA Bit-Slab and Activity-Gated Simulation Architecture | 🟢 Accepted | 2026-10-09 |
