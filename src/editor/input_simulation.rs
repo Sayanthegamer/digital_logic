@@ -19,8 +19,8 @@ impl Editor {
                     }
                 }
 
-                let max_steps = 100;
-                match self.engine.simulator.propagate_events(max_steps) {
+                let budget_multiplier = 100;
+                match self.engine.simulator.propagate_events(budget_multiplier) {
                     Ok(_) => self.engine.propagation_error = None,
                     Err(e) => {
                         self.engine.propagation_error = Some(e);

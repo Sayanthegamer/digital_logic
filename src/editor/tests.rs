@@ -3,7 +3,6 @@ use crate::editor::types::{TextAnnotation, VisualComponent, VisualConnection};
 use crate::engine::ComponentType;
 use macroquad::prelude::*;
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_custom_port_naming_collision() {
     let mut editor = Editor::new();
@@ -125,7 +124,6 @@ fn make_junction(x: f32, y: f32, w: f32, h: f32) -> VisualComponent {
 
 // ── input_port_pos ──
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_input_port_pos_single() {
     let comp = make_comp(100.0, 200.0, 70.0, 60.0);
@@ -134,7 +132,6 @@ fn test_input_port_pos_single() {
     assert_eq!(pos, Vec2::new(100.0, 230.0));
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_input_port_pos_multiple() {
     let comp = make_comp(100.0, 200.0, 70.0, 90.0);
@@ -143,7 +140,6 @@ fn test_input_port_pos_multiple() {
     assert_eq!(comp.input_port_pos(1, 2), Vec2::new(100.0, 260.0));
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_input_port_pos_zero_inputs() {
     let comp = make_comp(100.0, 200.0, 70.0, 60.0);
@@ -151,7 +147,6 @@ fn test_input_port_pos_zero_inputs() {
     assert_eq!(comp.input_port_pos(0, 0), Vec2::new(100.0, 200.0));
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_input_port_pos_junction_horizontal() {
     let junc = make_junction(50.0, 80.0, 40.0, 12.0); // wider than tall
@@ -159,7 +154,6 @@ fn test_input_port_pos_junction_horizontal() {
     assert_eq!(junc.input_port_pos(0, 1), Vec2::new(50.0, 86.0));
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_input_port_pos_junction_vertical() {
     let junc = make_junction(50.0, 80.0, 12.0, 40.0); // taller than wide
@@ -169,7 +163,6 @@ fn test_input_port_pos_junction_vertical() {
 
 // ── output_port_pos ──
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_output_port_pos_single() {
     let comp = make_comp(100.0, 200.0, 70.0, 60.0);
@@ -178,7 +171,6 @@ fn test_output_port_pos_single() {
     assert_eq!(pos, Vec2::new(170.0, 230.0));
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_output_port_pos_multiple() {
     let comp = make_comp(100.0, 200.0, 70.0, 90.0);
@@ -187,7 +179,6 @@ fn test_output_port_pos_multiple() {
     assert_eq!(comp.output_port_pos(1, 2), Vec2::new(170.0, 260.0));
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_output_port_pos_zero_outputs() {
     let comp = make_comp(100.0, 200.0, 70.0, 60.0);
@@ -195,7 +186,6 @@ fn test_output_port_pos_zero_outputs() {
     assert_eq!(comp.output_port_pos(0, 0), Vec2::new(170.0, 200.0));
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_output_port_pos_junction_horizontal() {
     let junc = make_junction(50.0, 80.0, 40.0, 12.0); // wider than tall
@@ -203,7 +193,6 @@ fn test_output_port_pos_junction_horizontal() {
     assert_eq!(junc.output_port_pos(0, 1), Vec2::new(90.0, 86.0));
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_output_port_pos_junction_vertical() {
     let junc = make_junction(50.0, 80.0, 12.0, 40.0); // taller than wide
@@ -211,7 +200,6 @@ fn test_output_port_pos_junction_vertical() {
     assert_eq!(junc.output_port_pos(0, 1), Vec2::new(56.0, 120.0));
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_coordinate_transformation() {
     let mut editor = Editor::new();
@@ -237,7 +225,6 @@ fn test_coordinate_transformation() {
     assert_eq!(recovered_world_p2, world_p2);
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_get_component_ports_count() {
     let mut editor = Editor::new();
@@ -301,7 +288,6 @@ fn test_get_component_ports_count() {
     );
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_save_load_project() {
     let mut editor = Editor::new();
@@ -399,7 +385,6 @@ fn test_save_load_project() {
     let _ = std::fs::remove_file(temp_path);
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_save_load_nested_project() {
     let mut editor = Editor::new();
@@ -528,7 +513,6 @@ fn test_save_load_nested_project() {
     let _ = std::fs::remove_file(temp_path);
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_hit_test_manhattan_wire_zoom() {
     let mut editor = Editor::new();
@@ -551,7 +535,6 @@ fn test_hit_test_manhattan_wire_zoom() {
     assert!(hit);
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_bus_compilation_and_propagation() {
     let mut editor = Editor::new();
@@ -653,9 +636,9 @@ fn test_bus_compilation_and_propagation() {
     // 4. Test signal propagation
     // Toggle inputs: IN_0 = true, IN_1 = false, IN_2 = true, IN_3 = false
     let input_states = [true, false, true, false];
-    for i in 0..4 {
+    for (i, &state) in input_states.iter().enumerate() {
         if let Some(&sim_idx) = editor.engine.visual_to_sim_map.get(&i) {
-            editor.engine.simulator.set_input(sim_idx, input_states[i]);
+            editor.engine.simulator.set_input(sim_idx, state);
         }
     }
 
@@ -664,10 +647,10 @@ fn test_bus_compilation_and_propagation() {
     assert!(propagate_ok);
 
     // Verify output values match input values
-    for i in 0..4 {
+    for (i, &state) in input_states.iter().enumerate() {
         if let Some(&sim_idx) = editor.engine.visual_to_sim_map.get(&(6 + i)) {
             let output_val = editor.engine.simulator.get_raw_state(sim_idx);
-            let expected_val = if input_states[i] { 0b10 } else { 0b01 };
+            let expected_val = if state { 0b10 } else { 0b01 };
             assert_eq!(output_val, expected_val, "Output {} state mismatch!", i);
         } else {
             panic!("Output {} not compiled in visual_to_sim_map!", i);
@@ -675,7 +658,6 @@ fn test_bus_compilation_and_propagation() {
     }
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_seven_segment_top_level_port_allocation() {
     let mut editor = Editor::new();
@@ -754,7 +736,6 @@ fn test_seven_segment_top_level_port_allocation() {
     );
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_svg_export() {
     let mut editor = Editor::new();
@@ -844,7 +825,6 @@ fn test_svg_export() {
     let _ = std::fs::remove_file(&svg_path);
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_spatial_hash_negative_dimensions() {
     use crate::editor::spatial_hash::SpatialHashGrid;
@@ -864,7 +844,6 @@ fn test_spatial_hash_negative_dimensions() {
     );
 }
 
-#[allow(clippy::needless_range_loop)]
 #[test]
 fn test_undo_redo_preserves_wire_nudges_and_offsets() {
     let mut editor = Editor::new();

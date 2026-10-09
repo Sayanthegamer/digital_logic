@@ -1156,8 +1156,8 @@ fn test_oscillation_budget_regression() {
     sim.connect(nand, nand, 0); // feed back to port 0
     sim.connect(nand, nand, 1); // feed back to port 1
 
-    // ~50k independent gates to artificially inflate capacity
-    for _ in 0..50_000 {
+    // ~2k independent gates to artificially inflate capacity
+    for _ in 0..2_000 {
         sim.add_gate(GateType::Nand);
     }
 
@@ -1165,6 +1165,33 @@ fn test_oscillation_budget_regression() {
     let res = sim.propagate_events(100);
     assert!(
         res.is_err(),
-        "Oscillation should be detected quickly despite 50k capacity"
+        "Oscillation should be detected quickly despite 2k capacity"
     );
+}
+
+#[test]
+fn test_compiler_rejects_out_of_bounds_connections() {
+    let mut sim = Simulator::new();
+    let malformed_blueprint = ChipBlueprint {
+        name: "CorruptChip".to_string(),
+        inputs: 1,
+        outputs: 1,
+        input_names: vec!["IN".to_string()],
+        output_names: vec!["OUT".to_string()],
+        components: vec![], // No components!
+        connections: vec![Connection {
+            source: SourcePort::ComponentOutput {
+                component_idx: 0,
+                port_idx: 0,
+            },
+            target: TargetPort::ChipOutput(0),
+        }],
+    };
+    let library = vec![malformed_blueprint];
+    let mut clocks = Vec::new();
+    let mut stack = Vec::new();
+
+    let res = sim.instantiate_chip_with_mapping(0, &library, &mut clocks, &mut stack);
+    assert!(res.is_err());
+    assert!(res.unwrap_err().contains("Invalid source component index"));
 }

@@ -437,9 +437,9 @@ impl Editor {
                         self.engine.is_playing = !self.engine.is_playing;
                     }
                     if ui.button(theme::ICON_STOP).clicked() {
-                        // Use a size-based cap to avoid false "oscillation" errors on large but stable circuits.
-                        let max_steps = 100;
-                        match self.engine.simulator.propagate_events(max_steps) {
+                        // Budget multiplier of 100 scales the evaluation cap linearly with capacity (100 * capacity).
+                        let budget_multiplier = 100;
+                        match self.engine.simulator.propagate_events(budget_multiplier) {
                             Ok(_) => self.engine.propagation_error = None,
                             Err(e) => self.engine.propagation_error = Some(e),
                         }
@@ -621,9 +621,9 @@ impl Editor {
                                 self.engine.is_playing = !self.engine.is_playing;
                             }
                             if ui.button(format!("{} Step", theme::ICON_STOP)).clicked() {
-                                // Use a size-based cap to avoid false "oscillation" errors on large but stable circuits.
-                                let max_steps = 100;
-                                match self.engine.simulator.propagate_events(max_steps) {
+                                // Budget multiplier of 100 scales the evaluation cap linearly with capacity (100 * capacity).
+                                let budget_multiplier = 100;
+                                match self.engine.simulator.propagate_events(budget_multiplier) {
                                     Ok(_) => self.engine.propagation_error = None,
                                     Err(e) => self.engine.propagation_error = Some(e),
                                 }
