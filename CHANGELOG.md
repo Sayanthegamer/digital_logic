@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.2.4] - Unreleased
+## [3.2.4] - 2026-10-09
 
 ### Documentation
 - **Repository Documentation Modernization**: Synchronized `SPEC.md`, `ARCHITECTURE.md`, `SCALE_BREAKING_POINTS.md`, `DESIGN.md`, `SYSTEM.md`, and `README.md` to document the linear oscillation budget ($100 \times N$), upfront compiler connection bounds checking, persistence validation barrier, profiler fallback (`usize::MAX`), and updated test performance metrics (39 tests in <0.3s).
