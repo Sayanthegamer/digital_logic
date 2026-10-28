@@ -119,6 +119,10 @@ impl Editor {
                 self.canvas.inspection_path.clear();
                 // Clear previous simulator states before compiling a freshly loaded project
                 self.engine.visual_to_sim_map.clear();
+                self.engine.component_ports.clear();
+                self.engine.compiled_components.clear();
+                self.engine.top_level_sleep_info.clear();
+                self.engine.dynamic_resolvers.clear();
                 self.engine.instance_tree = crate::engine::types::InstanceTree::default();
                 self.engine.active_clocks.clear();
                 self.compile();

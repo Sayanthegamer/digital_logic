@@ -194,6 +194,47 @@ impl Editor {
         }
     }
 
+    fn compute_library_fingerprint(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.engine.library.len().hash(&mut hasher);
+        for bp in &self.engine.library {
+            bp.name.hash(&mut hasher);
+            bp.inputs.hash(&mut hasher);
+            bp.outputs.hash(&mut hasher);
+            crate::editor::global_library::GlobalLibrary::blueprint_hash(bp, &HashMap::new())
+                .hash(&mut hasher);
+        }
+        hasher.finish()
+    }
+
+    fn can_compile_incrementally(&self, current_library_hash: u64) -> bool {
+        if self.engine.compiled_components.is_empty()
+            || self.circuit.components.is_empty()
+            || self.engine.compiled_library_hash != current_library_hash
+        {
+            return false;
+        }
+
+        // Every previously compiled component must either still exist with the exact same
+        // (comp_type, bus_width, clock_period) or have been a primitive (non-SubChip) deletion.
+        for (&old_id, &(old_type, old_bw, old_cp)) in &self.engine.compiled_components {
+            if let Some(comp) = self.get_component(old_id) {
+                if comp.comp_type != old_type
+                    || comp.bus_width != old_bw
+                    || comp.clock_period != old_cp
+                {
+                    return false;
+                }
+            } else if matches!(old_type, ComponentType::SubChip(_)) {
+                // Deleting a SubChip leaves a multi-gate gap; run full defragmenting compile
+                return false;
+            }
+        }
+        true
+    }
+
     pub fn compile(&mut self) {
         self.rebuild_comp_map();
         // Fix up sub-chip dimensions so existing projects get the new dynamic widths
@@ -208,6 +249,153 @@ impl Editor {
             }
         }
 
+        let current_library_hash = self.compute_library_fingerprint();
+        if self.can_compile_incrementally(current_library_hash) {
+            self.compile_incremental();
+        } else {
+            self.compile_full(current_library_hash);
+        }
+
+        self.recompute_wire_offsets(None);
+        self.rebuild_spatial_grid();
+    }
+
+    /// O(Δ) Incremental Delta-Compiler: patches only top-level canvas nets and added/removed
+    /// primitive components without reallocating or re-sorting any existing SubChip instances.
+    fn compile_incremental(&mut self) {
+        // 1. Remove any deleted primitive components from the existing Simulator
+        let old_ids: Vec<usize> = self.engine.compiled_components.keys().copied().collect();
+        for old_id in old_ids {
+            if !self.circuit.comp_map.contains_key(&old_id) {
+                self.engine.compiled_components.remove(&old_id);
+                self.engine.instance_tree.sub_instances.remove(&old_id);
+                self.engine
+                    .active_clocks
+                    .retain(|c| c.visual_id != Some(old_id));
+                self.engine
+                    .top_level_sleep_info
+                    .retain(|info| info.0 != old_id);
+                if let Some(sim_idx) = self.engine.visual_to_sim_map.remove(&old_id) {
+                    self.engine.simulator.remove_gate(sim_idx);
+                }
+                if let Some((inputs, _)) = self.engine.component_ports.remove(&old_id) {
+                    for targets in inputs {
+                        for (g_idx, _) in targets {
+                            self.engine.simulator.remove_gate(g_idx);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Wake & remove previous top-level canvas sleep domains and dynamic BusResolver gates
+        self.engine
+            .simulator
+            .truncate_sleep_domains(self.engine.base_sleep_domains_count);
+        for r_idx in self.engine.dynamic_resolvers.drain(..) {
+            self.engine.simulator.remove_gate(r_idx);
+        }
+        for (inputs, _) in self.engine.component_ports.values() {
+            for targets in inputs {
+                for &(tgt_g_idx, tgt_port) in targets {
+                    self.engine.simulator.disconnect_input(tgt_g_idx, tgt_port);
+                }
+            }
+        }
+
+        // 3. Allocate any newly added components into the existing Simulator
+        let mut template_cache: HashMap<usize, crate::engine::compiler::SubchipTemplate> =
+            HashMap::new();
+        let mut added_any = false;
+        let components_snapshot = self.circuit.components.clone();
+        for comp in &components_snapshot {
+            if !self.engine.compiled_components.contains_key(&comp.id) {
+                added_any = true;
+                let mut sim = std::mem::take(&mut self.engine.simulator);
+                let mut visual_to_sim_map = std::mem::take(&mut self.engine.visual_to_sim_map);
+                let mut component_ports = std::mem::take(&mut self.engine.component_ports);
+                let mut instance_tree = std::mem::take(&mut self.engine.instance_tree);
+                let mut active_clocks = std::mem::take(&mut self.engine.active_clocks);
+                let mut top_level_sleep_info =
+                    std::mem::take(&mut self.engine.top_level_sleep_info);
+
+                self.allocate_single_visual_component(
+                    comp,
+                    &mut sim,
+                    &mut visual_to_sim_map,
+                    &mut component_ports,
+                    &mut instance_tree,
+                    &mut active_clocks,
+                    &mut top_level_sleep_info,
+                    &mut template_cache,
+                );
+
+                self.engine.simulator = sim;
+                self.engine.visual_to_sim_map = visual_to_sim_map;
+                self.engine.component_ports = component_ports;
+                self.engine.instance_tree = instance_tree;
+                self.engine.active_clocks = active_clocks;
+                self.engine.top_level_sleep_info = top_level_sleep_info;
+                self.engine.compiled_components.insert(
+                    comp.id,
+                    (comp.comp_type, comp.bus_width, comp.clock_period),
+                );
+            }
+        }
+        self.engine.base_sleep_domains_count = self.engine.simulator.sleep_domains.len();
+
+        // 4. Re-wire top-level component inputs and output port map
+        self.update_expanded_connections();
+        let mut conn_map: HashMap<(usize, usize), Vec<&VisualConnection>> = HashMap::new();
+        for conn in &self.engine.expanded_connections {
+            conn_map
+                .entry((conn.tgt_comp_id, conn.tgt_port))
+                .or_default()
+                .push(conn);
+        }
+
+        let mut sim = std::mem::take(&mut self.engine.simulator);
+        let component_ports = std::mem::take(&mut self.engine.component_ports);
+        let top_level_sleep_info = std::mem::take(&mut self.engine.top_level_sleep_info);
+        let mut dynamic_resolvers = Vec::new();
+        let mut net_cache = HashMap::new();
+
+        self.wire_up_component_inputs(
+            &mut sim,
+            &conn_map,
+            &component_ports,
+            &mut net_cache,
+            &top_level_sleep_info,
+            &mut dynamic_resolvers,
+        );
+
+        let port_to_sim_gate_map = self.resolve_port_to_sim_gate_map(
+            &mut sim,
+            &conn_map,
+            &component_ports,
+            &mut net_cache,
+            &mut dynamic_resolvers,
+        );
+
+        if added_any && sim.nodes.len() <= 8_192 {
+            sim.calculate_depths();
+        }
+
+        let budget_multiplier = 100;
+        match sim.propagate_events(budget_multiplier) {
+            Ok(_) => self.engine.propagation_error = None,
+            Err(e) => self.engine.propagation_error = Some(e),
+        }
+
+        self.engine.simulator = sim;
+        self.engine.component_ports = component_ports;
+        self.engine.top_level_sleep_info = top_level_sleep_info;
+        self.engine.port_to_sim_gate_map = port_to_sim_gate_map;
+        self.engine.dynamic_resolvers = dynamic_resolvers;
+        self.engine.last_compile_was_incremental = true;
+    }
+
+    fn compile_full(&mut self, current_library_hash: u64) {
         // Snapshot existing Input / Clock states and InstanceTree gate states before recompiling
         // so that interactive canvas edits do not wipe running circuit memory.
         let mut prev_visual_states: HashMap<usize, u8> = HashMap::new();
@@ -247,6 +435,7 @@ impl Editor {
             &mut active_clocks,
             &mut top_level_sleep_info,
         );
+        let base_sleep_domains_count = sim.sleep_domains.len();
 
         self.update_expanded_connections();
 
@@ -261,12 +450,14 @@ impl Editor {
 
         // 2. Wire up all component inputs on the canvas in the simulator
         let mut net_cache = HashMap::new();
+        let mut dynamic_resolvers = Vec::new();
         self.wire_up_component_inputs(
             &mut sim,
             &conn_map,
             &component_ports,
             &mut net_cache,
             &top_level_sleep_info,
+            &mut dynamic_resolvers,
         );
 
         // 3. Resolve the visual output port states map
@@ -275,6 +466,7 @@ impl Editor {
             &conn_map,
             &component_ports,
             &mut net_cache,
+            &mut dynamic_resolvers,
         );
 
         // Pre-compute Depth for Multi-Threaded Simulation
@@ -294,6 +486,41 @@ impl Editor {
                 *sim_idx = old_to_new[*sim_idx];
             }
         }
+        for (inputs, outputs) in component_ports.values_mut() {
+            for targets in inputs {
+                for (tgt_g_idx, _) in targets {
+                    if *tgt_g_idx < old_to_new.len() && old_to_new[*tgt_g_idx] != usize::MAX {
+                        *tgt_g_idx = old_to_new[*tgt_g_idx];
+                    }
+                }
+            }
+            for out in outputs {
+                if let OutputSource::DrivenByGate(g_idx) = out
+                    && *g_idx < old_to_new.len()
+                    && old_to_new[*g_idx] != usize::MAX
+                {
+                    *g_idx = old_to_new[*g_idx];
+                }
+            }
+        }
+        for (_, _, gates, latches) in &mut top_level_sleep_info {
+            for g in gates {
+                if *g < old_to_new.len() && old_to_new[*g] != usize::MAX {
+                    *g = old_to_new[*g];
+                }
+            }
+            for l in latches {
+                if *l < old_to_new.len() && old_to_new[*l] != usize::MAX {
+                    *l = old_to_new[*l];
+                }
+            }
+        }
+        for r_idx in &mut dynamic_resolvers {
+            if *r_idx < old_to_new.len() && old_to_new[*r_idx] != usize::MAX {
+                *r_idx = old_to_new[*r_idx];
+            }
+        }
+
         instance_tree.apply_index_mapping(&old_to_new);
         for clock in &mut active_clocks {
             if clock.gate_idx < old_to_new.len() && old_to_new[clock.gate_idx] != usize::MAX {
@@ -327,15 +554,26 @@ impl Editor {
             Err(e) => self.engine.propagation_error = Some(e),
         }
 
+        let mut compiled_components = HashMap::with_capacity(self.circuit.components.len());
+        for comp in &self.circuit.components {
+            compiled_components.insert(
+                comp.id,
+                (comp.comp_type, comp.bus_width, comp.clock_period),
+            );
+        }
+
         self.engine.simulator = sim;
         self.engine.visual_to_sim_map = visual_to_sim_map;
         self.engine.port_to_sim_gate_map = port_to_sim_gate_map;
+        self.engine.component_ports = component_ports;
+        self.engine.compiled_components = compiled_components;
+        self.engine.top_level_sleep_info = top_level_sleep_info;
+        self.engine.base_sleep_domains_count = base_sleep_domains_count;
+        self.engine.dynamic_resolvers = dynamic_resolvers;
+        self.engine.compiled_library_hash = current_library_hash;
+        self.engine.last_compile_was_incremental = false;
         self.engine.instance_tree = instance_tree;
         self.engine.active_clocks = active_clocks;
-
-        self.recompute_wire_offsets(None);
-
-        self.rebuild_spatial_grid();
     }
 
     fn allocate_visual_components(
@@ -350,167 +588,183 @@ impl Editor {
         let mut template_cache: HashMap<usize, crate::engine::compiler::SubchipTemplate> =
             HashMap::new();
         for comp in &self.circuit.components {
-            match comp.comp_type {
-                ComponentType::Nand => {
-                    let sim_idx = sim.add_gate(GateType::Nand);
-                    visual_to_sim_map.insert(comp.id, sim_idx);
-                    component_ports.insert(
-                        comp.id,
-                        (
-                            vec![vec![(sim_idx, 0u8)], vec![(sim_idx, 1u8)]],
-                            vec![OutputSource::DrivenByGate(sim_idx)],
-                        ),
-                    );
-                    instance_tree.sub_instances.insert(
-                        comp.id,
-                        crate::engine::types::InstanceTree {
-                            gate_idx: Some(sim_idx),
-                            sub_instances: Default::default(),
-                            outputs: vec![OutputSource::DrivenByGate(sim_idx)],
-                        },
-                    );
-                }
-                ComponentType::Input => {
-                    let sim_idx = sim.add_gate(GateType::Input);
-                    visual_to_sim_map.insert(comp.id, sim_idx);
-                    component_ports
-                        .insert(comp.id, (vec![], vec![OutputSource::DrivenByGate(sim_idx)]));
-                }
-                ComponentType::Output => {
+            self.allocate_single_visual_component(
+                comp,
+                sim,
+                visual_to_sim_map,
+                component_ports,
+                instance_tree,
+                active_clocks,
+                top_level_sleep_info,
+                &mut template_cache,
+            );
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn allocate_single_visual_component(
+        &self,
+        comp: &VisualComponent,
+        sim: &mut Simulator,
+        visual_to_sim_map: &mut HashMap<usize, usize>,
+        component_ports: &mut HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
+        instance_tree: &mut crate::engine::types::InstanceTree,
+        active_clocks: &mut Vec<CompiledClock>,
+        top_level_sleep_info: &mut Vec<(usize, usize, Vec<usize>, Vec<usize>)>,
+        template_cache: &mut HashMap<usize, crate::engine::compiler::SubchipTemplate>,
+    ) {
+        match comp.comp_type {
+            ComponentType::Nand => {
+                let sim_idx = sim.add_gate(GateType::Nand);
+                visual_to_sim_map.insert(comp.id, sim_idx);
+                component_ports.insert(
+                    comp.id,
+                    (
+                        vec![vec![(sim_idx, 0u8)], vec![(sim_idx, 1u8)]],
+                        vec![OutputSource::DrivenByGate(sim_idx)],
+                    ),
+                );
+                instance_tree.sub_instances.insert(
+                    comp.id,
+                    crate::engine::types::InstanceTree {
+                        gate_idx: Some(sim_idx),
+                        sub_instances: Default::default(),
+                        outputs: vec![OutputSource::DrivenByGate(sim_idx)],
+                    },
+                );
+            }
+            ComponentType::Input => {
+                let sim_idx = sim.add_gate(GateType::Input);
+                visual_to_sim_map.insert(comp.id, sim_idx);
+                component_ports
+                    .insert(comp.id, (vec![], vec![OutputSource::DrivenByGate(sim_idx)]));
+            }
+            ComponentType::Output => {
+                let sim_idx = sim.add_gate(GateType::Output);
+                visual_to_sim_map.insert(comp.id, sim_idx);
+                component_ports.insert(comp.id, (vec![vec![(sim_idx, 0u8)]], vec![]));
+            }
+            ComponentType::Clock => {
+                let sim_idx = sim.add_gate(GateType::Input);
+                visual_to_sim_map.insert(comp.id, sim_idx);
+
+                let period = comp.clock_period.unwrap_or(20);
+                active_clocks.push(CompiledClock {
+                    gate_idx: sim_idx,
+                    period,
+                    counter: 0,
+                    visual_id: Some(comp.id),
+                });
+
+                component_ports
+                    .insert(comp.id, (vec![], vec![OutputSource::DrivenByGate(sim_idx)]));
+                instance_tree.sub_instances.insert(
+                    comp.id,
+                    crate::engine::types::InstanceTree {
+                        gate_idx: Some(sim_idx),
+                        sub_instances: Default::default(),
+                        outputs: vec![OutputSource::DrivenByGate(sim_idx)],
+                    },
+                );
+            }
+            ComponentType::TriStateBuffer => {
+                let sim_idx = sim.add_gate(GateType::TriStateBuffer);
+                visual_to_sim_map.insert(comp.id, sim_idx);
+                component_ports.insert(
+                    comp.id,
+                    (
+                        vec![vec![(sim_idx, 0u8)], vec![(sim_idx, 1u8)]],
+                        vec![OutputSource::DrivenByGate(sim_idx)],
+                    ),
+                );
+                instance_tree.sub_instances.insert(
+                    comp.id,
+                    crate::engine::types::InstanceTree {
+                        gate_idx: Some(sim_idx),
+                        sub_instances: Default::default(),
+                        outputs: vec![OutputSource::DrivenByGate(sim_idx)],
+                    },
+                );
+            }
+            ComponentType::Junction => {
+                // Support up to 16 pass-through channels so multi-bit buses can traverse Junctions
+                let max_w = 16;
+                component_ports.insert(
+                    comp.id,
+                    (
+                        vec![vec![]; max_w],
+                        (0..max_w).map(OutputSource::PassedThrough).collect(),
+                    ),
+                );
+            }
+            ComponentType::BusJoiner => {
+                let w = comp.bus_width();
+                component_ports.insert(
+                    comp.id,
+                    (
+                        vec![vec![]; w],
+                        (0..w).map(OutputSource::PassedThrough).collect(),
+                    ),
+                );
+            }
+            ComponentType::BusSplitter => {
+                let w = comp.bus_width();
+                component_ports.insert(
+                    comp.id,
+                    (
+                        vec![vec![]; w],
+                        (0..w).map(OutputSource::PassedThrough).collect(),
+                    ),
+                );
+            }
+            ComponentType::SevenSegment => {
+                let mut inputs = Vec::new();
+                // Port ordering: A, B, C, D, E, F, G, minus (8 ports total)
+                for _ in 0..8 {
                     let sim_idx = sim.add_gate(GateType::Output);
-                    visual_to_sim_map.insert(comp.id, sim_idx);
-                    component_ports.insert(comp.id, (vec![vec![(sim_idx, 0u8)]], vec![]));
+                    inputs.push(vec![(sim_idx, 0u8)]);
                 }
-                ComponentType::Clock => {
-                    let sim_idx = sim.add_gate(GateType::Input);
-                    visual_to_sim_map.insert(comp.id, sim_idx);
+                component_ports.insert(comp.id, (inputs, vec![]));
+            }
+            ComponentType::SubChip(sub_idx) => {
+                let template = if let Some(tmpl) = template_cache.get(&sub_idx) {
+                    Some(tmpl)
+                } else if let Ok(tmpl) = crate::engine::compiler::compile_subchip_template(
+                    sub_idx,
+                    &self.engine.library,
+                ) {
+                    template_cache.insert(sub_idx, tmpl);
+                    template_cache.get(&sub_idx)
+                } else {
+                    None
+                };
 
-                    let period = comp.clock_period.unwrap_or(20);
-                    active_clocks.push(CompiledClock {
-                        gate_idx: sim_idx,
-                        period,
-                        counter: 0,
-                        visual_id: Some(comp.id),
-                    });
+                if let Some(tmpl) = template {
+                    let start_gate_idx = sim.nodes.capacity();
+                    let (sub_interface, sub_tree) = tmpl.instantiate_into(sim, active_clocks);
+                    let end_gate_idx = sim.nodes.capacity();
 
-                    component_ports
-                        .insert(comp.id, (vec![], vec![OutputSource::DrivenByGate(sim_idx)]));
-                    instance_tree.sub_instances.insert(
-                        comp.id,
-                        crate::engine::types::InstanceTree {
-                            gate_idx: Some(sim_idx),
-                            sub_instances: Default::default(),
-                            outputs: vec![OutputSource::DrivenByGate(sim_idx)],
-                        },
-                    );
-                }
-                ComponentType::TriStateBuffer => {
-                    let sim_idx = sim.add_gate(GateType::TriStateBuffer);
-                    visual_to_sim_map.insert(comp.id, sim_idx);
-                    component_ports.insert(
-                        comp.id,
-                        (
-                            vec![vec![(sim_idx, 0u8)], vec![(sim_idx, 1u8)]],
-                            vec![OutputSource::DrivenByGate(sim_idx)],
-                        ),
-                    );
-                    instance_tree.sub_instances.insert(
-                        comp.id,
-                        crate::engine::types::InstanceTree {
-                            gate_idx: Some(sim_idx),
-                            sub_instances: Default::default(),
-                            outputs: vec![OutputSource::DrivenByGate(sim_idx)],
-                        },
-                    );
-                }
-                ComponentType::Junction => {
-                    // Support up to 16 pass-through channels so multi-bit buses can traverse Junctions
-                    let max_w = 16;
-                    component_ports.insert(
-                        comp.id,
-                        (
-                            vec![vec![]; max_w],
-                            (0..max_w).map(OutputSource::PassedThrough).collect(),
-                        ),
-                    );
-                }
-                ComponentType::BusJoiner => {
-                    let w = comp.bus_width();
-                    // NOTE: Officially BusJoiner has (w, 1) ports, but internally we represent it
-                    // as w inputs and w outputs (PassedThrough) to trace each channel independently.
-                    component_ports.insert(
-                        comp.id,
-                        (
-                            vec![vec![]; w],
-                            (0..w).map(OutputSource::PassedThrough).collect(),
-                        ),
-                    );
-                }
-                ComponentType::BusSplitter => {
-                    let w = comp.bus_width();
-                    // NOTE: Officially BusSplitter has (1, w) ports, but internally we represent it
-                    // as w inputs and w outputs (PassedThrough) to trace each channel independently.
-                    component_ports.insert(
-                        comp.id,
-                        (
-                            vec![vec![]; w],
-                            (0..w).map(OutputSource::PassedThrough).collect(),
-                        ),
-                    );
-                }
-                ComponentType::SevenSegment => {
-                    let mut inputs = Vec::new();
-                    // Port ordering: A, B, C, D, E, F, G, minus (8 ports total)
-                    for _ in 0..8 {
-                        let sim_idx = sim.add_gate(GateType::Output);
-                        inputs.push(vec![(sim_idx, 0u8)]);
-                    }
-                    component_ports.insert(comp.id, (inputs, vec![]));
-                }
-                ComponentType::SubChip(sub_idx) => {
-                    let template = if let Some(tmpl) = template_cache.get(&sub_idx) {
-                        Some(tmpl)
-                    } else if let Ok(tmpl) = crate::engine::compiler::compile_subchip_template(
-                        sub_idx,
-                        &self.engine.library,
-                    ) {
-                        template_cache.insert(sub_idx, tmpl);
-                        template_cache.get(&sub_idx)
-                    } else {
-                        None
-                    };
-
-                    if let Some(tmpl) = template {
-                        let start_gate_idx = sim.nodes.len();
-                        let (sub_interface, sub_tree) = tmpl.instantiate_into(sim, active_clocks);
-                        let end_gate_idx = sim.nodes.len();
-
-                        if let Some(sub_bp) = self.engine.library.get(sub_idx)
-                            && let Some(gating_port) = crate::engine::compiler::find_gating_input(
-                                sub_bp,
-                                &self.engine.library,
-                            )
-                        {
-                            let latches: Vec<usize> = (start_gate_idx..end_gate_idx)
-                                .filter(|&g| {
-                                    g < sim.nodes.gate_types.len()
-                                        && sim.nodes.gate_types[g] == GateType::Nand
-                                })
-                                .collect();
-                            if !latches.is_empty() {
-                                top_level_sleep_info.push((
-                                    comp.id,
-                                    gating_port,
-                                    (start_gate_idx..end_gate_idx).collect::<Vec<_>>(),
-                                    latches,
-                                ));
-                            }
+                    if let Some(sub_bp) = self.engine.library.get(sub_idx)
+                        && let Some(gating_port) = crate::engine::compiler::find_gating_input(
+                            sub_bp,
+                            &self.engine.library,
+                        )
+                    {
+                        let gates: Vec<usize> = (start_gate_idx..end_gate_idx)
+                            .filter(|&g| sim.nodes.contains(g))
+                            .collect();
+                        let latches: Vec<usize> = gates
+                            .iter()
+                            .copied()
+                            .filter(|&g| sim.nodes.gate_types[g] == GateType::Nand)
+                            .collect();
+                        if !latches.is_empty() {
+                            top_level_sleep_info.push((comp.id, gating_port, gates, latches));
                         }
-
-                        component_ports
-                            .insert(comp.id, (sub_interface.inputs, sub_interface.outputs));
-                        instance_tree.sub_instances.insert(comp.id, sub_tree);
                     }
+
+                    component_ports.insert(comp.id, (sub_interface.inputs, sub_interface.outputs));
+                    instance_tree.sub_instances.insert(comp.id, sub_tree);
                 }
             }
         }
@@ -523,6 +777,7 @@ impl Editor {
         component_ports: &HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
         net_cache: &mut HashMap<Vec<usize>, OutputSource>,
         top_level_sleep_info: &[(usize, usize, Vec<usize>, Vec<usize>)],
+        dynamic_resolvers: &mut Vec<usize>,
     ) {
         for comp in &self.circuit.components {
             let (inputs_count, _) =
@@ -533,8 +788,14 @@ impl Editor {
                     comp_id: comp.id,
                     port_idx,
                 };
-                let driver =
-                    self.trace_canvas_node(start_node, sim, conn_map, component_ports, net_cache);
+                let driver = self.trace_canvas_node(
+                    start_node,
+                    sim,
+                    conn_map,
+                    component_ports,
+                    net_cache,
+                    dynamic_resolvers,
+                );
 
                 if let OutputSource::DrivenByGate(src_g_idx) = driver
                     && let Some((inputs, _)) = component_ports.get(&comp.id)
@@ -570,6 +831,7 @@ impl Editor {
         conn_map: &HashMap<(usize, usize), Vec<&VisualConnection>>,
         component_ports: &HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
         net_cache: &mut HashMap<Vec<usize>, OutputSource>,
+        dynamic_resolvers: &mut Vec<usize>,
     ) -> HashMap<(usize, usize), usize> {
         let mut port_to_sim_gate_map = HashMap::new();
         for comp in &self.circuit.components {
@@ -581,8 +843,14 @@ impl Editor {
                     comp_id: comp.id,
                     port_idx,
                 };
-                let driver =
-                    self.trace_canvas_node(start_node, sim, conn_map, component_ports, net_cache);
+                let driver = self.trace_canvas_node(
+                    start_node,
+                    sim,
+                    conn_map,
+                    component_ports,
+                    net_cache,
+                    dynamic_resolvers,
+                );
                 if let OutputSource::DrivenByGate(g_idx) = driver {
                     port_to_sim_gate_map.insert((comp.id, port_idx), g_idx);
                 }
@@ -598,6 +866,7 @@ impl Editor {
         conn_map: &HashMap<(usize, usize), Vec<&VisualConnection>>,
         component_ports: &HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<OutputSource>)>,
         net_cache: &mut HashMap<Vec<usize>, OutputSource>,
+        dynamic_resolvers: &mut Vec<usize>,
     ) -> OutputSource {
         let mut visited = HashSet::new();
         let mut queue = vec![start_node];
@@ -655,6 +924,7 @@ impl Editor {
             let mut current_idx = drivers[0];
             for &driver in drivers.iter().skip(1) {
                 let resolver = sim.add_gate(GateType::BusResolver);
+                dynamic_resolvers.push(resolver);
                 sim.connect(current_idx, resolver, 0);
                 sim.connect(driver, resolver, 1);
                 current_idx = resolver;
@@ -884,6 +1154,7 @@ impl Editor {
         self.canvas.selected_comp_ids.clear();
         self.canvas.inspection_path.clear();
         self.canvas.editing_target = EditingTarget::LibraryChip(bp_idx);
+        self.engine.compiled_components.clear();
 
         let mut min_x = f32::MAX;
         let mut max_x = f32::MIN;
@@ -1158,6 +1429,7 @@ impl Editor {
             }
 
             self.canvas.editing_target = EditingTarget::MainCanvas;
+            self.engine.compiled_components.clear();
             self.compile();
         }
     }
@@ -1176,6 +1448,7 @@ impl Editor {
             }
 
             self.canvas.editing_target = EditingTarget::MainCanvas;
+            self.engine.compiled_components.clear();
             self.compile();
         }
     }

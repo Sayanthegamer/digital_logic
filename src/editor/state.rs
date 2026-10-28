@@ -123,6 +123,14 @@ pub struct EngineState {
     pub simulator: Simulator,
     pub visual_to_sim_map: HashMap<usize, usize>, // Visual ID -> Sim gate index
     pub port_to_sim_gate_map: HashMap<(usize, usize), usize>, // (Visual ID, port_idx) -> Sim gate index
+    pub component_ports: HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<crate::engine::OutputSource>)>,
+    pub compiled_components:
+        HashMap<usize, (crate::engine::ComponentType, Option<usize>, Option<u32>)>,
+    pub top_level_sleep_info: Vec<(usize, usize, Vec<usize>, Vec<usize>)>,
+    pub base_sleep_domains_count: usize,
+    pub dynamic_resolvers: Vec<usize>,
+    pub compiled_library_hash: u64,
+    pub last_compile_was_incremental: bool,
     pub expanded_connections: Vec<VisualConnection>,
     pub instance_tree: crate::engine::types::InstanceTree,
     pub active_clocks: Vec<CompiledClock>,
@@ -140,6 +148,13 @@ impl Default for EngineState {
             simulator: Simulator::new(),
             visual_to_sim_map: HashMap::new(),
             port_to_sim_gate_map: HashMap::new(),
+            component_ports: HashMap::new(),
+            compiled_components: HashMap::new(),
+            top_level_sleep_info: Vec::new(),
+            base_sleep_domains_count: 0,
+            dynamic_resolvers: Vec::new(),
+            compiled_library_hash: 0,
+            last_compile_was_incremental: false,
             expanded_connections: Vec::new(),
             instance_tree: crate::engine::types::InstanceTree::default(),
             active_clocks: Vec::new(),

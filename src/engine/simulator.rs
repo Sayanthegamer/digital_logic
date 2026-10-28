@@ -152,6 +152,35 @@ impl Simulator {
         self.enqueue(target_idx);
     }
 
+    /// Disconnects the specified input port (0 or 1) of `target_idx` and enqueues `target_idx` if it changed.
+    pub fn disconnect_input(&mut self, target_idx: usize, port: u8) {
+        if self.nodes.disconnect_input(target_idx, port) {
+            self.enqueue(target_idx);
+        }
+    }
+
+    /// Wakes and removes any sleep domains at or above `keep_len`, rebuilding `sleep_control_gates`.
+    pub fn truncate_sleep_domains(&mut self, keep_len: usize) {
+        if self.sleep_domains.len() <= keep_len {
+            return;
+        }
+        for d_idx in keep_len..self.sleep_domains.len() {
+            if self.sleep_domains[d_idx].is_sleeping {
+                let mut d = std::mem::take(&mut self.sleep_domains[d_idx]);
+                d.wake(self);
+                self.sleep_domains[d_idx] = d;
+            }
+        }
+        self.sleep_domains.truncate(keep_len);
+        self.sleep_control_gates.clear();
+        for domain in &self.sleep_domains {
+            if domain.control_gate >= self.sleep_control_gates.len() {
+                self.sleep_control_gates.grow(domain.control_gate + 64);
+            }
+            self.sleep_control_gates.insert(domain.control_gate);
+        }
+    }
+
     /// Sets the value of an Input gate.
     /// If the state changes, enqueues all dependents for evaluation without heap allocation.
     pub fn set_input(&mut self, gate_idx: usize, value: bool) {

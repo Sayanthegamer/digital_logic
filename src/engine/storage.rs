@@ -140,13 +140,39 @@ impl SoAGateStorage {
             tgt_idx
         );
 
-        if port == 0 {
-            self.sources[tgt_idx][0] = src_idx as u32;
-        } else {
-            self.sources[tgt_idx][1] = src_idx as u32;
+        let p = usize::from(port != 0);
+        let prev_src = self.sources[tgt_idx][p];
+        if prev_src == src_idx as u32 {
+            return;
+        }
+        if prev_src != NO_SOURCE {
+            let other_p = 1 - p;
+            if self.sources[tgt_idx][other_p] != prev_src && self.contains(prev_src as usize) {
+                self.dependents[prev_src as usize].retain(|&x| x != tgt_idx as u32);
+            }
         }
 
-        self.dependents[src_idx].push(tgt_idx as u32);
+        self.sources[tgt_idx][p] = src_idx as u32;
+        if !self.dependents[src_idx].contains(&(tgt_idx as u32)) {
+            self.dependents[src_idx].push(tgt_idx as u32);
+        }
+    }
+
+    pub fn disconnect_input(&mut self, tgt_idx: usize, port: u8) -> bool {
+        if !self.contains(tgt_idx) {
+            return false;
+        }
+        let p = usize::from(port != 0);
+        let prev_src = self.sources[tgt_idx][p];
+        if prev_src == NO_SOURCE {
+            return false;
+        }
+        self.sources[tgt_idx][p] = NO_SOURCE;
+        let other_p = 1 - p;
+        if self.sources[tgt_idx][other_p] != prev_src && self.contains(prev_src as usize) {
+            self.dependents[prev_src as usize].retain(|&x| x != tgt_idx as u32);
+        }
+        true
     }
 
     #[inline(always)]
