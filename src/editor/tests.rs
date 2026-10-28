@@ -1,4 +1,5 @@
 use crate::editor::Editor;
+use crate::editor::math::{Rect, Vec2};
 use crate::editor::types::{TextAnnotation, VisualComponent, VisualConnection};
 use crate::engine::ComponentType;
 
@@ -889,4 +890,330 @@ fn test_undo_redo_preserves_wire_nudges_and_offsets() {
         Some(88.0),
         "Redo must restore wire_offsets"
     );
+}
+
+
+#[test]
+fn test_compile_preserves_input_and_latch_states() {
+    let mut editor = Editor::new();
+    editor.circuit.components.clear();
+    editor.circuit.connections.clear();
+
+    // Input switch (id 1) -> Output (id 2)
+    editor.circuit.components.push(VisualComponent {
+        id: 1,
+        comp_type: ComponentType::Input,
+        pos: Vec2::new(0.0, 0.0),
+        width: 70.0,
+        height: 40.0,
+        label: "SW".to_string(),
+        clock_period: None,
+        color: None,
+        bus_width: None,
+    });
+    editor.circuit.components.push(VisualComponent {
+        id: 2,
+        comp_type: ComponentType::Output,
+        pos: Vec2::new(200.0, 0.0),
+        width: 70.0,
+        height: 40.0,
+        label: "LED".to_string(),
+        clock_period: None,
+        color: None,
+        bus_width: None,
+    });
+    editor.circuit.connections.push(VisualConnection {
+        src_comp_id: 1,
+        src_port: 0,
+        tgt_comp_id: 2,
+        tgt_port: 0,
+    });
+
+    editor.compile();
+
+    // Toggle Input 1 to High and propagate
+    let sw_gate = editor.engine.visual_to_sim_map[&1];
+    editor.engine.simulator.set_input(sw_gate, true);
+    editor.engine.simulator.propagate_events(100).unwrap();
+    assert!(editor.get_wire_state(1, 0));
+
+    // Place a new unrelated component and recompile
+    editor.circuit.components.push(VisualComponent {
+        id: 3,
+        comp_type: ComponentType::Nand,
+        pos: Vec2::new(100.0, 100.0),
+        width: 70.0,
+        height: 40.0,
+        label: "NAND".to_string(),
+        clock_period: None,
+        color: None,
+        bus_width: None,
+    });
+    editor.compile();
+
+    // Input 1 and Output 2 must still be High after recompilation
+    let sw_gate_after = editor.engine.visual_to_sim_map[&1];
+    let led_gate_after = editor.engine.visual_to_sim_map[&2];
+    assert!(editor.engine.simulator.get_state(sw_gate_after));
+    assert!(editor.engine.simulator.get_state(led_gate_after));
+}
+
+#[test]
+fn test_bus_routing_through_junction() {
+    let mut editor = Editor::new();
+    editor.circuit.components.clear();
+    editor.circuit.connections.clear();
+
+    for i in 0..4 {
+        editor.circuit.components.push(VisualComponent {
+            id: i + 1,
+            comp_type: ComponentType::Input,
+            pos: Vec2::new(0.0, i as f32 * 50.0),
+            width: 70.0,
+            height: 40.0,
+            label: format!("IN_{}", i),
+            clock_period: None,
+            color: None,
+            bus_width: None,
+        });
+    }
+
+    // BusJoiner (id 10), Junction (id 11), BusSplitter (id 12)
+    editor.circuit.components.push(VisualComponent {
+        id: 10,
+        comp_type: ComponentType::BusJoiner,
+        pos: Vec2::new(120.0, 60.0),
+        width: 50.0,
+        height: 104.0,
+        label: "JOIN".to_string(),
+        clock_period: None,
+        color: None,
+        bus_width: Some(4),
+    });
+    editor.circuit.components.push(VisualComponent {
+        id: 11,
+        comp_type: ComponentType::Junction,
+        pos: Vec2::new(220.0, 100.0),
+        width: 12.0,
+        height: 12.0,
+        label: "".to_string(),
+        clock_period: None,
+        color: None,
+        bus_width: None,
+    });
+    editor.circuit.components.push(VisualComponent {
+        id: 12,
+        comp_type: ComponentType::BusSplitter,
+        pos: Vec2::new(320.0, 60.0),
+        width: 50.0,
+        height: 104.0,
+        label: "SPLIT".to_string(),
+        clock_period: None,
+        color: None,
+        bus_width: Some(4),
+    });
+
+    for i in 0..4 {
+        editor.circuit.components.push(VisualComponent {
+            id: 20 + i,
+            comp_type: ComponentType::Output,
+            pos: Vec2::new(450.0, i as f32 * 50.0),
+            width: 70.0,
+            height: 40.0,
+            label: format!("OUT_{}", i),
+            clock_period: None,
+            color: None,
+            bus_width: None,
+        });
+        editor.circuit.connections.push(VisualConnection {
+            src_comp_id: i + 1,
+            src_port: 0,
+            tgt_comp_id: 10,
+            tgt_port: i,
+        });
+        editor.circuit.connections.push(VisualConnection {
+            src_comp_id: 12,
+            src_port: i,
+            tgt_comp_id: 20 + i,
+            tgt_port: 0,
+        });
+    }
+
+    // Route BusJoiner -> Junction -> BusSplitter
+    editor.circuit.connections.push(VisualConnection {
+        src_comp_id: 10,
+        src_port: 0,
+        tgt_comp_id: 11,
+        tgt_port: 0,
+    });
+    editor.circuit.connections.push(VisualConnection {
+        src_comp_id: 11,
+        src_port: 0,
+        tgt_comp_id: 12,
+        tgt_port: 0,
+    });
+
+    editor.compile();
+
+    let pattern = [false, true, true, false];
+    for (i, &val) in pattern.iter().enumerate() {
+        let g = editor.engine.visual_to_sim_map[&(i + 1)];
+        editor.engine.simulator.set_input(g, val);
+    }
+    editor.engine.simulator.propagate_events(100).unwrap();
+
+    for (i, &expected) in pattern.iter().enumerate() {
+        let out_g = editor.engine.visual_to_sim_map[&(20 + i)];
+        assert_eq!(editor.engine.simulator.get_state(out_g), expected);
+    }
+}
+
+#[test]
+fn test_global_library_move_and_delete_remaps_subchips() {
+    let mut editor = Editor::new();
+    editor.global_library = crate::editor::global_library::GlobalLibrary::default();
+    editor.engine.library.clear();
+    editor.circuit.components.clear();
+    editor.circuit.connections.clear();
+
+    let chip_a = crate::engine::ChipBlueprint {
+        name: "ChipA".to_string(),
+        inputs: 1,
+        outputs: 1,
+        input_names: vec!["I".to_string()],
+        output_names: vec!["O".to_string()],
+        components: vec![],
+        connections: vec![],
+    };
+    let chip_b = crate::engine::ChipBlueprint {
+        name: "ChipB".to_string(),
+        inputs: 1,
+        outputs: 1,
+        input_names: vec!["I".to_string()],
+        output_names: vec!["O".to_string()],
+        components: vec![crate::engine::Component {
+            component_type: ComponentType::SubChip(0), // References ChipA
+            pos: (0.0, 0.0),
+            clock_period: None,
+            bus_width: None,
+        }],
+        connections: vec![],
+    };
+
+    editor.global_library.ungrouped.push(chip_a);
+    editor.global_library.ungrouped.push(chip_b);
+    editor
+        .global_library
+        .folders
+        .push(crate::editor::global_library::ChipFolder {
+            name: "Folder1".to_string(),
+            color: None,
+            chips: Vec::new(),
+        });
+    editor.sync_engine_library();
+
+    // Place ChipB (currently flat index 1) on the canvas
+    editor.circuit.components.push(VisualComponent {
+        id: 1,
+        comp_type: ComponentType::SubChip(1),
+        pos: Vec2::new(0.0, 0.0),
+        width: 100.0,
+        height: 60.0,
+        label: "ChipB".to_string(),
+        clock_period: None,
+        color: None,
+        bus_width: None,
+    });
+
+    // Move ChipA (ungrouped index 0) into Folder1 (folder 0)
+    // Flat order changes from [ChipA(0), ChipB(1)] to [ChipB(0), ChipA(1)]!
+    editor.move_global_library_chip(
+        crate::editor::global_library::ChipLocation::Ungrouped(0),
+        Some(0),
+    );
+
+    // Canvas component must now point to SubChip(0) (ChipB's new index)
+    assert_eq!(
+        editor.circuit.components[0].comp_type,
+        ComponentType::SubChip(0)
+    );
+    // And ChipB's internal component must now point to SubChip(1) (ChipA's new index)
+    assert_eq!(
+        editor.engine.library[0].components[0].component_type,
+        ComponentType::SubChip(1)
+    );
+}
+
+#[test]
+fn test_cyclic_junction_inspection_does_not_stack_overflow() {
+    let mut editor = Editor::new();
+    editor.engine.library.clear();
+    editor.circuit.components.clear();
+
+    // Blueprint with 2 junctions wired in a loop: J0 -> J1 -> J0
+    editor.engine.library.push(crate::engine::ChipBlueprint {
+        name: "CyclicJunc".to_string(),
+        inputs: 1,
+        outputs: 1,
+        input_names: vec!["IN".to_string()],
+        output_names: vec!["OUT".to_string()],
+        components: vec![
+            crate::engine::Component {
+                component_type: ComponentType::Junction,
+                pos: (0.0, 0.0),
+                clock_period: None,
+                bus_width: None,
+            },
+            crate::engine::Component {
+                component_type: ComponentType::Junction,
+                pos: (50.0, 0.0),
+                clock_period: None,
+                bus_width: None,
+            },
+        ],
+        connections: vec![
+            crate::engine::Connection {
+                source: crate::engine::SourcePort::ComponentOutput {
+                    component_idx: 0,
+                    port_idx: 0,
+                },
+                target: crate::engine::TargetPort::ComponentInput {
+                    component_idx: 1,
+                    port_idx: 0,
+                },
+            },
+            crate::engine::Connection {
+                source: crate::engine::SourcePort::ComponentOutput {
+                    component_idx: 1,
+                    port_idx: 0,
+                },
+                target: crate::engine::TargetPort::ComponentInput {
+                    component_idx: 0,
+                    port_idx: 0,
+                },
+            },
+        ],
+    });
+
+    editor.circuit.components.push(VisualComponent {
+        id: 1,
+        comp_type: ComponentType::SubChip(0),
+        pos: Vec2::new(0.0, 0.0),
+        width: 100.0,
+        height: 60.0,
+        label: "CyclicJunc".to_string(),
+        clock_period: None,
+        color: None,
+        bus_width: None,
+    });
+    editor.compile();
+
+    let state = editor.get_raw_node_state_at_path(
+        &crate::engine::TraceNode::CompOutput {
+            component_idx: 0,
+            port_idx: 0,
+        },
+        &[1],
+    );
+    assert_eq!(state, 0b00);
 }

@@ -1195,3 +1195,115 @@ fn test_compiler_rejects_out_of_bounds_connections() {
     assert!(res.is_err());
     assert!(res.unwrap_err().contains("Invalid source component index"));
 }
+
+
+#[test]
+fn test_nand_dominant_low_and_contention_propagation() {
+    let mut sim = Simulator::new();
+
+    // Create two opposing tri-state drivers to produce 0b11 Contention on a bus
+    let d1 = sim.add_gate(GateType::Input);
+    let en1 = sim.add_gate(GateType::Input);
+    let tri1 = sim.add_gate(GateType::TriStateBuffer);
+    sim.connect(d1, tri1, 0);
+    sim.connect(en1, tri1, 1);
+
+    let d2 = sim.add_gate(GateType::Input);
+    let en2 = sim.add_gate(GateType::Input);
+    let tri2 = sim.add_gate(GateType::TriStateBuffer);
+    sim.connect(d2, tri2, 0);
+    sim.connect(en2, tri2, 1);
+
+    let bus = sim.add_gate(GateType::BusResolver);
+    sim.connect(tri1, bus, 0);
+    sim.connect(tri2, bus, 1);
+
+    let ctrl = sim.add_gate(GateType::Input);
+    let nand = sim.add_gate(GateType::Nand);
+    let out = sim.add_gate(GateType::Output);
+    sim.connect(bus, nand, 0);
+    sim.connect(ctrl, nand, 1);
+    sim.connect(nand, out, 0);
+
+    sim.calculate_depths();
+
+    // Enable both drivers with opposite levels -> bus is 0b11 (Contention)
+    sim.set_input(d1, true);
+    sim.set_input(en1, true);
+    sim.set_input(d2, false);
+    sim.set_input(en2, true);
+
+    // Case 1: ctrl = Low (0b01) -> NAND(0b11, 0b01) must output High (0b10) due to dominant low
+    sim.set_input(ctrl, false);
+    assert!(sim.propagate_events(100).is_ok());
+    assert_eq!(sim.get_raw_state(bus), 0b11);
+    assert_eq!(sim.get_raw_state(out), 0b10);
+
+    // Case 2: ctrl = High (0b10) -> NAND(0b11, 0b10) must propagate Contention (0b11)
+    sim.set_input(ctrl, true);
+    assert!(sim.propagate_events(100).is_ok());
+    assert_eq!(sim.get_raw_state(out), 0b11);
+}
+
+#[test]
+fn test_oscillation_error_cleans_event_queue_for_recovery() {
+    let mut sim = Simulator::new();
+    let enable = sim.add_gate(GateType::Input);
+    let nand = sim.add_gate(GateType::Nand);
+
+    // Feedback on port 0, enable on port 1
+    sim.connect(nand, nand, 0);
+    sim.connect(enable, nand, 1);
+    sim.calculate_depths();
+
+    // Enable = true -> oscillates
+    sim.set_input(enable, true);
+    let res = sim.propagate_events(100);
+    assert!(res.is_err());
+
+    // Queue and in_queue flags must be cleanly reset after oscillation abort
+    assert!(sim.event_queue.iter().all(|q| q.is_empty()));
+    assert!(!sim.nodes.in_queue.contains(nand));
+
+    // Disabling the ring oscillator (enable = false) must now settle cleanly to High
+    sim.set_input(enable, false);
+    assert!(sim.propagate_events(100).is_ok());
+    assert!(sim.get_state(nand));
+}
+
+#[test]
+fn test_sleep_domain_defragmentation_remaps_sleeping_gates_bitset() {
+    let mut sim = Simulator::new();
+
+    // Create gates out of topological order so defragment_and_sort_by_depth reorders them
+    let sleeping_nand = sim.add_gate(GateType::Nand); // index 0 initially, depth 1
+    let ctrl_in = sim.add_gate(GateType::Input); // index 1 initially, depth 0
+    sim.connect(ctrl_in, sleeping_nand, 0);
+    sim.connect(ctrl_in, sleeping_nand, 1);
+
+    // ctrl_in is initially Low (0b01), so registering an active-high sleep domain immediately hibernates it
+    let domain = crate::engine::sleep::SleepDomain::new(
+        0,
+        ctrl_in,
+        true,
+        vec![sleeping_nand],
+        vec![sleeping_nand],
+    );
+    sim.register_sleep_domain(domain);
+    assert!(sim.sleeping_gates.contains(sleeping_nand));
+
+    sim.calculate_depths();
+    let old_to_new = sim.defragment_and_sort_by_depth();
+    let new_nand_idx = old_to_new[sleeping_nand];
+    let new_ctrl_idx = old_to_new[ctrl_in];
+
+    assert_ne!(new_nand_idx, sleeping_nand);
+    assert!(
+        sim.sleeping_gates.contains(new_nand_idx),
+        "sleeping_gates bitset must track the remapped gate index after defragmentation"
+    );
+    assert!(
+        !sim.sleeping_gates.contains(new_ctrl_idx),
+        "control input gate must not be marked as sleeping after defragmentation"
+    );
+}
