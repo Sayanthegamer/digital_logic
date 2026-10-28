@@ -1,50 +1,85 @@
 # System Specifications
 
-This document outlines the operational specifications of the logic engine.
+This document outlines the operational specifications of the logic engine and schematic editor.
 
-## Primitives
+## Primitives & 4-State Signal Semantics
 
-Every signal is a 4-state value stored as a `u8`: `0b00` Floating, `0b01` Low, `0b10` High, `0b11` Contention. An unconnected input reads as Floating (`0b00`).
+Every signal is an IEEE-style 4-state value stored as a `u8`:
+- `0b00`: **Floating** (high-impedance / unconnected)
+- `0b01`: **Low** (logic 0 / ground)
+- `0b10`: **High** (logic 1 / VCC)
+- `0b11`: **Contention** (electrical conflict / bus fight)
+
+An unconnected input pin defaults to Floating (`0b00`).
 
 The simulator core (`GateType`) understands five primitive gates:
 
-1. **Nand**: The universal logic gate. Only the High bit of each input counts, so Floating and Low both read as false. Output is `0b10` (High) unless both inputs are High, in which case it is `0b01` (Low). An unconnected NAND therefore evaluates to High. Initial state: High.
-2. **Input**: A source of logic level (High/Low) driven by user interaction, outer-chip connections, or a compiled Clock. Initial state: Low.
-3. **Output**: A sink that passes along the full 4-state value of its driving source (input A). Initial state: Low.
-4. **TriStateBuffer**: Input A is data and input B is enable. When enabled it drives High or Low according to the data input; when disabled it outputs Floating (`0b00`). Initial state: Floating.
-5. **BusResolver**: Merges two drivers by bitwise OR of their states. Floating yields to the other driver, and a High driver meeting a Low driver produces Contention (`0b11`). The compiler inserts these automatically when several drivers feed the same net. Initial state: Floating.
+1. **Nand**: The universal logic gate.
+   - **Dominant-Low Semantics**: A `0b01` Low on either input forces the output to `0b10` High, regardless of whether the opposing input is `0b00` Floating or `0b11` Contention.
+   - **Contention Propagation**: If one input is `0b11` Contention and the other is `0b10` High, the gate propagates `0b11` Contention.
+   - **Standard Evaluation**: If both inputs are `0b10` High, the output is `0b01` Low. If inputs are Floating without Low, the gate evaluates to `0b00` Floating.
+   - **Initial State**: `0b10` High.
+2. **Input**: A source of logic level driven by user interaction, outer-chip connections, or an autonomous Clock. Initial state: `0b01` Low.
+3. **Output**: A sink that reflects the full 4-state value of its driving source (input A). Initial state: `0b01` Low.
+4. **TriStateBuffer**: Input A is data, and input B is enable.
+   - When enabled (`0b10`), it drives the 4-state value of input A.
+   - When disabled or floating (`0b01` or `0b00`), it outputs `0b00` Floating.
+   - When enable is in contention (`0b11`), it drives `0b11` Contention.
+   - Initial state: `0b00` Floating.
+5. **BusResolver**: Merges multiple drivers on a shared electrical net via bitwise OR (`val_a | val_b`):
+   - Floating (`0b00`) yields transparently to active drivers.
+   - Concurrent High (`0b10`) and Low (`0b01`) drivers produce Contention (`0b11`).
+   - The compiler automatically synthesizes `BusResolver` trees whenever multiple drivers attach to the same net. Initial state: `0b00` Floating.
 
-At the editor/blueprint level (`ComponentType`) there are also **Clock**, an autonomous component that flips after a localized number of simulation ticks (its `period`) and compiles to an Input gate, plus display and bus-routing components (`SevenSegment`, `Junction`, `BusJoiner`, `BusSplitter`) and `SubChip` references.
+At the editor and blueprint level (`ComponentType`), additional components exist:
+- **Clock**: Autonomous pulse generator with configurable period. Compiles down to an Input gate.
+- **SevenSegment**: Multi-segment visual indicator decoding 4-state bus inputs.
+- **Junction**: Electrical distribution hub that transparently forwards 1-bit and multi-bit signals across branches without slicing or data corruption.
+- **BusJoiner & BusSplitter**: Bundle 2 to 16 individual single-bit lines into unified multi-bit buses and vice versa.
+- **SubChip**: Reusable, hierarchical custom chip packaging a complete sub-circuit.
 
-## Event Propagation & Activity-Gating
+## Event Propagation, Activity-Gating & Recovery
 
-- The simulator uses a `Vec<Vec<usize>>` (`event_queue`) to queue primitive indices that require evaluation, one queue per topological depth. Depths come from Tarjan's SCC algorithm followed by longest-path layering over the condensation DAG, so every gate in a feedback loop shares one depth.
-- When an Input state changes (or a Clock ticks), its immediate dependents are pushed to the queue. A gate is queued at most once at a time (`in_queue: FixedBitSet`).
-- **Parallel Evaluation**: During `propagate_events`, the engine loops through the depth layers in order. For each layer it first computes all new states from the current node states, then applies the changes and enqueues dependents of every gate whose state changed. When the layer's queue is at least `dynamic_threshold` long (calibrated once per process by a hardware profiler), the compute pass runs on `rayon::par_iter()`; otherwise it runs sequentially. Results are collected in order, so processing is deterministic. If a change re-enqueues a gate at an earlier depth, the events are picked up once the loop runs past the last non-empty layer.
-- **Activity-Gated Sleep Domains (`SleepDomain`)**: Deeply nested repetitive subchips (such as RAM banks and register files) register sleep domains with a controlling driver gate (`control_gate`). When the control signal transitions to inactive, the domain hibernates: its bistable latch gates are compressed into bitsets (`FixedBitSet`), and internal gates are skipped during event scheduling. When re-enabled, the domain wakes up and restores latch states.
-- **Oscillation Detection**: To prevent infinite loops caused by zero-delay feedback loops (e.g., an inverter connected to itself), `propagate_events(budget_multiplier)` computes a budget of `capacity × max(budget_multiplier, 100)` gate evaluations, counted cumulatively across the whole propagation pass. The editor passes `100` as the budget multiplier by default (scaling the step budget linearly to `capacity × 100`), preventing runaway delay spikes on wide networks while quickly catching genuine oscillations. If the total exceeds the budget, it returns an `Oscillation detected` error, halting the loop and displaying an error in the UI.
+- **Topological Depth Queuing**: The simulator maintains per-depth event queues (`event_queue: Vec<Vec<usize>>`). Gate depths are calculated using Tarjan's SCC condensation algorithm followed by longest-path DAG layering, ensuring all gates within a feedback loop (such as an SR latch) evaluate within the same depth step.
+- **Zero-Allocation Hot Loops**: `propagate_events()` operates with zero heap allocations per tick. Scratch buffers (`scratch_queue`, `scratch_updates`, `scratch_next_enqueues`) are reused across depth layers. Dependent iterations use direct indexed slices rather than allocating cloned vectors.
+- **Parallel vs Sequential Execution**: When a depth layer holds fewer gates than `dynamic_threshold`, it evaluates sequentially on a single thread. When it meets or exceeds `dynamic_threshold`, Pass 1 computes states in parallel across CPU cores using `rayon::par_iter()`. Pass 2 applies states sequentially and schedules dependents.
+- **$O(1)$ Sleep-Domain Gating**: Control gates driving sleep domains are registered in `sleep_control_gates: FixedBitSet`. Gates transitioning state perform an $O(1)$ bit test; non-control transitions skip sleep domain scanning entirely.
+- **Activity-Gated Hibernation (`SleepDomain`)**: When a domain's control gate becomes inactive, internal bistable latches are compacted into dense bit-arrays (`FixedBitSet`), and internal gates are skipped during propagation. On re-activation, latches are decompressed and queued for evaluation.
+- **Oscillation Cap & Clean Recovery**: To prevent infinite loops caused by zero-delay feedback loops (e.g. an inverter connected to itself), propagation enforces a linear budget: $\text{capacity} \times \text{multiplier}$ (defaulting to 100). If the step count exceeds this budget, propagation halts, returns an `Oscillation detected` error, and cleanly drains all queues and bitsets to allow immediate recovery on the next input edit.
 
-## Custom Chips (Sub-Chips) & Hierarchical Templates
+## Compilation, Delta-Compilation & Templates
 
-Custom chips are stored in a blueprint `library`. A `ChipBlueprint` consists of:
-- `name`: Chip identifier string.
-- `inputs`: Number of external input ports.
-- `outputs`: Number of external output ports.
-- `input_names`: Labels for custom input pins.
-- `output_names`: Labels for custom output pins.
-- `components`: A list of internals (primitives such as Nands and Clocks, display and bus-routing components, or nested Sub-chips referencing other blueprints).
-- `connections`: Abstract links between component ports.
+### 1. Hierarchical Blueprint Structure
+Custom chips are saved as `ChipBlueprint` instances containing:
+- `name`: Identifier string.
+- `inputs`, `outputs`: External port counts.
+- `input_names`, `output_names`: Pin label descriptors.
+- `components`: Internal primitive, bus, or nested `SubChip` components.
+- `connections`: Topological port linkages.
 
-When instantiated:
-- **Upfront Bounds Validation**: The compiler validates that all connection source/target components and port indices exist within valid bounds of the component definitions and subchip blueprint interfaces before instantiation begins, returning an explicit `Err` on malformed blueprints to prevent index out-of-bounds panics.
-- **Subchip Template Caching**: Rather than repeatedly flattening identical nested blueprints, `compile_subchip_template` caches compiled prototype graphs (`SubchipTemplate`). Subsequent instantiations clone the template via `instantiate_into` with index base offsets, eliminating canvas freeze.
-- **Automatic Topological Sleep-Gating**: `find_gating_input` inspects blueprints to discover Chip-Select / Enable pins. If pins lack nominal labels (`"cs"`, `"en"`), it performs Tarjan SCC feedback loop analysis on primitive components to locate cross-coupled latch cores and identifies control lines by fan-out asymmetry ($2N$ vs $1$). Circuits with zero feedback cycles (Adders, Multiplexers) return `None`, guaranteeing zero false sleep domains.
-- The compiler traces connections backward from targets to their absolute "root driver" (a primitive gate).
-- Ports mapped merely to pass-through a signal (Input -> Output) are mathematically resolved without allocating a physical "buffer" gate in the array.
-- If several drivers feed the same internal port, the compiler synthesizes a `BusResolver` tree so High/Low conflicts surface as Contention instead of one driver silently overwriting the other.
+### 2. Static $O(V + E)$ Blueprint Validation
+Before loading or compilation:
+- `Simulator::validate_library()` runs 3-color DFS cycle detection on the chip library to detect circular blueprint hierarchies.
+- Validates that all connection source/target component indices and port numbers fall strictly within declared blueprint interfaces, rejecting malformed blueprints before allocation.
 
-## Clocks and Multi-Domain Timing
+### 3. $O(\Delta)$ Incremental Delta-Compilation
+During interactive schematic editing:
+- `Editor::compile()` distinguishes between full rebuilds (`compile_full()`) and incremental updates (`compile_incremental()`).
+- When the user adds/removes wires, places/deletes primitive components, or places new `SubChip` instances, the compiler preserves existing `SubChip` instances in `SoAGateStorage` along with their internal latch/register states.
+- Topological rewiring uses `SoAGateStorage::disconnect_input()` to clear obsolete connections in-place without invalidating gate indices, keeping canvas edit latency under 1 millisecond on million-gate circuits.
 
-- **Tick Base**: The simulator does not rely on real-time rendering frames to dictate logic time. Logic time is advanced explicitly by a "tick" loop in the editor (`editor/input_simulation.rs`), not by the engine.
-- **Multi-Domain**: Different clocks can have different periods (default 20 ticks when unset). The compiler registers each Clock in an `active_clocks` list as a `CompiledClock` pointing at its Input gate. On each tick the editor increments a localized counter per clock. When a counter reaches `max(period / 2, 1)`, it resets, flips the clock's Input state and enqueues its dependents.
-- This allows complex sequences (like a CPU clock running faster than a peripheral display clock) to function synchronously within the same flat data array.
+### 4. Template Caching
+- `compile_subchip_template()` pre-compiles blueprints into reusable `SubchipTemplate` structures.
+- Instantiations on canvas clone templates via base offset indexing, bypassing recursive flattening during placement.
+
+### 5. Topological Auto-Gating
+- `find_gating_input()` identifies Chip-Select and Write-Enable pins without relying on pin names.
+- Analyzes Tarjan SCC feedback loops to locate latch cores and detects control lines via fan-out asymmetry ($2N$ vs $1$). Combinational circuits (Adders, Multiplexers) return `None`, guaranteeing zero false sleep domains.
+
+## Wire Routing & Schematic Rendering
+
+- **Monotonic Ribbon Routing**: Corridor-based routing sorts vertical wire trunks by net origin and Y-overlap, ordering upward and downward branches monotonically to eliminate crossover braids on multi-bit buses.
+- **Obstacle-Aware Detours**: 5-segment Manhattan paths calculate clear horizontal bypass channels above or below intermediate components when a straight connection would slice through a chip body.
+- **Batched Polylines**: Uninterrupted Manhattan segments are drawn using native `egui::Shape::line` polylines, minimizing GPU draw calls and eliminating corner circle tessellations.
+- **Zoom Level-of-Detail (LOD)**: When `zoom < 0.38` or visible wires exceed 2,500, expensive bridge-arc intersection checks are bypassed.
+- **Viewport Culling**: `SpatialHashGrid` restricts rendering and intersection calculations to visible viewport bounds.

@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-10-28
+
+### Added
+- **Native `eframe` + `egui` (0.31) Architecture**:
+  - Migrated the entire desktop and mobile frontend off `macroquad`, `egui-macroquad`, and `miniquad` onto native `eframe` and `egui 0.31`.
+  - Unified 2D schematic canvas rendering directly onto `egui::Painter` with sub-pixel vector accuracy, antialiasing, and native typography.
+  - Native windowing, clipboard, and DPI scaling backed by `winit` on Windows, Linux, and macOS.
+  - Android host migrated to `android.app.NativeActivity` (`MainActivity.java` with immersive fullscreen insets) and `android-activity`.
+- **$O(\Delta)$ Incremental Delta-Compilation (`Editor::compile_incremental`)**:
+  - Implemented surgical in-place delta compilation for interactive canvas edits: adding/deleting wires, placing/removing primitive gates, or instantiating new `SubChip` instances.
+  - Preserves existing `SubChip` allocations, internal gate indices, and memory latch states in `SoAGateStorage` across edits, reducing recompile latency on 1,000,000+ gate circuits to under 1 millisecond.
+  - Added `SoAGateStorage::disconnect_input()` for in-place pin unwiring and dependent list pruning without graph reconstruction.
+- **Zero-Allocation Simulation Hot Loop (`0 mallocs / tick`)**:
+  - Removed all per-event `.clone()` heap allocations in `Simulator::propagate_events`, `Simulator::set_input`, and `Simulator::remove_gate`, replacing them with zero-allocation indexed iteration.
+  - Replaced `std::mem::take` buffer churn with persistent, reusable scratch buffers (`scratch_queue`, `scratch_updates`, `scratch_next_enqueues`).
+- **$O(1)$ Sleep-Domain Control Bitset**:
+  - Introduced `sleep_control_gates: FixedBitSet` in `Simulator`, maintained across `register_sleep_domain` and `defragment_and_sort_by_depth`.
+  - Non-control gate transitions skip scanning `sleep_domains` via a single $O(1)$ bit test, eliminating sleep-domain overhead during normal simulation.
+- **Obstacle-Aware Orthogonal Wire Detours**:
+  - Added automatic 5-segment Manhattan detour routing in `recompute_wire_offsets`: when a forward wire would slice through an intermediate component's bounding box, the router automatically calculates a clear horizontal bypass channel above or below the obstacle.
+- **Monotonic Ribbon Routing & Clean Crossing Arcs**:
+  - Corridor-based routing groups vertical wire trunks by net origin and Y-overlap, ordering upward and downward branches monotonically to eliminate crossover braids on multi-bit buses.
+  - Eliminated 45-degree chamfers in favor of crisp orthogonal Manhattan crossings, restricting bridge arcs strictly to interior horizontal-over-vertical intersections and drawing solder dots at T-junctions.
+- **Batched `egui::Shape::line` Polylines & Multi-Tier Zoom LOD**:
+  - Uninterrupted Manhattan wire paths are drawn via contiguous `egui::Shape::line` polylines, eliminating 16-triangle circle fan tessellations at corners.
+  - Introduced zoom-out Level-of-Detail: when zoomed out (`zoom < 0.38`) or viewing dense schematics (>2,500 visible wires), expensive crossing-arc intersection checks are bypassed.
+- **Static $O(V + E)$ Blueprint Validation**:
+  - Added `Simulator::validate_library()` using a 3-color DFS cycle detector and static port/component bounds verification on project load without allocating throwaway gates.
+- **Integration Test Expansion**:
+  - Expanded test coverage to 51 unit tests and 7 integration test suites (67 total tests running in <0.5s), including new tests for incremental delta-compilation, SoA storage disconnects, obstacle detour routing, and folder-safe library imports.
+
+### Fixed
+- **Folder-Safe Global Library Imports**:
+  - Fixed an index-shift bug in `GlobalLibrary::import_from_project` where importing new chips into ungrouped while folders existed shifted flat indices without updating internal `SubChip` references.
+- **Deduplicated Undo History**:
+  - Updated `Editor::push_history_snapshot()` to deduplicate consecutive identical circuit states, preventing no-op clicks from filling the undo stack.
+- **Oscillation Queue Drainage**:
+  - When the linear oscillation step budget is exceeded, pending queues and `in_queue` bitsets are cleanly drained so subsequent user interactions recover immediately.
+- **Wire Click & Context Menu Hit-Testing**:
+  - Hit-testing now accounts for obstacle detours and uses `get_connection_ports()`, ensuring wires attached to `Junction` nodes select reliably.
+
 ## [3.3.1] - 2026-10-09
 
 ### Added

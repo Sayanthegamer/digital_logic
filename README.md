@@ -3,8 +3,8 @@
 [![Publish Release](https://github.com/Sayanthegamer/digital_logic/actions/workflows/release.yml/badge.svg)](https://github.com/Sayanthegamer/digital_logic/actions/workflows/release.yml)
 [![VirusTotal Scan](https://img.shields.io/badge/VirusTotal-Scanned-brightgreen?logo=virustotal)](https://www.virustotal.com/)
 [![Rust](https://img.shields.io/badge/rust-edition%202024-blue.svg)](https://www.rust-lang.org)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-lightgrey.svg)]()
-[![Made with Macroquad](https://img.shields.io/badge/Made%20with-Macroquad-green.svg)](https://macroquad.rs)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-lightgrey.svg)]()
+[![Frontend](https://img.shields.io/badge/UI-native%20eframe%20%2F%20egui%200.31-blue.svg)](https://github.com/emilk/egui)
 [![License](https://img.shields.io/badge/license-see%20repo-lightgrey.svg)]()
 
 > **Build a computer. From NAND gates. In real time. On a laptop.**
@@ -99,11 +99,15 @@ flowchart TD
 
 | | |
 |---|---|
-| 🚀 **Massive Scale Engine** | Uses a compact Struct-of-Arrays (SoA) Bit-Slab (14.16 bytes/gate) and Tarjan's Strongly Connected Components (SCC) algorithm for O(V+E) zero-clone depth scheduling. Crunches 100,000+ gate circuits in real-time at 60 FPS in only 1.38 MB of RAM. |
-| 💤 **Activity-Gated Sleep Domains** | Dormant RAM banks and subchips automatically hibernate into dense bit-arrays, skipping gate evaluations on inactive memory banks and eliminating CPU cache thrashing. |
+| 🚀 **Massive Scale Engine** | Uses a compact Struct-of-Arrays (SoA) Bit-Slab (14.16 bytes/gate) and Tarjan's Strongly Connected Components (SCC) algorithm for O(V+E) zero-clone depth scheduling. Easily crunches 100,000+ to 1,000,000+ gate circuits in real time at 60 FPS. |
+| ⚡ **$O(\Delta)$ Incremental Delta-Compilation** | Editing wires or placing primitive components executes an incremental in-place delta compilation pass, leaving existing SubChip instances and their internal gate indices completely untouched in memory (<1 ms canvas edits on million-gate chips). |
+| 🔁 **Zero-Allocation Hot Loop** | Evaluation hot loops in Simulator::propagate_events operate with zero heap allocations per tick using reusable scratch buffers, eliminating malloc/free churn during rapid clock cycles. |
+| 💤 **Activity-Gated Sleep Domains** | Dormant RAM banks and subchips automatically hibernate into dense bit-arrays with $O(1)$ control gate bitset testing (`sleep_control_gates`), skipping gate evaluations on inactive memory banks and eliminating CPU cache thrashing. |
 | 🧠 **Topological Auto-Gating** | Discovers Chip-Select and Write-Enable lines topologically via Tarjan SCC feedback analysis and fan-out asymmetry ($2N$ vs $1$), providing automatic sleep-gating even with arbitrary or default pin names. |
 | ⚡ **Subchip Template Caching** | Prototypes are pre-compiled and cloned during canvas instantiation, eliminating UI freeze when placing large ALUs or memory blocks. |
-| 🔌 **Event-Driven Simulation** | Gates only re-evaluate when their inputs actually change — not every frame. Oscillation detection stops runaway feedback loops (e.g. an inverter wired to itself) from freezing the app. |
+| 🔌 **Event-Driven Simulation** | Gates only re-evaluate when their inputs actually change — not every frame. Oscillation detection stops runaway feedback loops (e.g. an inverter wired to itself) and cleanly drains queues on timeout. |
+| 🛣️ **Crossing-Free Ribbon Routing** | Corridor-based monotonic wire routing prevents parallel multi-bit buses from braiding across each other, while 5-segment obstacle detours automatically bypass intermediate chips. |
+| 🎨 **Batched Polylines & Zoom LOD** | Uninterrupted wires render as single contiguous egui::Shape::line polylines, and zoom-out Level-of-Detail gates bypass expensive intersection searches when viewing massive circuits. |
 | 🎮 **App Mode Routing** | Navigate seamlessly through a dedicated Main Menu, Project Manager, Settings Overlay, and Credits, keeping the Editor clean and focused. |
 | 🧩 **Custom Chips (Sub-Chips)** | Package any circuit into a named, reusable chip with custom input/output labels. Drop it into future circuits like any primitive. |
 | 🔍 **Look-Inside Inspection** | Step *into* any chip — even ones nested many layers deep — and watch the live 4-state (Floating / Low / High / Contention) signal on every internal wire, read-only. |
@@ -282,10 +286,10 @@ For when you want to hack on the engine itself, or your platform isn't covered b
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-**Linux only** — graphics & audio dependencies for Macroquad/egui:
+**Linux only** — graphics & audio dependencies for eframe/egui:
 ```bash
 sudo apt-get update
-sudo apt-get install -y pkg-config libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev libwayland-dev
+sudo apt-get install -y pkg-config libx11-dev libxi-dev libxcursor-dev libxrandr-dev libxinerama-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev
 ```
 
 **Windows / macOS** — no extra system packages needed beyond a working Rust toolchain.
@@ -305,7 +309,7 @@ cargo run
 cargo run --release
 ```
 
-Run the test suite (57 unit/integration tests running in <0.9s — NAND truth tables, SR latches, multi-domain clocks, nested-chip compilation, 32-bit CPU pure-NAND arithmetic, multi-bank activity-gated RAM, topological sleep-gating detection, SoA storage benchmarks, and pure-NAND 4-bit RAM & ALU system verification):
+Run the test suite (51 unit tests and 7 integration suites (67 total tests) running in <0.5s — NAND truth tables, SR latches, multi-domain clocks, nested-chip compilation, 32-bit CPU pure-NAND arithmetic, multi-bank activity-gated RAM, topological sleep-gating detection, SoA storage benchmarks, and pure-NAND 4-bit RAM & ALU system verification):
 
 ```bash
 cargo test
@@ -374,7 +378,7 @@ digital_logic/
 │   │   ├── profiler.rs      # Calibrates the parallel-vs-sequential crossover threshold
 │   │   └── tests.rs         # Truth-table, latch, clock, compilation tests
 │   │
-│   ├── editor/               # Macroquad + egui frontend
+│   ├── editor/               # Native eframe + egui 0.31 frontend
 │   │   ├── canvas.rs         # Visual → simulator compilation bridge
 │   │   ├── drawing*.rs       # Wire/component rendering & manhattan routing
 │   │   ├── input.rs          # Input entry point and coordinator
@@ -385,10 +389,10 @@ digital_logic/
 │   │   ├── persistence.rs    # .logic / .json project save/load
 │   │   └── state.rs          # EngineState / CanvasState / UiState
 │   │
-│   ├── lib.rs                 # Frame loop glue (draw_gui → update → draw)
+│   ├── lib.rs                 # eframe::App native entry point and update loop
 │   └── main.rs
 │
-├── android/                  # Gradle project + JNI glue for the APK build
+├── android/                  # Gradle project + NativeActivity host for eframe/winit
 ├── .github/workflows/        # CI: Windows EXE, Android APK, tagged releases
 ├── ARCHITECTURE.md            # Deep dive on engine/editor separation
 ├── DESIGN.md                  # Data-oriented design philosophy & rationale
@@ -450,5 +454,5 @@ If you build something interesting with this — a working ALU, a tiny CPU, a ga
 ---
 
 <p align="center">
-  Built with 🦀 Rust, <a href="https://macroquad.rs">Macroquad</a>, and <a href="https://github.com/emilk/egui">egui</a>.
+  Built with 🦀 Rust, <a href="https://github.com/emilk/egui">egui</a>, and <a href="https://docs.rs/eframe">eframe</a>.
 </p>

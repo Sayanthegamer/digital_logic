@@ -1,26 +1,26 @@
 # Deployment and Build Guide
 
-This simulator is built using Rust. It compiles to native standalone executables.
+This simulator is built using Rust and `eframe`. It compiles to native standalone executables for desktop and Android.
 
 ## Prerequisites
 
 1. Install [Rust via rustup](https://rustup.rs/).
-2. For Linux users, install the required graphics/wayland dependencies:
+2. For Linux users, install the required graphics/Wayland dependencies for `eframe`/`winit`:
    ```bash
    # Ubuntu/Debian
    sudo apt-get update
-   sudo apt-get install -y pkg-config libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev libwayland-dev
+   sudo apt-get install -y pkg-config libx11-dev libxi-dev libxcursor-dev libxrandr-dev libxinerama-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev
    ```
 
 ## Development Build
 
-To build and run the simulator in debug mode (faster compilation, slower runtime performance):
+To build and run the simulator in debug mode:
 
 ```bash
 cargo run
 ```
 
-To run the test suite:
+To run the complete test suite (51 unit tests and 7 integration suites, 67 tests total):
 
 ```bash
 cargo test
@@ -28,15 +28,15 @@ cargo test
 
 ## Production / Release Build
 
-For maximum performance (crucial when testing large circuits like the 32-bit CPU, multi-bank RAM, or mega-scale pure-NAND networks), you **must** build in release mode. The release mode enables heavy compiler optimizations.
+For maximum performance (crucial when simulating complex circuits like 32-bit CPUs, multi-bank RAM, or 1,000,000+ gate circuits), you **must** build in release mode:
 
 ```bash
 cargo build --release
 ```
 
 The resulting executable will be located at:
-- Linux/macOS: `./target/release/logic_simulator_bin`
-- Windows: `.\target\release\logic_simulator_bin.exe`
+- **Linux/macOS**: `./target/release/logic_simulator_bin`
+- **Windows**: `.\target\release\logic_simulator_bin.exe`
 
 You can run it directly:
 
@@ -44,21 +44,19 @@ You can run it directly:
 cargo run --release
 ```
 
-
-
 ## Distribution
 
-Because the application compiles to a statically linked binary (aside from system libraries like OpenGL/X11), you can simply zip the executable generated in the `target/release/` directory and share it with users on the same operating system.
+Because the application compiles to a standalone binary (linked to system graphics backends like DirectX, Vulkan, Metal, or OpenGL/Wayland/X11), you can package the executable generated in `target/release/` and distribute it directly.
 
 ## Android Build
 
-You can also build the application as a standalone Android APK. Because the interface is built with Macroquad and egui, it is fully compatible with touch screens and compiles directly to native Android code.
+The application compiles as a native Android APK using `android.app.NativeActivity` and `eframe` / `winit`, offering fullscreen hardware acceleration and touch-gesture support.
 
 ### Prerequisites
 
 1. **Install Android NDK & SDK**:
    - Ensure the Android SDK and NDK are installed on your machine.
-   - Set the `NDK_HOME` environment variable to point to your NDK installation directory.
+   - Set the `NDK_HOME` or `ANDROID_NDK_ROOT` environment variable to point to your NDK installation directory.
 
 2. **Add Android Targets**:
    ```bash
@@ -85,6 +83,5 @@ You can also build the application as a standalone Android APK. Because the inte
    ./gradlew assembleRelease
    ```
 
-The resulting signed release APK will be located at:
+The resulting release APK will be located at:
 - `android/app/build/outputs/apk/release/app-release.apk`
-

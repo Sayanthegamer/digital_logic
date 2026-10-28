@@ -6,11 +6,10 @@
 - **macOS** (AArch64 / x86_64)
 - **Android** (AArch64 / ARMv7)
 
-
 ## Minimum System Requirements
 - **CPU**: Modern multi-core processor (x86_64 or ARM64)
-- **RAM**: 2 GB (Minimal usage by the simulator itself, scaling based on the complexity of loaded circuits)
-- **Graphics**: Hardware acceleration required (OpenGL 3.3 / WebGL 2 / DirectX 11 / Metal compatible)
+- **RAM**: 2 GB (Minimal baseline usage by the simulator itself; compact 14.16 bytes/gate layout fits 100,000 gates in 1.38 MB)
+- **Graphics**: Hardware acceleration required (OpenGL 3.3 / WebGL 2 / DirectX 11 / Metal compatible GPU)
 
 ## Build Dependencies
 To compile the project from source, you need the Rust toolchain and specific platform libraries.
@@ -20,29 +19,27 @@ To compile the project from source, you need the Rust toolchain and specific pla
 - **cargo**: Package manager
 
 ### Linux Dependencies
-On Linux systems (e.g., Ubuntu/Debian), you must install dependencies for graphics and audio APIs used by Macroquad/egui.
+On Linux systems (e.g., Ubuntu/Debian), install dependencies for graphics APIs and windowing used by `eframe` / `winit`:
 ```bash
 sudo apt-get update
-sudo apt-get install -y pkg-config libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev libwayland-dev
+sudo apt-get install -y pkg-config libx11-dev libxi-dev libxcursor-dev libxrandr-dev libxinerama-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev
 ```
 
 ### Android Dependencies
-To package the app for Android, you must configure:
-- **Android NDK & SDK**: Ensure both are installed. Set `ANDROID_NDK_ROOT` to point to the NDK path (e.g., version `r25c`).
+To package the app for Android:
+- **Android NDK & SDK**: Ensure both are installed. Set `ANDROID_NDK_ROOT` to point to the NDK path (e.g. `r25c` or later).
 - **Rust Android Targets**: Run `rustup target add aarch64-linux-android armv7-linux-androideabi`.
-- **cargo-ndk**: The compilation tool installed via `cargo install cargo-ndk`.
-
+- **cargo-ndk**: Install via `cargo install cargo-ndk`.
+- **Android Host**: NativeActivity architecture (`winit` + `android-activity`).
 
 ## Cargo Dependencies
 The following core libraries are utilized (see `Cargo.toml` for exact versions):
-- `macroquad`: High-performance 2D rendering and window creation.
-- `egui`: Immediate mode GUI for editor interfaces.
-- `egui-macroquad`: Binding layer between Macroquad and egui.
-- `serde` & `serde_json`: Serialization and deserialization for saving/loading `.logic` blueprint files.
-- `fixedbitset`: Bit-packed set tracking pending queue membership (`in_queue: FixedBitSet`) and dense latch hibernation bit-arrays for sleep domains.
+- `eframe`: Official framework for building native desktop and mobile applications with `egui`.
+- `egui`: Immediate-mode graphical user interface library powering the editor canvas, tools, and overlays.
+- `serde` & `serde_json`: Serialization and deserialization for saving/loading `.logic` and `.json` blueprint files.
+- `fixedbitset`: Bit-packed sets for queue tracking (`in_queue: FixedBitSet`), sleep-control gate bitmasks (`sleep_control_gates`), and dense latch hibernation arrays (`dormant_bits`).
 - `slab`: Pre-allocated generational slot indexing and freelist management.
-- `rayon`: Work-stealing threadpool and data-parallel iterators for topological depth evaluation.
+- `rayon`: Work-stealing threadpool and data-parallel iterators for parallel topological depth layer evaluation.
 - `rfd`: Native desktop file dialogs for cross-platform project saving/loading (`cfg(not(target_os = "android"))`).
-- `ndk-context`, `jni`, `miniquad`: Android JNI lifecycle glue and rendering bindings (`cfg(target_os = "android")`).
-- `winres`: Windows resource and icon compilation (`build-dependencies`).
-
+- `ndk-context`, `jni`: Android lifecycle and native activity integration (`cfg(target_os = "android")`).
+- `winres`: Windows resource and executable icon compilation (`build-dependencies`).
