@@ -96,8 +96,15 @@ impl Editor {
                 let (src_pos, tgt_pos) = self.get_connection_ports(wire, src, tgt);
 
                 let offset = self.get_connection_routing_offset(wire);
-                let segments =
-                    Self::compute_wire_segments_world(src_pos, tgt_pos, offset, wire.tgt_port);
+                let detour_y = self.get_connection_detour_y(wire);
+                let segments = Self::compute_wire_segments_screen_with_detour(
+                    src_pos,
+                    tgt_pos,
+                    offset,
+                    detour_y,
+                    wire.tgt_port,
+                    1.0,
+                );
                 let is_bus = self.is_bus_connection(wire);
 
                 let wire_state = self.get_raw_wire_state(wire.src_comp_id, wire.src_port);

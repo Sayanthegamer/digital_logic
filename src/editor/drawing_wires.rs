@@ -31,10 +31,11 @@ impl Editor {
 
         let color = color_override.unwrap_or(base_color);
 
-        let segments = Self::compute_wire_segments_screen(
+        let segments = Self::compute_wire_segments_screen_with_detour(
             src_pos,
             tgt_pos,
             routing_offset,
+            self.canvas.current_wire_detour_screen.get(),
             tgt_port,
             self.canvas.zoom,
         );
@@ -208,8 +209,14 @@ impl Editor {
         point: Vec2,
         threshold: f32,
     ) -> bool {
-        let segments =
-            Self::compute_wire_segments_world(src_pos, tgt_pos, routing_offset, tgt_port);
+        let segments = Self::compute_wire_segments_screen_with_detour(
+            src_pos,
+            tgt_pos,
+            routing_offset,
+            self.canvas.current_wire_detour_screen.get(),
+            tgt_port,
+            1.0,
+        );
 
         for (a, b) in segments {
             let line_vec = b - a;

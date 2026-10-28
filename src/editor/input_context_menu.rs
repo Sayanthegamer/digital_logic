@@ -44,22 +44,22 @@ impl Editor {
                     comp_by_id.get(&conn.tgt_comp_id),
                 );
                 if let (Some(&src), Some(&tgt)) = (src_comp_opt, tgt_comp_opt) {
-                    let (_, outputs) = self
-                        .get_component_ports_count_with_width(src.comp_type, Some(src.bus_width()));
-                    let (inputs, _) = self
-                        .get_component_ports_count_with_width(tgt.comp_type, Some(tgt.bus_width()));
-                    let src_pos = src.output_port_pos(conn.src_port, outputs);
-                    let tgt_pos = tgt.input_port_pos(conn.tgt_port, inputs);
+                    let (src_pos, tgt_pos) = self.get_connection_ports(conn, src, tgt);
 
                     let offset = self.get_connection_routing_offset(conn);
-                    if self.hit_test_manhattan_wire(
+                    self.canvas
+                        .current_wire_detour_screen
+                        .set(self.get_connection_detour_y(conn));
+                    let hit = self.hit_test_manhattan_wire(
                         src_pos,
                         tgt_pos,
                         offset,
                         conn.tgt_port,
                         mouse_pos_world,
                         10.0 / self.canvas.zoom,
-                    ) {
+                    );
+                    self.canvas.current_wire_detour_screen.set(None);
+                    if hit {
                         let screen_pos = self.to_screen_space(mouse_pos_world);
                         self.ui.context_menu_pos = (screen_pos.x, screen_pos.y);
                         self.ui.context_menu_color = self

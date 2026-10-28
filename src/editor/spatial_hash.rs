@@ -140,8 +140,12 @@ impl super::Editor {
 
             let min_x = src_pos.x.min(tgt_pos.x) - pad;
             let max_x = src_pos.x.max(tgt_pos.x) + pad;
-            let min_y = src_pos.y.min(tgt_pos.y) - pad;
-            let max_y = src_pos.y.max(tgt_pos.y) + pad;
+            let mut min_y = src_pos.y.min(tgt_pos.y) - pad;
+            let mut max_y = src_pos.y.max(tgt_pos.y) + pad;
+            if let Some(detour_y) = self.get_connection_detour_y(&conn) {
+                min_y = min_y.min(detour_y - pad);
+                max_y = max_y.max(detour_y + pad);
+            }
 
             let rect = Rect::new(min_x, min_y, max_x - min_x, max_y - min_y);
             self.canvas.wire_spatial_grid.insert(conn, rect);

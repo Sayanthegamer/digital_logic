@@ -404,7 +404,10 @@ impl Simulator {
                         port_idx,
                     } => {
                         if component_idx >= blueprint.components.len() {
-                            return Err(format!("Invalid source component index {}", component_idx));
+                            return Err(format!(
+                                "Invalid source component index {}",
+                                component_idx
+                            ));
                         }
                         let comp = &blueprint.components[component_idx];
                         let (_, out_ports) =
@@ -426,7 +429,10 @@ impl Simulator {
                         port_idx,
                     } => {
                         if component_idx >= blueprint.components.len() {
-                            return Err(format!("Invalid target component index {}", component_idx));
+                            return Err(format!(
+                                "Invalid target component index {}",
+                                component_idx
+                            ));
                         }
                         let comp = &blueprint.components[component_idx];
                         let (in_ports, _) =

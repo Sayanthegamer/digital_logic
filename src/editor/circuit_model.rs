@@ -12,6 +12,8 @@ pub struct CircuitModel {
     pub color_overrides: ColorOverrides,
     pub wire_nudges: HashMap<VisualConnection, f32>,
     pub wire_offsets: HashMap<VisualConnection, f32>,
+    /// Optional world-space Y bypass coordinate for wires that detour around intermediate component obstacles.
+    pub wire_detours: HashMap<VisualConnection, f32>,
     pub wire_lane_grid: HashMap<(i32, i32), Vec<(usize, VerticalSeg, VisualConnection)>>,
 }
 
@@ -26,6 +28,7 @@ impl Default for CircuitModel {
             color_overrides: ColorOverrides::default(),
             wire_nudges: HashMap::new(),
             wire_offsets: HashMap::new(),
+            wire_detours: HashMap::new(),
             wire_lane_grid: HashMap::new(),
         }
     }

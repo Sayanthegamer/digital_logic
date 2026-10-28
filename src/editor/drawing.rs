@@ -129,6 +129,10 @@ impl Editor {
                 let is_selected = self.canvas.selected_connections.contains(wire);
                 let wire_color_override = self.circuit.color_overrides.get_wire_color(wire);
                 let offset = self.get_connection_routing_offset(wire);
+                let detour_screen = self
+                    .get_connection_detour_y(wire)
+                    .map(|dy| self.to_screen_space(Vec2::new(0.0, dy)).y);
+                self.canvas.current_wire_detour_screen.set(detour_screen);
                 let is_bus = self.is_bus_connection(wire);
                 let empty_gaps = &[];
                 let gaps = upper_gaps
@@ -148,6 +152,7 @@ impl Editor {
                     is_bus,
                     gaps,
                 );
+                self.canvas.current_wire_detour_screen.set(None);
             }
         }
 

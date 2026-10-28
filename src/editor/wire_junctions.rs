@@ -1,5 +1,6 @@
 use crate::editor::drawing_shapes::draw_circle_filled;
 use crate::editor::math::{Color, Rect, Vec2};
+use crate::engine::ComponentType;
 
 use super::Editor;
 use super::theme;
@@ -68,6 +69,10 @@ impl Editor {
         base_offset + manual_nudge
     }
 
+    pub fn get_connection_detour_y(&self, conn: &VisualConnection) -> Option<f32> {
+        self.circuit.wire_detours.get(conn).copied()
+    }
+
     pub fn recompute_wire_offsets(
         &mut self,
         _affected_comps: Option<&std::collections::HashSet<usize>>,
@@ -75,6 +80,8 @@ impl Editor {
         #[derive(Clone)]
         struct RoutedConn {
             conn: VisualConnection,
+            src_pos: Vec2,
+            tgt_pos: Vec2,
             ideal_x: f32,
             y_min: f32,
             y_max: f32,
@@ -134,6 +141,8 @@ impl Editor {
 
                 conn_data.push(RoutedConn {
                     conn: *conn,
+                    src_pos,
+                    tgt_pos,
                     ideal_x,
                     y_min,
                     y_max,
@@ -143,6 +152,29 @@ impl Editor {
                 });
             }
         }
+
+        // Pre-collect obstacle bounding boxes for non-Junction components
+        struct ObstacleBox {
+            id: usize,
+            x1: f32,
+            y1: f32,
+            x2: f32,
+            y2: f32,
+        }
+        let pad = 8.0_f32;
+        let obstacles: Vec<ObstacleBox> = self
+            .circuit
+            .components
+            .iter()
+            .filter(|c| c.comp_type != ComponentType::Junction)
+            .map(|c| ObstacleBox {
+                id: c.id,
+                x1: c.pos.x - pad,
+                y1: c.pos.y - pad,
+                x2: c.pos.x + c.width + pad,
+                y2: c.pos.y + c.height + pad,
+            })
+            .collect();
 
         // 1. Sort all connections by ideal_x to cluster into vertical routing corridors
         conn_data.sort_by(|a, b| {
@@ -171,6 +203,7 @@ impl Editor {
 
         let mut wire_offsets =
             std::collections::HashMap::with_capacity(self.circuit.connections.len());
+        let mut wire_detours = std::collections::HashMap::new();
         let mut grid: std::collections::HashMap<
             (i32, i32),
             Vec<(usize, VerticalSeg, VisualConnection)>,
@@ -246,11 +279,6 @@ impl Editor {
                     })
                     .collect();
 
-                // Crossing-free monotonic ribbon ordering:
-                // - For downward-going wires (avg_tgt_y >= avg_src_y), inner (larger src_y) nets must sit to the left (smaller X offset)
-                //   and outer (smaller src_y) nets must sit to the right (larger X offset) so their L-bends nest without crossing.
-                // - For upward-going wires (avg_tgt_y < avg_src_y), inner (smaller src_y) nets must sit to the left (smaller X offset)
-                //   and outer (larger src_y) nets must sit to the right (larger X offset).
                 nets.sort_by(|a, b| {
                     let a_down = a.avg_tgt_y >= a.avg_src_y;
                     let b_down = b.avg_tgt_y >= b.avg_src_y;
@@ -294,6 +322,94 @@ impl Editor {
                     for item in net.conns {
                         wire_offsets.insert(item.conn, pixel_offset);
 
+                        // Obstacle-Avoidance Check for forward connections:
+                        // If the standard 3-segment H-V-H wire intersects any intermediate component's body,
+                        // compute a clean horizontal detour channel above or below the blocking obstacle(s).
+                        if item.tgt_pos.x >= item.src_pos.x + 20.0 {
+                            let manual_nudge = self
+                                .circuit
+                                .wire_nudges
+                                .get(&item.conn)
+                                .copied()
+                                .unwrap_or(0.0);
+                            let total_offset = pixel_offset + manual_nudge;
+                            let margin = 10.0_f32.min((item.tgt_pos.x - item.src_pos.x) * 0.45);
+                            let mid_x = (item.src_pos.x
+                                + (item.tgt_pos.x - item.src_pos.x) / 2.0
+                                + total_offset)
+                                .clamp(item.src_pos.x + margin, item.tgt_pos.x - margin);
+
+                            let mut block_top = f32::INFINITY;
+                            let mut block_bottom = f32::NEG_INFINITY;
+                            let mut hit_obstacle = false;
+
+                            for obs in &obstacles {
+                                if obs.id == item.conn.src_comp_id
+                                    || obs.id == item.conn.tgt_comp_id
+                                {
+                                    continue;
+                                }
+                                // Check if any of the 3 segments intersect `obs`
+                                let seg1_hits = item.src_pos.y > obs.y1
+                                    && item.src_pos.y < obs.y2
+                                    && mid_x > obs.x1
+                                    && item.src_pos.x < obs.x2;
+                                let seg2_hits = mid_x > obs.x1
+                                    && mid_x < obs.x2
+                                    && item.y_max > obs.y1
+                                    && item.y_min < obs.y2;
+                                let seg3_hits = item.tgt_pos.y > obs.y1
+                                    && item.tgt_pos.y < obs.y2
+                                    && item.tgt_pos.x > obs.x1
+                                    && mid_x < obs.x2;
+
+                                if seg1_hits || seg2_hits || seg3_hits {
+                                    hit_obstacle = true;
+                                    block_top = block_top.min(obs.y1);
+                                    block_bottom = block_bottom.max(obs.y2);
+                                }
+                            }
+
+                            if hit_obstacle {
+                                let x_span_min = item.src_pos.x + 12.0;
+                                let x_span_max = item.tgt_pos.x - 12.0;
+                                let lane_pad = (lane_idx as f32) * 8.0;
+
+                                let mut cand_top = block_top - 10.0 - lane_pad;
+                                let mut cand_bot = block_bottom + 10.0 + lane_pad;
+
+                                // Expand candidate channels if another intermediate obstacle sits at cand_top / cand_bot
+                                for _pass in 0..4 {
+                                    for obs in &obstacles {
+                                        if obs.id == item.conn.src_comp_id
+                                            || obs.id == item.conn.tgt_comp_id
+                                        {
+                                            continue;
+                                        }
+                                        if obs.x2 > x_span_min && obs.x1 < x_span_max {
+                                            if cand_top > obs.y1 && cand_top < obs.y2 {
+                                                cand_top = obs.y1 - 10.0 - lane_pad;
+                                            }
+                                            if cand_bot > obs.y1 && cand_bot < obs.y2 {
+                                                cand_bot = obs.y2 + 10.0 + lane_pad;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                let cost_top = (item.src_pos.y - cand_top).abs()
+                                    + (item.tgt_pos.y - cand_top).abs();
+                                let cost_bot = (item.src_pos.y - cand_bot).abs()
+                                    + (item.tgt_pos.y - cand_bot).abs();
+                                let detour_y = if cost_top <= cost_bot {
+                                    cand_top
+                                } else {
+                                    cand_bot
+                                };
+                                wire_detours.insert(item.conn, detour_y);
+                            }
+                        }
+
                         for s in &item.vertical_segs {
                             let col = (s.ideal_x / cell_size_x).floor() as i32;
                             let start_row = (s.y_min / cell_size_y).floor() as i32;
@@ -316,6 +432,7 @@ impl Editor {
         }
 
         self.circuit.wire_offsets = wire_offsets;
+        self.circuit.wire_detours = wire_detours;
         self.circuit.wire_lane_grid = grid;
     }
 
@@ -376,6 +493,35 @@ impl Editor {
         let hash_offset = (hash as f32 - 1.0) * 4.0;
 
         fanout_offset + hash_offset
+    }
+
+    /// Compute all orthogonal Manhattan wire segments for a given connection, in screen space,
+    /// optionally using a horizontal detour channel (`detour_y_screen`) to bypass intermediate components.
+    pub fn compute_wire_segments_screen_with_detour(
+        src_pos: Vec2,
+        tgt_pos: Vec2,
+        routing_offset: f32,
+        detour_y_screen: Option<f32>,
+        tgt_port: usize,
+        zoom: f32,
+    ) -> Vec<(Vec2, Vec2)> {
+        if let Some(detour_y) = detour_y_screen
+            && tgt_pos.x >= src_pos.x + 20.0 * zoom
+        {
+            let span_x = tgt_pos.x - src_pos.x;
+            let stub = (18.0 * zoom + routing_offset.abs() * 0.6 * zoom).min(span_x * 0.35);
+            let x1 = src_pos.x + stub;
+            let x2 = tgt_pos.x - stub;
+
+            return vec![
+                (Vec2::new(src_pos.x, src_pos.y), Vec2::new(x1, src_pos.y)),
+                (Vec2::new(x1, src_pos.y), Vec2::new(x1, detour_y)),
+                (Vec2::new(x1, detour_y), Vec2::new(x2, detour_y)),
+                (Vec2::new(x2, detour_y), Vec2::new(x2, tgt_pos.y)),
+                (Vec2::new(x2, tgt_pos.y), Vec2::new(tgt_pos.x, tgt_pos.y)),
+            ];
+        }
+        Self::compute_wire_segments_screen(src_pos, tgt_pos, routing_offset, tgt_port, zoom)
     }
 
     /// Compute all orthogonal Manhattan wire segments for a given connection, in screen space.
@@ -458,10 +604,14 @@ impl Editor {
                 let tgt_pos = self.to_screen_space(tgt_p);
 
                 let offset = self.get_connection_routing_offset(wire);
-                let segments = Self::compute_wire_segments_screen(
+                let detour_y_screen = self
+                    .get_connection_detour_y(wire)
+                    .map(|dy| self.to_screen_space(Vec2::new(0.0, dy)).y);
+                let segments = Self::compute_wire_segments_screen_with_detour(
                     src_pos,
                     tgt_pos,
                     offset,
+                    detour_y_screen,
                     wire.tgt_port,
                     self.canvas.zoom,
                 );
@@ -572,8 +722,6 @@ impl Editor {
                     let conn_j = visible_wires[s2.conn_idx];
 
                     if wires_share_endpoint(conn_i, conn_j) {
-                        // T-junction detection: one segment's coordinate lies strictly inside the perpendicular segment
-                        // while the other coordinate touches within tolerance.
                         let x_on_h = v_x >= h_min_x - junction_tol && v_x <= h_max_x + junction_tol;
                         let y_on_v = h_y >= v_min_y - junction_tol && h_y <= v_max_y + junction_tol;
                         let x_strictly_inside_h =

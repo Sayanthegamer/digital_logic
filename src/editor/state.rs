@@ -331,6 +331,7 @@ pub struct CanvasState {
     pub right_drag_dist: f32,
     pub alignment_guides: Vec<(Vec2, Vec2)>,
     pub render_scratch: std::cell::RefCell<WireRenderScratch>,
+    pub current_wire_detour_screen: std::cell::Cell<Option<f32>>,
 }
 
 #[derive(Default)]
@@ -360,6 +361,7 @@ impl Default for CanvasState {
             spatial_grid: crate::editor::spatial_hash::SpatialHashGrid::new(),
             wire_spatial_grid: crate::editor::spatial_hash::SpatialHashGrid::new(),
             render_scratch: std::cell::RefCell::new(WireRenderScratch::default()),
+            current_wire_detour_screen: std::cell::Cell::new(None),
             frame_input: FrameInput::default(),
             last_mouse_pos: Vec2::new(0.0, 0.0),
             selected_tool: None,

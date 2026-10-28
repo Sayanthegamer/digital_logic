@@ -431,8 +431,7 @@ impl Simulator {
                 domain.control_gate = old_to_new[domain.control_gate];
             }
             if domain.control_gate >= self.sleep_control_gates.len() {
-                self.sleep_control_gates
-                    .grow(domain.control_gate + 64);
+                self.sleep_control_gates.grow(domain.control_gate + 64);
             }
             self.sleep_control_gates.insert(domain.control_gate);
 
@@ -565,7 +564,8 @@ impl Simulator {
             if self.scratch_queue.len() >= self.dynamic_threshold {
                 let par_updates: Vec<Option<(usize, u8)>> =
                     self.scratch_queue.par_iter().map(compute_state).collect();
-                self.scratch_updates.extend(par_updates.into_iter().flatten());
+                self.scratch_updates
+                    .extend(par_updates.into_iter().flatten());
             } else {
                 self.scratch_updates
                     .extend(self.scratch_queue.iter().filter_map(compute_state));
