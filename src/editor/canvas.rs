@@ -15,6 +15,50 @@ enum CanvasNode {
 use super::Editor;
 use super::types::*;
 
+fn collect_tree_gate_states(
+    tree: &crate::engine::types::InstanceTree,
+    sim: &Simulator,
+    current_path: &mut Vec<usize>,
+    out: &mut HashMap<Vec<usize>, u8>,
+) {
+    if let Some(gate_idx) = tree.gate_idx
+        && sim.nodes.contains(gate_idx)
+    {
+        out.insert(current_path.clone(), sim.get_raw_state(gate_idx));
+    }
+    for (&sub_id, sub_tree) in &tree.sub_instances {
+        current_path.push(sub_id);
+        collect_tree_gate_states(sub_tree, sim, current_path, out);
+        current_path.pop();
+    }
+}
+
+fn restore_tree_gate_states(
+    tree: &crate::engine::types::InstanceTree,
+    sim: &mut Simulator,
+    current_path: &mut Vec<usize>,
+    saved: &HashMap<Vec<usize>, u8>,
+) {
+    if let Some(gate_idx) = tree.gate_idx
+        && let Some(&prev_state) = saved.get(current_path)
+        && (prev_state == 0b01 || prev_state == 0b10)
+        && sim.nodes.contains(gate_idx)
+        && sim.nodes.states[gate_idx] != prev_state
+    {
+        sim.nodes.states[gate_idx] = prev_state;
+        sim.enqueue_internal(gate_idx);
+        let deps = sim.nodes.dependents[gate_idx].clone();
+        for dep in deps {
+            sim.enqueue_internal(dep as usize);
+        }
+    }
+    for (&sub_id, sub_tree) in &tree.sub_instances {
+        current_path.push(sub_id);
+        restore_tree_gate_states(sub_tree, sim, current_path, saved);
+        current_path.pop();
+    }
+}
+
 impl Editor {
     pub fn get_component_ports_count(&self, comp_type: ComponentType) -> (usize, usize) {
         self.get_component_ports_count_with_width(comp_type, None)
@@ -80,19 +124,60 @@ impl Editor {
         let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
             self.circuit.components.iter().map(|c| (c.id, c)).collect();
 
+        // Trace any BusJoiner output width that propagates through Junctions
+        let mut junction_bus_widths: HashMap<usize, usize> = HashMap::new();
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for conn in &self.circuit.connections {
+                let src_width = match comp_by_id.get(&conn.src_comp_id) {
+                    Some(c) if c.comp_type == ComponentType::BusJoiner && conn.src_port == 0 => {
+                        Some(c.bus_width())
+                    }
+                    Some(c) if c.comp_type == ComponentType::Junction => {
+                        junction_bus_widths.get(&c.id).copied()
+                    }
+                    _ => None,
+                };
+                if let Some(w) = src_width
+                    && let Some(tgt) = comp_by_id.get(&conn.tgt_comp_id)
+                    && tgt.comp_type == ComponentType::Junction
+                    && !junction_bus_widths.contains_key(&tgt.id)
+                {
+                    junction_bus_widths.insert(tgt.id, w);
+                    changed = true;
+                }
+            }
+        }
+
         for conn in &self.circuit.connections {
             let src_comp = comp_by_id.get(&conn.src_comp_id);
             let tgt_comp = comp_by_id.get(&conn.tgt_comp_id);
 
-            let is_bus = src_comp
-                .is_some_and(|c| c.comp_type == ComponentType::BusJoiner && conn.src_port == 0)
-                && tgt_comp.is_some_and(|c| {
-                    c.comp_type == ComponentType::BusSplitter && conn.tgt_port == 0
-                });
+            let src_bus_width = match src_comp {
+                Some(c) if c.comp_type == ComponentType::BusJoiner && conn.src_port == 0 => {
+                    Some(c.bus_width())
+                }
+                Some(c) if c.comp_type == ComponentType::Junction => {
+                    junction_bus_widths.get(&c.id).copied()
+                }
+                _ => None,
+            };
 
-            if is_bus {
-                let w_src = src_comp.map_or(4, |c| c.bus_width());
-                let w_tgt = tgt_comp.map_or(4, |c| c.bus_width());
+            let tgt_bus_width = match tgt_comp {
+                Some(c) if c.comp_type == ComponentType::BusSplitter && conn.tgt_port == 0 => {
+                    Some(c.bus_width())
+                }
+                Some(c)
+                    if c.comp_type == ComponentType::Junction
+                        && junction_bus_widths.contains_key(&c.id) =>
+                {
+                    junction_bus_widths.get(&c.id).copied()
+                }
+                _ => None,
+            };
+
+            if let (Some(w_src), Some(w_tgt)) = (src_bus_width, tgt_bus_width) {
                 let w = w_src.min(w_tgt);
                 for i in 0..w {
                     self.engine.expanded_connections.push(VisualConnection {
@@ -121,6 +206,29 @@ impl Editor {
                 self.circuit.components[i].height = h;
             }
         }
+
+        // Snapshot existing Input / Clock states and InstanceTree gate states before recompiling
+        // so that interactive canvas edits do not wipe running circuit memory.
+        let mut prev_visual_states: HashMap<usize, u8> = HashMap::new();
+        for (&comp_id, &gate_idx) in &self.engine.visual_to_sim_map {
+            if self.engine.simulator.nodes.contains(gate_idx) {
+                prev_visual_states.insert(comp_id, self.engine.simulator.get_raw_state(gate_idx));
+            }
+        }
+        let mut prev_clock_counters: HashMap<usize, usize> = HashMap::new();
+        for clk in &self.engine.active_clocks {
+            if let Some(vis_id) = clk.visual_id {
+                prev_clock_counters.insert(vis_id, clk.counter);
+            }
+        }
+        let mut prev_tree_states: HashMap<Vec<usize>, u8> = HashMap::new();
+        let mut path_buf = Vec::new();
+        collect_tree_gate_states(
+            &self.engine.instance_tree,
+            &self.engine.simulator,
+            &mut path_buf,
+            &mut prev_tree_states,
+        );
 
         let mut sim = Simulator::new();
         let mut visual_to_sim_map = HashMap::new();
@@ -190,7 +298,25 @@ impl Editor {
             if clock.gate_idx < old_to_new.len() && old_to_new[clock.gate_idx] != usize::MAX {
                 clock.gate_idx = old_to_new[clock.gate_idx];
             }
+            if let Some(vis_id) = clock.visual_id
+                && let Some(&saved_counter) = prev_clock_counters.get(&vis_id)
+            {
+                clock.counter = saved_counter;
+            }
         }
+
+        // Restore preserved Input/Clock states and internal gate states
+        for comp in &self.circuit.components {
+            if matches!(comp.comp_type, ComponentType::Input | ComponentType::Clock)
+                && let Some(&prev_state) = prev_visual_states.get(&comp.id)
+                && (prev_state == 0b01 || prev_state == 0b10)
+                && let Some(&gate_idx) = visual_to_sim_map.get(&comp.id)
+            {
+                sim.set_input(gate_idx, prev_state == 0b10);
+            }
+        }
+        path_buf.clear();
+        restore_tree_gate_states(&instance_tree, &mut sim, &mut path_buf, &prev_tree_states);
 
         // Settle initial states
         // Budget multiplier of 100 scales the evaluation cap linearly with capacity (100 * capacity).
@@ -297,9 +423,14 @@ impl Editor {
                     );
                 }
                 ComponentType::Junction => {
+                    // Support up to 16 pass-through channels so multi-bit buses can traverse Junctions
+                    let max_w = 16;
                     component_ports.insert(
                         comp.id,
-                        (vec![vec![]], vec![OutputSource::PassedThrough(0)]),
+                        (
+                            vec![vec![]; max_w],
+                            (0..max_w).map(OutputSource::PassedThrough).collect(),
+                        ),
                     );
                 }
                 ComponentType::BusJoiner => {
@@ -992,7 +1123,24 @@ impl Editor {
                 let mut updated_bp = new_bp;
                 if let Some(entry) = self.engine.library.get_mut(bp_idx) {
                     updated_bp.name = entry.name.clone();
-                    *entry = updated_bp;
+                    *entry = updated_bp.clone();
+                }
+                if let Some(loc) = self.global_library.flat_index_to_location(bp_idx) {
+                    match loc {
+                        crate::editor::global_library::ChipLocation::Ungrouped(idx) => {
+                            if idx < self.global_library.ungrouped.len() {
+                                self.global_library.ungrouped[idx] = updated_bp;
+                            }
+                        }
+                        crate::editor::global_library::ChipLocation::InFolder(fi, ci) => {
+                            if fi < self.global_library.folders.len()
+                                && ci < self.global_library.folders[fi].chips.len()
+                            {
+                                self.global_library.folders[fi].chips[ci] = updated_bp;
+                            }
+                        }
+                    }
+                    crate::editor::global_library::save_global_library(&self.global_library);
                 }
             }
 

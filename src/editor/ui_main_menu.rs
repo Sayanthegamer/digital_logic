@@ -2,7 +2,6 @@
 use super::Editor;
 use super::state::AppMode;
 use crate::editor::theme;
-use crate::engine::ComponentType;
 
 impl Editor {
     pub(crate) fn draw_main_menu(&mut self, ctx: &egui::Context) {
@@ -244,32 +243,7 @@ impl Editor {
                             }
 
                             if let Some(idx) = to_delete {
-                                self.engine.library.remove(idx);
-                                // Shift all SubChip indices down by 1 if they are > idx
-                                for c in &mut self.circuit.components {
-                                    if let ComponentType::SubChip(ref mut i) = c.comp_type {
-                                        if *i > idx {
-                                            *i -= 1;
-                                        }
-                                    }
-                                }
-                                // Drop any components of this exact type
-                                let to_remove: Vec<_> = self
-                                    .circuit
-                                    .components
-                                    .iter()
-                                    .filter(|c| c.comp_type == ComponentType::SubChip(idx))
-                                    .filter(|c| c.comp_type == ComponentType::SubChip(idx))
-                                    .map(|c| c.id)
-                                    .collect();
-                                self.circuit
-                                    .components
-                                    .retain(|c| c.comp_type != ComponentType::SubChip(idx));
-                                self.circuit.connections.retain(|w| {
-                                    !to_remove.contains(&w.src_comp_id)
-                                        && !to_remove.contains(&w.tgt_comp_id)
-                                });
-                                self.compile();
+                                self.delete_library_chip(idx);
                             }
 
                             if self.engine.library.is_empty() {

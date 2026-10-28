@@ -68,6 +68,45 @@ impl Default for Editor {
     }
 }
 
+fn remap_visual_components_and_connections(
+    components: &mut Vec<types::VisualComponent>,
+    connections: &mut Vec<types::VisualConnection>,
+    map: &[Option<usize>],
+) {
+    let mut removed_ids = std::collections::HashSet::new();
+    components.retain_mut(|comp| {
+        if let ComponentType::SubChip(ref mut idx) = comp.comp_type {
+            match map.get(*idx).copied().flatten() {
+                Some(new_idx) => {
+                    *idx = new_idx;
+                    true
+                }
+                None => {
+                    removed_ids.insert(comp.id);
+                    false
+                }
+            }
+        } else {
+            true
+        }
+    });
+    if !removed_ids.is_empty() {
+        connections.retain(|conn| {
+            !removed_ids.contains(&conn.src_comp_id) && !removed_ids.contains(&conn.tgt_comp_id)
+        });
+    }
+}
+
+fn remap_blueprint_subchips(bp: &mut ChipBlueprint, map: &[Option<usize>]) {
+    for comp in &mut bp.components {
+        if let ComponentType::SubChip(ref mut idx) = comp.component_type
+            && let Some(Some(new_idx)) = map.get(*idx)
+        {
+            *idx = *new_idx;
+        }
+    }
+}
+
 impl Editor {
     pub fn new() -> Self {
         let font = {
@@ -710,6 +749,75 @@ impl Editor {
         }
     }
 
+    /// Centralised remapping helper whenever library chip indices move or are deleted.
+    /// `map[old_idx] = Some(new_idx)` if retained, or `None` if deleted.
+    pub fn apply_library_index_map(&mut self, map: &[Option<usize>]) {
+        // 1. Remap main canvas
+        remap_visual_components_and_connections(
+            &mut self.circuit.components,
+            &mut self.circuit.connections,
+            map,
+        );
+
+        // 2. Remap stashed main canvas if currently editing a blueprint
+        if let Some(ref mut stashed) = self.canvas.stashed_main_canvas {
+            remap_visual_components_and_connections(
+                &mut stashed.components,
+                &mut stashed.connections,
+                map,
+            );
+        }
+
+        // 3. Remap undo and redo history stacks
+        for snap in &mut self.history.undo_stack {
+            remap_visual_components_and_connections(&mut snap.components, &mut snap.connections, map);
+        }
+        for snap in &mut self.history.redo_stack {
+            remap_visual_components_and_connections(&mut snap.components, &mut snap.connections, map);
+        }
+
+        // 4. Remap internal SubChip references inside engine.library and global_library
+        for bp in &mut self.engine.library {
+            remap_blueprint_subchips(bp, map);
+        }
+        for bp in &mut self.global_library.ungrouped {
+            remap_blueprint_subchips(bp, map);
+        }
+        for folder in &mut self.global_library.folders {
+            for bp in &mut folder.chips {
+                remap_blueprint_subchips(bp, map);
+            }
+        }
+
+        // 5. Remap selected_tool if it points to a SubChip
+        if let Some(crate::editor::types::ActiveTool::PlaceComponent(ComponentType::SubChip(
+            old_idx,
+        ))) = self.canvas.selected_tool
+        {
+            match map.get(old_idx).copied().flatten() {
+                Some(new_idx) => {
+                    self.canvas.selected_tool = Some(
+                        crate::editor::types::ActiveTool::PlaceComponent(ComponentType::SubChip(
+                            new_idx,
+                        )),
+                    );
+                }
+                None => {
+                    self.canvas.selected_tool = None;
+                }
+            }
+        }
+
+        // 6. Remap editing_target if editing a library chip
+        if let state::EditingTarget::LibraryChip(old_idx) = self.canvas.editing_target {
+            if let Some(Some(new_idx)) = map.get(old_idx) {
+                self.canvas.editing_target = state::EditingTarget::LibraryChip(*new_idx);
+            } else {
+                self.canvas.editing_target = state::EditingTarget::MainCanvas;
+            }
+        }
+    }
+
     pub fn remap_library_chip(&mut self, from: usize, to: usize) {
         let len = self.engine.library.len();
         if from == to || from >= len || to >= len {
@@ -720,9 +828,9 @@ impl Editor {
         let item = new_order.remove(from);
         new_order.insert(to, item);
 
-        let mut map = vec![0; len];
+        let mut map = vec![None; len];
         for (new_idx, &old_idx) in new_order.iter().enumerate() {
-            map[old_idx] = new_idx;
+            map[old_idx] = Some(new_idx);
         }
 
         let mut new_library = Vec::with_capacity(len);
@@ -731,33 +839,41 @@ impl Editor {
         }
         self.engine.library = new_library;
 
-        // Remap in main canvas
-        for comp in &mut self.circuit.components {
-            if let ComponentType::SubChip(ref mut idx) = comp.comp_type
-                && let Some(&new_idx) = map.get(*idx)
-            {
-                *idx = new_idx;
+        // Also reorder inside ungrouped or folder if both indices belong to the same group
+        if from < self.global_library.ungrouped.len() && to < self.global_library.ungrouped.len() {
+            let chip = self.global_library.ungrouped.remove(from);
+            self.global_library.ungrouped.insert(to, chip);
+        }
+
+        self.apply_library_index_map(&map);
+        global_library::save_global_library(&self.global_library);
+    }
+
+    pub fn delete_library_chip(&mut self, flat_idx: usize) {
+        let old_len = self.engine.library.len();
+        if flat_idx >= old_len {
+            return;
+        }
+
+        let _ = self.global_library.remove_at_flat_index(flat_idx);
+        if flat_idx < self.engine.library.len() {
+            self.engine.library.remove(flat_idx);
+        }
+
+        let mut map = Vec::with_capacity(old_len);
+        for i in 0..old_len {
+            if i < flat_idx {
+                map.push(Some(i));
+            } else if i == flat_idx {
+                map.push(None);
+            } else {
+                map.push(Some(i - 1));
             }
         }
 
-        // Remap in library blueprints
-        for bp in &mut self.engine.library {
-            for comp in &mut bp.components {
-                if let ComponentType::SubChip(ref mut idx) = comp.component_type
-                    && let Some(&new_idx) = map.get(*idx)
-                {
-                    *idx = new_idx;
-                }
-            }
-        }
-
-        // Remap selected_tool if it points to a SubChip
-        if let Some(crate::editor::types::ActiveTool::PlaceComponent(ComponentType::SubChip(
-            ref mut idx,
-        ))) = self.canvas.selected_tool
-        {
-            *idx = map[*idx];
-        }
+        self.apply_library_index_map(&map);
+        global_library::save_global_library(&self.global_library);
+        self.compile();
     }
 
     pub fn get_connection_ports(

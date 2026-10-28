@@ -146,6 +146,30 @@ impl Editor {
                                         }
 
                                         if let Some(fi) = folder_to_delete {
+                                            // Compute exact flat index remapping before moving folder chips to ungrouped
+                                            let old_total = self.global_library.to_flat_list().len();
+                                            let mut tagged_ungrouped: Vec<usize> =
+                                                (0..self.global_library.ungrouped.len()).collect();
+                                            let mut offset = self.global_library.ungrouped.len();
+                                            let mut tagged_folders: Vec<Vec<usize>> = Vec::new();
+                                            for folder in &self.global_library.folders {
+                                                let len = folder.chips.len();
+                                                tagged_folders.push((offset..offset + len).collect());
+                                                offset += len;
+                                            }
+                                            let moved_indices = tagged_folders.remove(fi);
+                                            tagged_ungrouped.extend(moved_indices);
+                                            let mut new_flat_order = tagged_ungrouped;
+                                            for tf in tagged_folders {
+                                                new_flat_order.extend(tf);
+                                            }
+                                            let mut map = vec![None; old_total];
+                                            for (new_idx, &old_idx) in
+                                                new_flat_order.iter().enumerate()
+                                            {
+                                                map[old_idx] = Some(new_idx);
+                                            }
+
                                             // Move chips to ungrouped before deleting
                                             let chips =
                                                 self.global_library.folders[fi].chips.clone();
@@ -155,9 +179,11 @@ impl Editor {
                                                 self.ui.global_lib_selected_folder = None;
                                             }
                                             self.sync_engine_library();
+                                            self.apply_library_index_map(&map);
                                             global_library::save_global_library(
                                                 &self.global_library,
                                             );
+                                            self.compile();
                                         }
                                     });
                             });
@@ -355,9 +381,10 @@ impl Editor {
                                             ui.add_space(3.0);
                                         }
 
-                                        // Process delete
+                                        // Process delete using centralized flat-index remapper
                                         if let Some(ci) = chip_to_delete {
-                                            match self.ui.global_lib_selected_folder {
+                                            let flat_idx_opt = match self.ui.global_lib_selected_folder
+                                            {
                                                 Some(fi)
                                                     if fi < self.global_library.folders.len() =>
                                                 {
@@ -366,75 +393,49 @@ impl Editor {
                                                             .chips
                                                             .len()
                                                     {
-                                                        self.global_library.folders[fi]
-                                                            .chips
-                                                            .remove(ci);
-                                                    }
-                                                }
-                                                _ => {
-                                                    if ci < self.global_library.ungrouped.len() {
-                                                        self.global_library.ungrouped.remove(ci);
-                                                    }
-                                                }
-                                            }
-                                            self.sync_engine_library();
-                                            global_library::save_global_library(
-                                                &self.global_library,
-                                            );
-                                        }
-
-                                        // Process move
-                                        if let Some((ci, target_folder)) = chip_to_move {
-                                            let chip = match self.ui.global_lib_selected_folder {
-                                                Some(fi)
-                                                    if fi < self.global_library.folders.len() =>
-                                                {
-                                                    if ci
-                                                        < self.global_library.folders[fi]
-                                                            .chips
-                                                            .len()
-                                                    {
-                                                        Some(
-                                                            self.global_library.folders[fi]
+                                                        let mut offset =
+                                                            self.global_library.ungrouped.len();
+                                                        for f_idx in 0..fi {
+                                                            offset += self.global_library.folders
+                                                                [f_idx]
                                                                 .chips
-                                                                .remove(ci),
-                                                        )
+                                                                .len();
+                                                        }
+                                                        Some(offset + ci)
                                                     } else {
                                                         None
                                                     }
                                                 }
                                                 _ => {
                                                     if ci < self.global_library.ungrouped.len() {
-                                                        Some(
-                                                            self.global_library
-                                                                .ungrouped
-                                                                .remove(ci),
-                                                        )
+                                                        Some(ci)
                                                     } else {
                                                         None
                                                     }
                                                 }
                                             };
-
-                                            if let Some(chip) = chip {
-                                                match target_folder {
-                                                    Some(fi)
-                                                        if fi
-                                                            < self.global_library.folders.len() =>
-                                                    {
-                                                        self.global_library.folders[fi]
-                                                            .chips
-                                                            .push(chip);
-                                                    }
-                                                    _ => {
-                                                        self.global_library.ungrouped.push(chip);
-                                                    }
-                                                }
+                                            if let Some(flat_idx) = flat_idx_opt {
+                                                self.delete_library_chip(flat_idx);
                                             }
-                                            self.sync_engine_library();
-                                            global_library::save_global_library(
-                                                &self.global_library,
-                                            );
+                                        }
+
+                                        // Process move with full flat-index remapping
+                                        if let Some((ci, target_folder)) = chip_to_move {
+                                            let from_loc = match self.ui.global_lib_selected_folder {
+                                                Some(fi)
+                                                    if fi < self.global_library.folders.len() =>
+                                                {
+                                                    Some(global_library::ChipLocation::InFolder(
+                                                        fi, ci,
+                                                    ))
+                                                }
+                                                _ => Some(global_library::ChipLocation::Ungrouped(
+                                                    ci,
+                                                )),
+                                            };
+                                            if let Some(from) = from_loc {
+                                                self.move_global_library_chip(from, target_folder);
+                                            }
                                         }
                                     });
                             });
@@ -488,6 +489,65 @@ impl Editor {
                     });
                 });
             });
+    }
+
+    /// Move a chip in the global library and remap all SubChip flat indices across the editor and blueprints.
+    pub fn move_global_library_chip(
+        &mut self,
+        from: global_library::ChipLocation,
+        to_folder: Option<usize>,
+    ) {
+        let old_total = self.global_library.to_flat_list().len();
+        let mut tagged_ungrouped: Vec<usize> = (0..self.global_library.ungrouped.len()).collect();
+        let mut offset = self.global_library.ungrouped.len();
+        let mut tagged_folders: Vec<Vec<usize>> = Vec::new();
+        for folder in &self.global_library.folders {
+            let len = folder.chips.len();
+            tagged_folders.push((offset..offset + len).collect());
+            offset += len;
+        }
+
+        let moved_old_idx = match from {
+            global_library::ChipLocation::Ungrouped(idx) => {
+                if idx < tagged_ungrouped.len() {
+                    tagged_ungrouped.remove(idx)
+                } else {
+                    return;
+                }
+            }
+            global_library::ChipLocation::InFolder(fi, ci) => {
+                if fi < tagged_folders.len() && ci < tagged_folders[fi].len() {
+                    tagged_folders[fi].remove(ci)
+                } else {
+                    return;
+                }
+            }
+        };
+
+        match to_folder {
+            Some(fi) if fi < tagged_folders.len() => {
+                tagged_folders[fi].push(moved_old_idx);
+            }
+            _ => {
+                tagged_ungrouped.push(moved_old_idx);
+            }
+        }
+
+        let mut new_flat_order = tagged_ungrouped;
+        for tf in tagged_folders {
+            new_flat_order.extend(tf);
+        }
+
+        let mut map = vec![None; old_total];
+        for (new_idx, &old_idx) in new_flat_order.iter().enumerate() {
+            map[old_idx] = Some(new_idx);
+        }
+
+        self.global_library.move_chip(from, to_folder);
+        self.sync_engine_library();
+        self.apply_library_index_map(&map);
+        global_library::save_global_library(&self.global_library);
+        self.compile();
     }
 
     /// Import chips from a project file into the global library.
