@@ -152,7 +152,7 @@ impl Editor {
         }
 
         // 1.1 Draw Wire Junction/Crossing Indicators
-        self.draw_wire_junctions(&intersections);
+        self.draw_wire_junctions(painter, &intersections);
 
         // Draw active wire drag preview
         if let Some((src_id, src_port, src_is_input)) = self.canvas.active_wire_drag
@@ -471,15 +471,11 @@ impl Editor {
                     _ => comp.label.clone(),
                 };
 
-                let (text_w, text_h) = self.measure_text_dims(&display_label, font_size);
-                let text_x = screen_pos.x + (comp_width - text_w) / 2.0;
-                let text_y = screen_pos.y + (comp_height + text_h * 0.7) / 2.0;
-
-                draw_text_label(
+                draw_text_centered(
                     painter,
                     &display_label,
-                    text_x,
-                    text_y,
+                    screen_pos.x + comp_width / 2.0,
+                    screen_pos.y + comp_height / 2.0,
                     font_size,
                     theme::TEXT_PRIMARY.mq(),
                 );
@@ -584,11 +580,11 @@ impl Editor {
                         .get(i)
                         .cloned()
                         .unwrap_or_else(|| format!("{}", i));
-                    draw_text_label(
+                    draw_text_left_center(
                         painter,
                         &name,
-                        port_pos.x + 6.0 * self.canvas.zoom,
-                        port_pos.y + 3.0 * self.canvas.zoom,
+                        port_pos.x + 7.0 * self.canvas.zoom,
+                        port_pos.y,
                         target_text_size_px,
                         theme::TEXT_SECONDARY.mq(),
                     );
@@ -600,12 +596,11 @@ impl Editor {
                         .get(o)
                         .cloned()
                         .unwrap_or_else(|| format!("{}", o));
-                    let (text_w, _) = self.measure_text_dims(&name, target_text_size_px);
-                    draw_text_label(
+                    draw_text_right_center(
                         painter,
                         &name,
-                        port_pos.x - 6.0 * self.canvas.zoom - text_w,
-                        port_pos.y + 3.0 * self.canvas.zoom,
+                        port_pos.x - 7.0 * self.canvas.zoom,
+                        port_pos.y,
                         target_text_size_px,
                         theme::TEXT_SECONDARY.mq(),
                     );

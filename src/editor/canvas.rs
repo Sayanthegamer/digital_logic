@@ -835,8 +835,9 @@ impl Editor {
                     // Title takes ~10px per char
                     let title_w = (title_len as f32) * 10.0;
 
-                    // Total width needs to comfortably fit all three side-by-side with extra padding
-                    let total_w = left_w + title_w + right_w + 30.0;
+                    // Since the title is centered at width / 2.0, reserve symmetric clearance for the wider port column on both sides
+                    let side_w = left_w.max(right_w);
+                    let total_w = title_w + side_w * 2.0 + 36.0;
 
                     total_w.max(120.0)
                 } else {

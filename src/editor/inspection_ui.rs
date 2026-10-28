@@ -132,11 +132,11 @@ impl Editor {
                 .get(i)
                 .cloned()
                 .unwrap_or_else(|| format!("IN {}", i));
-            draw_text_label(
+            draw_text_right_center(
                 painter,
                 &label_text,
-                screen_pos.x - 45.0 * self.canvas.zoom,
-                screen_pos.y + 4.0 * self.canvas.zoom,
+                screen_pos.x - 10.0 * self.canvas.zoom,
+                screen_pos.y,
                 (12.0 * self.canvas.zoom).max(6.0),
                 theme::TEXT_SECONDARY.mq(),
             );
@@ -175,11 +175,11 @@ impl Editor {
                 .get(j)
                 .cloned()
                 .unwrap_or_else(|| format!("OUT {}", j));
-            draw_text_label(
+            draw_text_left_center(
                 painter,
                 &label_text,
-                screen_pos.x + 15.0 * self.canvas.zoom,
-                screen_pos.y + 4.0 * self.canvas.zoom,
+                screen_pos.x + 10.0 * self.canvas.zoom,
+                screen_pos.y,
                 (12.0 * self.canvas.zoom).max(6.0),
                 theme::TEXT_SECONDARY.mq(),
             );
@@ -329,14 +329,11 @@ impl Editor {
             if comp.component_type != ComponentType::SevenSegment {
                 let label = self.get_component_label(comp.component_type);
                 let font_size = (13.0 * self.canvas.zoom).max(6.0);
-                let (text_w, text_h) = self.measure_text_dims(&label, font_size);
-                let text_x = screen_pos.x + (screen_width - text_w) / 2.0;
-                let text_y = screen_pos.y + (screen_height + text_h * 0.7) / 2.0;
-                draw_text_label(
+                draw_text_centered(
                     painter,
                     &label,
-                    text_x,
-                    text_y,
+                    screen_pos.x + screen_width / 2.0,
+                    screen_pos.y + screen_height / 2.0,
                     font_size,
                     theme::TEXT_PRIMARY.mq(),
                 );

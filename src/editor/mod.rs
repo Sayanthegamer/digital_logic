@@ -201,9 +201,17 @@ impl Editor {
             return;
         }
         self.push_history_snapshot();
+        for i in 0..self.circuit.components.len() {
+            let comp_type = self.circuit.components[i].comp_type;
+            let bus_w = self.circuit.components[i].bus_width;
+            let (w, h) = self.get_component_dimensions_with_width(comp_type, bus_w);
+            self.circuit.components[i].width = self.circuit.components[i].width.max(w);
+            self.circuit.components[i].height = self.circuit.components[i].height.max(h);
+        }
         layout::auto_arrange(&mut self.circuit.components, &self.circuit.connections);
         self.circuit.wire_offsets.clear();
         self.circuit.wire_nudges.clear();
+        self.recompute_wire_offsets(None);
         self.rebuild_spatial_grid();
     }
 

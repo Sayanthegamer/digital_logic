@@ -50,18 +50,21 @@ impl Editor {
                 continue;
             }
             let dir = line_vec / len;
+            let is_horiz_seg = (a.y - b.y).abs() < 0.5;
 
             scratch.holes.clear();
-            for &(gap, lower_thickness) in gaps {
-                let t = (gap - a).dot(dir);
-                let proj = a + dir * t;
-                let gap_radius = lower_thickness / 2.0 + 3.0 * self.canvas.zoom;
+            if is_horiz_seg {
+                for &(gap, lower_thickness) in gaps {
+                    if (gap.y - a.y).abs() > 1.5 * self.canvas.zoom {
+                        continue;
+                    }
+                    let t = (gap - a).dot(dir);
+                    let gap_radius = lower_thickness / 2.0 + 3.0 * self.canvas.zoom;
+                    let end_clearance = gap_radius + 1.5 * self.canvas.zoom;
 
-                if proj.distance(gap) < 2.0 * self.canvas.zoom
-                    && t > -gap_radius
-                    && t < len + gap_radius
-                {
-                    scratch.holes.push((t - gap_radius, t + gap_radius));
+                    if t >= end_clearance && t <= len - end_clearance {
+                        scratch.holes.push((t - gap_radius, t + gap_radius));
+                    }
                 }
             }
 
@@ -71,7 +74,7 @@ impl Editor {
             scratch.merged_holes.clear();
             for h in &scratch.holes {
                 if let Some(last) = scratch.merged_holes.last_mut()
-                    && h.0 <= last.1
+                    && h.0 <= last.1 + 1.5 * self.canvas.zoom
                 {
                     last.1 = last.1.max(h.1);
                     continue;
@@ -82,13 +85,18 @@ impl Editor {
             let mut current_t: f32 = 0.0;
             scratch.visible_intervals.clear();
             for h in &scratch.merged_holes {
-                if h.0 > current_t {
-                    scratch.visible_intervals.push((current_t, h.0.min(len)));
+                let h0 = h.0.max(1.0);
+                let h1 = h.1.min(len - 1.0);
+                if h1 <= h0 {
+                    continue;
                 }
-                current_t = current_t.max(h.1);
+                if h0 > current_t {
+                    scratch.visible_intervals.push((current_t, h0.min(len)));
+                }
+                current_t = current_t.max(h1);
 
-                let center_t = (h.0 + h.1) / 2.0;
-                let radius = (h.1 - h.0) / 2.0;
+                let center_t = (h0 + h1) / 2.0;
+                let radius = ((h1 - h0) / 2.0).min(8.0 * self.canvas.zoom);
                 let center = a + dir * center_t;
                 scratch.bridge_arcs.push((center, radius, dir));
             }

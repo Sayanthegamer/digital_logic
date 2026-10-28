@@ -1,3 +1,4 @@
+use crate::editor::drawing_shapes::draw_circle_filled;
 use crate::editor::math::{Color, Rect, Vec2};
 
 use super::Editor;
@@ -69,32 +70,22 @@ impl Editor {
 
     pub fn recompute_wire_offsets(
         &mut self,
-        affected_comps: Option<&std::collections::HashSet<usize>>,
+        _affected_comps: Option<&std::collections::HashSet<usize>>,
     ) {
-        let mut wire_offsets = if affected_comps.is_some() {
-            self.circuit.wire_offsets.clone()
-        } else {
-            std::collections::HashMap::new()
-        };
-
-        struct ConnectionSegments {
+        #[derive(Clone)]
+        struct RoutedConn {
             conn: VisualConnection,
+            ideal_x: f32,
+            y_min: f32,
+            y_max: f32,
+            src_y: f32,
+            tgt_y: f32,
             vertical_segs: Vec<VerticalSeg>,
-            source_y: f32,
         }
 
-        let mut conn_data = Vec::new();
+        let mut conn_data = Vec::with_capacity(self.circuit.connections.len());
 
         for conn in &self.circuit.connections {
-            let is_affected = if let Some(affected) = affected_comps {
-                affected.contains(&conn.src_comp_id) || affected.contains(&conn.tgt_comp_id)
-            } else {
-                true
-            };
-            if !is_affected {
-                continue;
-            }
-
             let src_comp = self.get_component(conn.src_comp_id);
             let tgt_comp = self.get_component(conn.tgt_comp_id);
 
@@ -102,17 +93,20 @@ impl Editor {
                 let (src_pos, tgt_pos) = self.get_connection_ports(conn, src, tgt);
 
                 let mut vertical_segs = Vec::new();
+                let ideal_x: f32;
+                let y_min: f32;
+                let y_max: f32;
 
                 if tgt_pos.x >= src_pos.x + 20.0 {
-                    // Forward routing: 1 vertical segment
-                    let ideal_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0;
+                    ideal_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0;
+                    y_min = src_pos.y.min(tgt_pos.y);
+                    y_max = src_pos.y.max(tgt_pos.y);
                     vertical_segs.push(VerticalSeg {
                         ideal_x,
-                        y_min: src_pos.y.min(tgt_pos.y),
-                        y_max: src_pos.y.max(tgt_pos.y),
+                        y_min,
+                        y_max,
                     });
                 } else {
-                    // Backward routing: 2 vertical segments
                     let stub_src = src_pos.x + 20.0;
                     let target_stagger = conn.tgt_port as f32 * 6.0;
                     let stub_tgt = tgt_pos.x - 20.0 - target_stagger;
@@ -121,6 +115,10 @@ impl Editor {
                     if (tgt_pos.y - src_pos.y).abs() < 10.0 {
                         mid_y += 35.0;
                     }
+
+                    ideal_x = stub_src;
+                    y_min = src_pos.y.min(tgt_pos.y).min(mid_y);
+                    y_max = src_pos.y.max(tgt_pos.y).max(mid_y);
 
                     vertical_segs.push(VerticalSeg {
                         ideal_x: stub_src,
@@ -134,123 +132,191 @@ impl Editor {
                     });
                 }
 
-                let seg_data = ConnectionSegments {
+                conn_data.push(RoutedConn {
                     conn: *conn,
+                    ideal_x,
+                    y_min,
+                    y_max,
+                    src_y: src_pos.y,
+                    tgt_y: tgt_pos.y,
                     vertical_segs,
-                    source_y: src_pos.y,
-                };
-                conn_data.push(seg_data);
+                });
             }
         }
 
-        // Spatial Sorting: Sort connections so lane assignment is deterministic and ordered
+        // 1. Sort all connections by ideal_x to cluster into vertical routing corridors
         conn_data.sort_by(|a, b| {
-            let a_x = a.vertical_segs.first().map(|s| s.ideal_x).unwrap_or(0.0);
-            let b_x = b.vertical_segs.first().map(|s| s.ideal_x).unwrap_or(0.0);
-
-            a_x.partial_cmp(&b_x)
+            a.ideal_x
+                .partial_cmp(&b.ideal_x)
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then(
-                    a.source_y
-                        .partial_cmp(&b.source_y)
+                    a.src_y
+                        .partial_cmp(&b.src_y)
                         .unwrap_or(std::cmp::Ordering::Equal),
                 )
         });
 
-        let cell_size_y = 100.0;
-        let cell_size_x = 20.0;
+        let mut corridors: Vec<Vec<RoutedConn>> = Vec::new();
+        for item in conn_data {
+            if let Some(last_corridor) = corridors.last_mut() {
+                let avg_x = last_corridor.iter().map(|c| c.ideal_x).sum::<f32>()
+                    / last_corridor.len() as f32;
+                if (item.ideal_x - avg_x).abs() <= 28.0 {
+                    last_corridor.push(item);
+                    continue;
+                }
+            }
+            corridors.push(vec![item]);
+        }
 
+        let mut wire_offsets =
+            std::collections::HashMap::with_capacity(self.circuit.connections.len());
         let mut grid: std::collections::HashMap<
             (i32, i32),
             Vec<(usize, VerticalSeg, VisualConnection)>,
         > = std::collections::HashMap::new();
+        let cell_size_y = 100.0;
+        let cell_size_x = 20.0;
+        let lane_spacing = 8.0_f32;
 
-        // Greedy interval coloring to assign non-overlapping lanes (Spatial Grid Optimized)
-        for conn_item in &conn_data {
-            let mut occupied_lanes = std::collections::HashSet::new();
+        // 2. Within each corridor, split into Y-overlapping interval clusters and assign crossing-free ribbon lanes
+        for mut corridor in corridors {
+            corridor.sort_by(|a, b| {
+                a.y_min
+                    .partial_cmp(&b.y_min)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then(
+                        a.y_max
+                            .partial_cmp(&b.y_max)
+                            .unwrap_or(std::cmp::Ordering::Equal),
+                    )
+            });
 
-            for s1 in &conn_item.vertical_segs {
-                let col = (s1.ideal_x / cell_size_x).floor() as i32;
-                let start_row = (s1.y_min / cell_size_y).floor() as i32;
-                let end_row = (s1.y_max / cell_size_y).floor() as i32;
+            let mut y_clusters: Vec<Vec<RoutedConn>> = Vec::new();
+            let mut current_cluster: Vec<RoutedConn> = Vec::new();
+            let mut cluster_max_y = f32::MIN;
 
-                for c in (col - 1)..=(col + 1) {
-                    for r in start_row..=end_row {
-                        if let Some(bucket) = grid.get(&(c, r)) {
-                            for (assigned_lane, s2, _) in bucket {
-                                if occupied_lanes.contains(assigned_lane) {
-                                    continue;
-                                }
+            for item in corridor {
+                if current_cluster.is_empty() {
+                    cluster_max_y = item.y_max;
+                    current_cluster.push(item);
+                } else if item.y_min <= cluster_max_y + 4.0 {
+                    cluster_max_y = cluster_max_y.max(item.y_max);
+                    current_cluster.push(item);
+                } else {
+                    y_clusters.push(current_cluster);
+                    cluster_max_y = item.y_max;
+                    current_cluster = vec![item];
+                }
+            }
+            if !current_cluster.is_empty() {
+                y_clusters.push(current_cluster);
+            }
 
-                                let same_corridor = (s1.ideal_x - s2.ideal_x).abs() < 15.0;
-                                let y_overlap =
-                                    s1.y_min - 4.0 < s2.y_max && s2.y_min - 4.0 < s1.y_max;
-                                if same_corridor && y_overlap {
-                                    occupied_lanes.insert(*assigned_lane);
-                                }
-                            }
+            for cluster in y_clusters {
+                // Group by electrical source net (src_comp_id, src_port) so fan-out branches share a single vertical trunk lane
+                struct NetGroup {
+                    net_key: (usize, usize),
+                    conns: Vec<RoutedConn>,
+                    avg_src_y: f32,
+                    avg_tgt_y: f32,
+                }
+
+                let mut net_map: std::collections::HashMap<(usize, usize), Vec<RoutedConn>> =
+                    std::collections::HashMap::new();
+                for item in cluster {
+                    net_map
+                        .entry((item.conn.src_comp_id, item.conn.src_port))
+                        .or_default()
+                        .push(item);
+                }
+
+                let mut nets: Vec<NetGroup> = net_map
+                    .into_iter()
+                    .map(|(net_key, conns)| {
+                        let n = conns.len() as f32;
+                        let avg_src_y = conns.iter().map(|c| c.src_y).sum::<f32>() / n;
+                        let avg_tgt_y = conns.iter().map(|c| c.tgt_y).sum::<f32>() / n;
+                        NetGroup {
+                            net_key,
+                            conns,
+                            avg_src_y,
+                            avg_tgt_y,
                         }
+                    })
+                    .collect();
 
-                        if let Some(affected) = affected_comps
-                            && let Some(bucket) = self.circuit.wire_lane_grid.get(&(c, r))
-                        {
-                            for (assigned_lane, s2, s_conn) in bucket {
-                                if affected.contains(&s_conn.src_comp_id)
-                                    || affected.contains(&s_conn.tgt_comp_id)
-                                {
-                                    continue;
-                                }
-                                if occupied_lanes.contains(assigned_lane) {
-                                    continue;
-                                }
+                // Crossing-free monotonic ribbon ordering:
+                // - For downward-going wires (avg_tgt_y >= avg_src_y), inner (larger src_y) nets must sit to the left (smaller X offset)
+                //   and outer (smaller src_y) nets must sit to the right (larger X offset) so their L-bends nest without crossing.
+                // - For upward-going wires (avg_tgt_y < avg_src_y), inner (smaller src_y) nets must sit to the left (smaller X offset)
+                //   and outer (larger src_y) nets must sit to the right (larger X offset).
+                nets.sort_by(|a, b| {
+                    let a_down = a.avg_tgt_y >= a.avg_src_y;
+                    let b_down = b.avg_tgt_y >= b.avg_src_y;
 
-                                let same_corridor = (s1.ideal_x - s2.ideal_x).abs() < 15.0;
-                                let y_overlap =
-                                    s1.y_min - 4.0 < s2.y_max && s2.y_min - 4.0 < s1.y_max;
-                                if same_corridor && y_overlap {
-                                    occupied_lanes.insert(*assigned_lane);
-                                }
+                    match (a_down, b_down) {
+                        (true, true) => b
+                            .avg_src_y
+                            .partial_cmp(&a.avg_src_y)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                            .then(
+                                b.avg_tgt_y
+                                    .partial_cmp(&a.avg_tgt_y)
+                                    .unwrap_or(std::cmp::Ordering::Equal),
+                            )
+                            .then(a.net_key.cmp(&b.net_key)),
+                        (false, false) => a
+                            .avg_src_y
+                            .partial_cmp(&b.avg_src_y)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                            .then(
+                                a.avg_tgt_y
+                                    .partial_cmp(&b.avg_tgt_y)
+                                    .unwrap_or(std::cmp::Ordering::Equal),
+                            )
+                            .then(a.net_key.cmp(&b.net_key)),
+                        (true, false) => std::cmp::Ordering::Less,
+                        (false, true) => std::cmp::Ordering::Greater,
+                    }
+                });
+
+                let num_lanes = nets.len();
+                let center_lane = (num_lanes.saturating_sub(1)) as f32 / 2.0;
+
+                for (lane_idx, net) in nets.into_iter().enumerate() {
+                    let pixel_offset = if num_lanes <= 1 {
+                        0.0
+                    } else {
+                        (lane_idx as f32 - center_lane) * lane_spacing
+                    };
+
+                    for item in net.conns {
+                        wire_offsets.insert(item.conn, pixel_offset);
+
+                        for s in &item.vertical_segs {
+                            let col = (s.ideal_x / cell_size_x).floor() as i32;
+                            let start_row = (s.y_min / cell_size_y).floor() as i32;
+                            let end_row = (s.y_max / cell_size_y).floor() as i32;
+                            for r in start_row..=end_row {
+                                grid.entry((col, r)).or_default().push((
+                                    lane_idx,
+                                    VerticalSeg {
+                                        ideal_x: s.ideal_x,
+                                        y_min: s.y_min,
+                                        y_max: s.y_max,
+                                    },
+                                    item.conn,
+                                ));
                             }
                         }
                     }
                 }
             }
-
-            let mut lane = 0;
-            while occupied_lanes.contains(&lane) {
-                lane += 1;
-            }
-
-            for s in &conn_item.vertical_segs {
-                let col = (s.ideal_x / cell_size_x).floor() as i32;
-                let start_row = (s.y_min / cell_size_y).floor() as i32;
-                let end_row = (s.y_max / cell_size_y).floor() as i32;
-                for r in start_row..=end_row {
-                    grid.entry((col, r)).or_default().push((
-                        lane,
-                        VerticalSeg {
-                            ideal_x: s.ideal_x,
-                            y_min: s.y_min,
-                            y_max: s.y_max,
-                        },
-                        conn_item.conn,
-                    ));
-                }
-            }
-
-            let pixel_offset = if lane % 2 == 0 {
-                (lane / 2) as f32 * 6.0
-            } else {
-                -(lane.div_ceil(2) as f32) * 6.0
-            };
-
-            wire_offsets.insert(conn_item.conn, pixel_offset);
         }
 
         self.circuit.wire_offsets = wire_offsets;
-        if affected_comps.is_none() {
-            self.circuit.wire_lane_grid = grid;
-        }
+        self.circuit.wire_lane_grid = grid;
     }
 
     pub fn get_blueprint_connection_routing_offset(
@@ -292,7 +358,7 @@ impl Editor {
 
             if let Some(idx) = sharing.iter().position(|c| c.target == conn.target) {
                 let n = sharing.len() as f32;
-                (idx as f32 - (n - 1.0) / 2.0) * 10.0
+                (idx as f32 - (n - 1.0) / 2.0) * 8.0
             } else {
                 0.0
             }
@@ -312,7 +378,7 @@ impl Editor {
         fanout_offset + hash_offset
     }
 
-    /// Compute all Manhattan wire segments for a given connection, in screen space.
+    /// Compute all orthogonal Manhattan wire segments for a given connection, in screen space.
     pub fn compute_wire_segments_screen(
         src_pos: Vec2,
         tgt_pos: Vec2,
@@ -320,14 +386,17 @@ impl Editor {
         tgt_port: usize,
         zoom: f32,
     ) -> Vec<(Vec2, Vec2)> {
-        let mut segments = Vec::new();
+        let mut segments = Vec::with_capacity(5);
         if tgt_pos.x >= src_pos.x + 20.0 * zoom {
             let offset = routing_offset * zoom;
             let mut mid_x = src_pos.x + (tgt_pos.x - src_pos.x) / 2.0 + offset;
-            mid_x = mid_x.clamp(src_pos.x + 8.0 * zoom, tgt_pos.x - 8.0 * zoom);
+            let margin = (10.0 * zoom).min((tgt_pos.x - src_pos.x) * 0.45);
+            mid_x = mid_x.clamp(src_pos.x + margin, tgt_pos.x - margin);
 
             segments.push((Vec2::new(src_pos.x, src_pos.y), Vec2::new(mid_x, src_pos.y)));
-            segments.push((Vec2::new(mid_x, src_pos.y), Vec2::new(mid_x, tgt_pos.y)));
+            if (tgt_pos.y - src_pos.y).abs() > 0.5 {
+                segments.push((Vec2::new(mid_x, src_pos.y), Vec2::new(mid_x, tgt_pos.y)));
+            }
             segments.push((Vec2::new(mid_x, tgt_pos.y), Vec2::new(tgt_pos.x, tgt_pos.y)));
         } else {
             let offset_x = routing_offset.abs() * 0.7 * zoom;
@@ -354,48 +423,7 @@ impl Editor {
                 Vec2::new(tgt_pos.x, tgt_pos.y),
             ));
         }
-        Self::chamfer_segments(segments, 10.0 * zoom)
-    }
-
-    fn chamfer_segments(segments: Vec<(Vec2, Vec2)>, base_radius: f32) -> Vec<(Vec2, Vec2)> {
-        if segments.len() <= 1 {
-            return segments;
-        }
-
-        let mut out = Vec::new();
-        let mut prev_b_new = segments[0].0;
-
-        for i in 0..segments.len() - 1 {
-            let (a, b) = segments[i];
-            let (c, d) = segments[i + 1];
-
-            let len_ab = a.distance(b);
-            let len_cd = c.distance(d);
-
-            let r = base_radius.min(len_ab / 2.0).min(len_cd / 2.0);
-
-            if r <= 0.1 {
-                out.push((prev_b_new, b));
-                prev_b_new = b;
-                continue;
-            }
-
-            let dir_ab = (b - a) / len_ab;
-            let dir_cd = (d - c) / len_cd;
-
-            let b_new = b - dir_ab * r;
-            let c_new = c + dir_cd * r;
-
-            out.push((prev_b_new, b_new));
-            out.push((b_new, c_new));
-
-            prev_b_new = c_new;
-        }
-
-        let last = segments.last().unwrap();
-        out.push((prev_b_new, last.1));
-
-        out
+        segments
     }
 
     /// Compute all Manhattan wire segments in world space (without zoom).
@@ -408,7 +436,7 @@ impl Editor {
         Self::compute_wire_segments_screen(src_pos, tgt_pos, routing_offset, tgt_port, 1.0)
     }
 
-    /// Find all wire intersections (junctions and crossings) across visible connections.
+    /// Find all wire intersections (T-junctions and orthogonal crossings) across visible connections.
     pub fn find_wire_intersections(
         &self,
         visible_wires: &[&VisualConnection],
@@ -439,6 +467,9 @@ impl Editor {
                 );
 
                 for (a, b) in segments {
+                    if a.distance(b) < 1.0 {
+                        continue;
+                    }
                     let min_x = a.x.min(b.x);
                     let max_x = a.x.max(b.x);
                     let min_y = a.y.min(b.y);
@@ -488,11 +519,17 @@ impl Editor {
         }
 
         let mut intersections = Vec::new();
-        let mut seen_points: std::collections::HashSet<(i32, i32)> =
+        let mut seen_crossings: std::collections::HashSet<(i32, i32)> =
+            std::collections::HashSet::new();
+        let mut seen_junctions: std::collections::HashSet<(i32, i32)> =
             std::collections::HashSet::new();
         let mut checked_pairs: std::collections::HashSet<(usize, usize)> =
             std::collections::HashSet::new();
-        let epsilon = (2.0 * self.canvas.zoom).max(0.5);
+
+        let zoom = self.canvas.zoom;
+        let bucket_eps = (3.0 * zoom).max(1.0);
+        let crossing_margin = (5.0 * zoom).max(2.0);
+        let junction_tol = (2.0 * zoom).max(0.75);
 
         for cell in grid.values() {
             for i in 0..cell.len() {
@@ -511,13 +548,71 @@ impl Editor {
                         continue;
                     }
 
-                    if let Some(point) = segment_intersection(s1.a, s1.b, s2.a, s2.b, epsilon) {
-                        let bucket_x = (point.x / epsilon).round() as i32;
-                        let bucket_y = (point.y / epsilon).round() as i32;
+                    let seg_i_horizontal = is_horizontal(s1.a, s1.b);
+                    let seg_j_horizontal = is_horizontal(s2.a, s2.b);
+
+                    // Only perpendicular (one horizontal, one vertical) segments can form a crossing or T-junction
+                    if seg_i_horizontal == seg_j_horizontal {
+                        continue;
+                    }
+
+                    let (h_seg, v_seg) = if seg_i_horizontal { (s1, s2) } else { (s2, s1) };
+
+                    let h_min_x = h_seg.a.x.min(h_seg.b.x);
+                    let h_max_x = h_seg.a.x.max(h_seg.b.x);
+                    let h_y = (h_seg.a.y + h_seg.b.y) * 0.5;
+
+                    let v_min_y = v_seg.a.y.min(v_seg.b.y);
+                    let v_max_y = v_seg.a.y.max(v_seg.b.y);
+                    let v_x = (v_seg.a.x + v_seg.b.x) * 0.5;
+
+                    let point = Vec2::new(v_x, h_y);
+
+                    let conn_i = visible_wires[s1.conn_idx];
+                    let conn_j = visible_wires[s2.conn_idx];
+
+                    if wires_share_endpoint(conn_i, conn_j) {
+                        // T-junction detection: one segment's coordinate lies strictly inside the perpendicular segment
+                        // while the other coordinate touches within tolerance.
+                        let x_on_h = v_x >= h_min_x - junction_tol && v_x <= h_max_x + junction_tol;
+                        let y_on_v = h_y >= v_min_y - junction_tol && h_y <= v_max_y + junction_tol;
+                        let x_strictly_inside_h =
+                            v_x > h_min_x + crossing_margin && v_x < h_max_x - crossing_margin;
+                        let y_strictly_inside_v =
+                            h_y > v_min_y + crossing_margin && h_y < v_max_y - crossing_margin;
+
+                        if x_on_h && y_on_v && (x_strictly_inside_h || y_strictly_inside_v) {
+                            let bx = (point.x / bucket_eps).round() as i32;
+                            let by = (point.y / bucket_eps).round() as i32;
+                            if seen_junctions.insert((bx, by)) {
+                                let (color, thickness) = self.get_connection_style(conn_i);
+                                intersections.push(WireIntersection {
+                                    point,
+                                    junction_type: JunctionType::Connected,
+                                    upper_horizontal: true,
+                                    upper_conn: None,
+                                    lower_color: color,
+                                    lower_thickness: thickness,
+                                    upper_color: color,
+                                    upper_thickness: thickness,
+                                });
+                            }
+                        }
+                        continue;
+                    }
+
+                    // Strict interior orthogonal crossing between two unrelated electrical nets
+                    if v_x > h_min_x + crossing_margin
+                        && v_x < h_max_x - crossing_margin
+                        && h_y > v_min_y + crossing_margin
+                        && h_y < v_max_y - crossing_margin
+                    {
+                        let bx = (point.x / bucket_eps).round() as i32;
+                        let by = (point.y / bucket_eps).round() as i32;
                         let mut already_seen = false;
                         for dx in -1..=1 {
                             for dy in -1..=1 {
-                                if seen_points.contains(&(bucket_x + dx, bucket_y + dy)) {
+                                if seen_crossings.contains(&(bx + dx, by + dy)) {
                                     already_seen = true;
                                     break;
                                 }
@@ -526,42 +621,19 @@ impl Editor {
                         if already_seen {
                             continue;
                         }
-                        seen_points.insert((bucket_x, bucket_y));
+                        seen_crossings.insert((bx, by));
 
-                        let conn_i = visible_wires[s1.conn_idx];
-                        let conn_j = visible_wires[s2.conn_idx];
-
-                        let connected = wires_share_endpoint(conn_i, conn_j);
-                        if connected {
-                            continue;
-                        }
-
-                        let seg_i_horizontal = is_horizontal(s1.a, s1.b);
-                        let seg_j_horizontal = is_horizontal(s2.a, s2.b);
-
-                        let (lower_conn_idx, upper_conn_idx, upper_is_horizontal) =
-                            if seg_i_horizontal != seg_j_horizontal {
-                                if seg_i_horizontal {
-                                    (s2.conn_idx, s1.conn_idx, true)
-                                } else {
-                                    (s1.conn_idx, s2.conn_idx, true)
-                                }
-                            } else if s1.conn_idx > s2.conn_idx {
-                                (s2.conn_idx, s1.conn_idx, seg_i_horizontal)
-                            } else {
-                                (s1.conn_idx, s2.conn_idx, seg_j_horizontal)
-                            };
-
-                        let lower_conn = visible_wires[lower_conn_idx];
+                        // The horizontal wire always bridges over the vertical wire
+                        let lower_conn = visible_wires[v_seg.conn_idx];
                         let (lower_color, lower_thickness) = self.get_connection_style(lower_conn);
 
-                        let upper_conn = visible_wires[upper_conn_idx];
+                        let upper_conn = visible_wires[h_seg.conn_idx];
                         let (upper_color, upper_thickness) = self.get_connection_style(upper_conn);
 
                         intersections.push(WireIntersection {
                             point,
                             junction_type: JunctionType::Crossing,
-                            upper_horizontal: upper_is_horizontal,
+                            upper_horizontal: true,
                             upper_conn: Some(*upper_conn),
                             lower_color,
                             lower_thickness,
@@ -576,7 +648,14 @@ impl Editor {
         intersections
     }
 
-    pub fn draw_wire_junctions(&self, _intersections: &[WireIntersection]) {}
+    pub fn draw_wire_junctions(&self, painter: &egui::Painter, intersections: &[WireIntersection]) {
+        for int in intersections {
+            if int.junction_type == JunctionType::Connected {
+                let radius = (int.upper_thickness * 1.45).max(3.2 * self.canvas.zoom);
+                draw_circle_filled(painter, int.point.x, int.point.y, radius, int.upper_color);
+            }
+        }
+    }
 }
 
 fn is_horizontal(a: Vec2, b: Vec2) -> bool {
@@ -588,22 +667,4 @@ fn wires_share_endpoint(a: &VisualConnection, b: &VisualConnection) -> bool {
         || (a.tgt_comp_id == b.tgt_comp_id && a.tgt_port == b.tgt_port)
         || (a.src_comp_id == b.tgt_comp_id && a.src_port == b.tgt_port)
         || (a.tgt_comp_id == b.src_comp_id && a.tgt_port == b.src_port)
-}
-
-fn segment_intersection(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2, _epsilon: f32) -> Option<Vec2> {
-    let denom = (a1.x - a2.x) * (b1.y - b2.y) - (a1.y - a2.y) * (b1.x - b2.x);
-    if denom.abs() < 1e-5 {
-        return None;
-    }
-    let t = ((a1.x - b1.x) * (b1.y - b2.y) - (a1.y - b1.y) * (b1.x - b2.x)) / denom;
-    let u = ((a1.x - b1.x) * (a1.y - a2.y) - (a1.y - b1.y) * (a1.x - a2.x)) / denom;
-
-    if (-0.01..=1.01).contains(&t) && (-0.01..=1.01).contains(&u) {
-        Some(Vec2::new(
-            a1.x + t * (a2.x - a1.x),
-            a1.y + t * (a2.y - a1.y),
-        ))
-    } else {
-        None
-    }
 }

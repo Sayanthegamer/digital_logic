@@ -116,3 +116,57 @@ pub(crate) fn draw_text_label(
         color.to_egui(),
     );
 }
+
+#[inline(always)]
+pub(crate) fn draw_text_centered(
+    painter: &egui::Painter,
+    text: &str,
+    center_x: f32,
+    center_y: f32,
+    font_size: f32,
+    color: Color,
+) {
+    painter.text(
+        egui::pos2(center_x, center_y),
+        egui::Align2::CENTER_CENTER,
+        text,
+        egui::FontId::proportional(font_size.max(4.0)),
+        color.to_egui(),
+    );
+}
+
+#[inline(always)]
+pub(crate) fn draw_text_left_center(
+    painter: &egui::Painter,
+    text: &str,
+    x: f32,
+    center_y: f32,
+    font_size: f32,
+    color: Color,
+) {
+    painter.text(
+        egui::pos2(x, center_y),
+        egui::Align2::LEFT_CENTER,
+        text,
+        egui::FontId::proportional(font_size.max(4.0)),
+        color.to_egui(),
+    );
+}
+
+#[inline(always)]
+pub(crate) fn draw_text_right_center(
+    painter: &egui::Painter,
+    text: &str,
+    x: f32,
+    center_y: f32,
+    font_size: f32,
+    color: Color,
+) {
+    painter.text(
+        egui::pos2(x, center_y),
+        egui::Align2::RIGHT_CENTER,
+        text,
+        egui::FontId::proportional(font_size.max(4.0)),
+        color.to_egui(),
+    );
+}

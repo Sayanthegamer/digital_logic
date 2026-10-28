@@ -1215,3 +1215,129 @@ fn test_cyclic_junction_inspection_does_not_stack_overflow() {
     );
     assert_eq!(state, 0b00);
 }
+
+#[test]
+fn test_auto_arrange_recomputes_wire_offsets_and_eliminates_bus_crossings() {
+    let mut editor = Editor::new();
+    editor.engine.library.clear();
+    editor.circuit.components.clear();
+    editor.circuit.connections.clear();
+
+    // Add a 8-input, 4-output RAM SubChip blueprint
+    editor.engine.library.push(crate::engine::ChipBlueprint {
+        name: "RAM_4x4Bit".to_string(),
+        inputs: 8,
+        outputs: 4,
+        input_names: vec![
+            "Addr0".to_string(),
+            "Addr1".to_string(),
+            "CS".to_string(),
+            "WE".to_string(),
+            "D0".to_string(),
+            "D1".to_string(),
+            "D2".to_string(),
+            "D3".to_string(),
+        ],
+        output_names: vec![
+            "Q0".to_string(),
+            "Q1".to_string(),
+            "Q2".to_string(),
+            "Q3".to_string(),
+        ],
+        components: vec![],
+        connections: vec![],
+    });
+
+    let (ram_w, ram_h) = editor.get_component_dimensions(ComponentType::SubChip(0));
+    editor.circuit.components.push(VisualComponent {
+        id: 100,
+        comp_type: ComponentType::SubChip(0),
+        pos: Vec2::new(400.0, 200.0),
+        width: ram_w,
+        height: ram_h,
+        label: "RAM_4x4Bit".to_string(),
+        clock_period: None,
+        color: None,
+        bus_width: None,
+    });
+
+    for i in 0..8 {
+        editor.circuit.components.push(VisualComponent {
+            id: i + 1,
+            comp_type: ComponentType::Input,
+            pos: Vec2::new(50.0, i as f32 * 60.0),
+            width: 70.0,
+            height: 56.0,
+            label: format!("IN_{}", i),
+            clock_period: None,
+            color: None,
+            bus_width: None,
+        });
+        editor.circuit.connections.push(VisualConnection {
+            src_comp_id: i + 1,
+            src_port: 0,
+            tgt_comp_id: 100,
+            tgt_port: i,
+        });
+    }
+
+    for o in 0..4 {
+        editor.circuit.components.push(VisualComponent {
+            id: 200 + o,
+            comp_type: ComponentType::Output,
+            pos: Vec2::new(700.0, o as f32 * 60.0),
+            width: 70.0,
+            height: 56.0,
+            label: format!("Q{}", o),
+            clock_period: None,
+            color: None,
+            bus_width: None,
+        });
+        editor.circuit.connections.push(VisualConnection {
+            src_comp_id: 100,
+            src_port: o,
+            tgt_comp_id: 200 + o,
+            tgt_port: 0,
+        });
+    }
+
+    editor.rebuild_comp_map();
+    editor.auto_arrange_components();
+
+    // 1. Verify wire_offsets was recomputed by auto_arrange_components
+    assert_eq!(
+        editor.circuit.wire_offsets.len(),
+        editor.circuit.connections.len(),
+        "auto_arrange_components must populate wire_offsets for all connections"
+    );
+
+    // 2. Verify the RAM chip's vertical center is closely aligned with the 8 inputs' vertical center
+    let ram = editor.get_component(100).unwrap();
+    let ram_center_y = ram.pos.y + ram.height * 0.5;
+    let inputs_avg_center_y: f32 = (1..=8)
+        .map(|id| {
+            let c = editor.get_component(id).unwrap();
+            c.pos.y + c.height * 0.5
+        })
+        .sum::<f32>()
+        / 8.0;
+    assert!(
+        (ram_center_y - inputs_avg_center_y).abs() <= 30.0,
+        "RAM vertical center ({}) should align with inputs vertical center ({})",
+        ram_center_y,
+        inputs_avg_center_y
+    );
+
+    // 3. Verify zero wire-crossing intersections exist across the arranged parallel buses
+    let visible_refs: Vec<&VisualConnection> = editor.circuit.connections.iter().collect();
+    let intersections = editor.find_wire_intersections(&visible_refs);
+    let crossings_count = intersections
+        .iter()
+        .filter(|int| int.junction_type == crate::editor::wire_junctions::JunctionType::Crossing)
+        .count();
+    assert_eq!(
+        crossings_count, 0,
+        "Parallel bus connections to RAM_4x4Bit should route with 0 wire crossings, found {}",
+        crossings_count
+    );
+}
