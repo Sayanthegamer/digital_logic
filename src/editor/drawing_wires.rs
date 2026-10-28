@@ -28,6 +28,7 @@ impl Editor {
         if is_bus {
             thickness *= 2.2;
         }
+        thickness = thickness.max(0.9);
 
         let color = color_override.unwrap_or(base_color);
 
@@ -39,6 +40,56 @@ impl Editor {
             tgt_port,
             self.canvas.zoom,
         );
+
+        // Fast Path: When zoomed out (< 0.38) or when the wire has no crossing bridge-arc gaps,
+        // emit a single batched `egui::Shape::line` polyline instead of tessellating per-segment circles.
+        if self.canvas.zoom < 0.38 || gaps.is_empty() {
+            let mut poly_points = Vec::with_capacity(segments.len() + 1);
+            for (idx, &(a, b)) in segments.iter().enumerate() {
+                if idx == 0 {
+                    poly_points.push(egui::pos2(a.x, a.y));
+                }
+                if a.distance(b) > 0.25 {
+                    poly_points.push(egui::pos2(b.x, b.y));
+                }
+            }
+
+            if (is_active || is_selected) && self.canvas.zoom >= 0.35 {
+                let glow_base = if is_selected {
+                    theme::ACCENT_PRIMARY.mq_with_alpha(0.4)
+                } else {
+                    color
+                };
+                let glow_color = Color::new(glow_base.r, glow_base.g, glow_base.b, 0.2);
+                let glow_thickness =
+                    thickness + (if is_selected { 6.0 } else { 4.0 }) * self.canvas.zoom;
+                draw_polyline(painter, poly_points.clone(), glow_thickness, glow_color);
+            }
+
+            draw_polyline(painter, poly_points, thickness, color);
+
+            if self.canvas.zoom >= 0.35 {
+                let port_radius = 4.0 * self.canvas.zoom;
+                if is_active {
+                    draw_circle_filled(
+                        painter,
+                        tgt_pos.x,
+                        tgt_pos.y,
+                        port_radius + 2.0 * self.canvas.zoom,
+                        theme::ACCENT_PRIMARY.mq_with_alpha(0.2),
+                    );
+                }
+                draw_circle_filled(painter, tgt_pos.x, tgt_pos.y, port_radius, color);
+                draw_circle_filled(
+                    painter,
+                    tgt_pos.x,
+                    tgt_pos.y,
+                    2.0 * self.canvas.zoom,
+                    theme::BG_CANVAS.mq(),
+                );
+            }
+            return;
+        }
 
         let mut scratch_borrow = self.canvas.render_scratch.borrow_mut();
         scratch_borrow.clear();

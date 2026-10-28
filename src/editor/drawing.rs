@@ -85,7 +85,12 @@ impl Editor {
         sorted_visible_wires
             .sort_unstable_by_key(|w| (w.src_comp_id, w.src_port, w.tgt_comp_id, w.tgt_port));
 
-        let intersections = self.find_wire_intersections(&sorted_visible_wires);
+        // Skip O(K) crossing/bridge-arc search when zoomed out (< 0.38) or viewing > 2,500 simultaneous wires
+        let intersections = if self.canvas.zoom >= 0.38 && sorted_visible_wires.len() <= 2_500 {
+            self.find_wire_intersections(&sorted_visible_wires)
+        } else {
+            Vec::new()
+        };
         let mut upper_gaps: std::collections::HashMap<
             crate::editor::types::VisualConnection,
             Vec<(Vec2, f32)>,

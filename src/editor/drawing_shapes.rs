@@ -79,6 +79,21 @@ pub(crate) fn draw_line_seg(
 }
 
 #[inline(always)]
+pub(crate) fn draw_polyline(
+    painter: &egui::Painter,
+    points: Vec<egui::Pos2>,
+    thickness: f32,
+    color: Color,
+) {
+    if points.len() >= 2 {
+        painter.add(egui::Shape::line(
+            points,
+            egui::Stroke::new(thickness, color.to_egui()),
+        ));
+    }
+}
+
+#[inline(always)]
 pub(crate) fn draw_circle_filled(painter: &egui::Painter, x: f32, y: f32, r: f32, color: Color) {
     painter.circle_filled(egui::pos2(x, y), r.max(0.0), color.to_egui());
 }
