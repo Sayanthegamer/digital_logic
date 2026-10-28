@@ -1,7 +1,7 @@
 use super::Simulator;
 use fixedbitset::FixedBitSet;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct SleepDomain {
     pub id: usize,
     pub control_gate: usize,
@@ -53,7 +53,9 @@ impl SleepDomain {
         // Mark internal gates as sleeping
         for &gate_idx in &self.gates {
             if gate_idx < sim.nodes.states.len() {
-                sim.sleeping_gates.grow(gate_idx + 1);
+                if gate_idx >= sim.sleeping_gates.len() {
+                    sim.sleeping_gates.grow(gate_idx + 1);
+                }
                 sim.sleeping_gates.insert(gate_idx);
             }
         }
@@ -62,9 +64,11 @@ impl SleepDomain {
 
         // Enqueue external dependents of latches to ensure downstream logic settles
         for &latch_idx in &self.latch_indices {
-            let deps = sim.nodes.dependents[latch_idx].clone();
-            for dep in deps {
-                sim.enqueue_internal(dep as usize);
+            if latch_idx < sim.nodes.dependents.len() {
+                let deps = sim.nodes.dependents[latch_idx].clone();
+                for dep in deps {
+                    sim.enqueue_internal(dep as usize);
+                }
             }
         }
     }
@@ -101,9 +105,11 @@ impl SleepDomain {
 
         // Enqueue external dependents of latches
         for &latch_idx in &self.latch_indices {
-            let deps = sim.nodes.dependents[latch_idx].clone();
-            for dep in deps {
-                sim.enqueue_internal(dep as usize);
+            if latch_idx < sim.nodes.dependents.len() {
+                let deps = sim.nodes.dependents[latch_idx].clone();
+                for dep in deps {
+                    sim.enqueue_internal(dep as usize);
+                }
             }
         }
 

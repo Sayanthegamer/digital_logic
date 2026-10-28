@@ -189,11 +189,11 @@ impl Simulator {
             if self.sleep_domains[d_idx].control_gate == ctrl_gate_idx {
                 let should_sleep = self.sleep_domains[d_idx].should_sleep(new_state);
                 if should_sleep && !self.sleep_domains[d_idx].is_sleeping {
-                    let mut d = self.sleep_domains[d_idx].clone();
+                    let mut d = std::mem::take(&mut self.sleep_domains[d_idx]);
                     d.hibernate(self);
                     self.sleep_domains[d_idx] = d;
                 } else if !should_sleep && self.sleep_domains[d_idx].is_sleeping {
-                    let mut d = self.sleep_domains[d_idx].clone();
+                    let mut d = std::mem::take(&mut self.sleep_domains[d_idx]);
                     d.wake(self);
                     self.sleep_domains[d_idx] = d;
                 }
@@ -354,6 +354,7 @@ impl Simulator {
             let new_idx =
                 new_storage.insert(self.nodes.gate_types[old_idx], self.nodes.states[old_idx]);
             new_storage.depths[new_idx] = self.nodes.depths[old_idx];
+            new_storage.in_queue.set(new_idx, self.nodes.in_queue.contains(old_idx));
             old_to_new[old_idx] = new_idx;
         }
 
@@ -393,7 +394,8 @@ impl Simulator {
             }
         }
 
-        // Remap sleep domains
+        // Remap sleep domains and rebuild sleeping_gates bitset to match new indices
+        self.sleeping_gates.clear();
         for domain in &mut self.sleep_domains {
             if domain.control_gate < old_to_new.len()
                 && old_to_new[domain.control_gate] != usize::MAX
@@ -403,6 +405,12 @@ impl Simulator {
             for g in &mut domain.gates {
                 if *g < old_to_new.len() && old_to_new[*g] != usize::MAX {
                     *g = old_to_new[*g];
+                }
+                if domain.is_sleeping {
+                    if *g >= self.sleeping_gates.len() {
+                        self.sleeping_gates.grow(*g + 1);
+                    }
+                    self.sleeping_gates.insert(*g);
                 }
             }
             for latch in &mut domain.latch_indices {
@@ -428,11 +436,11 @@ impl Simulator {
                     let ctrl_val = self.nodes.states[ctrl_gate];
                     let should_sleep = self.sleep_domains[d_idx].should_sleep(ctrl_val);
                     if should_sleep && !self.sleep_domains[d_idx].is_sleeping {
-                        let mut d = self.sleep_domains[d_idx].clone();
+                        let mut d = std::mem::take(&mut self.sleep_domains[d_idx]);
                         d.hibernate(self);
                         self.sleep_domains[d_idx] = d;
                     } else if !should_sleep && self.sleep_domains[d_idx].is_sleeping {
-                        let mut d = self.sleep_domains[d_idx].clone();
+                        let mut d = std::mem::take(&mut self.sleep_domains[d_idx]);
                         d.wake(self);
                         self.sleep_domains[d_idx] = d;
                     }
@@ -481,15 +489,27 @@ impl Simulator {
                     GateType::Input => curr_state,
                     GateType::Output => val_a,
                     GateType::Nand => {
-                        let a_bool = (val_a & 0b10) != 0;
-                        let b_bool = (val_b & 0b10) != 0;
-                        if !(a_bool && b_bool) { 0b10 } else { 0b01 }
+                        // Dominant Low (0b01) or unconnected Floating (0b00) forces NAND output High (0b10).
+                        // If neither input is Low/Floating and either is Contention (0b11), propagate Contention (0b11).
+                        if val_a <= 0b01 || val_b <= 0b01 {
+                            0b10
+                        } else if val_a == 0b11 || val_b == 0b11 {
+                            0b11
+                        } else {
+                            0b01
+                        }
                     }
                     GateType::TriStateBuffer => {
-                        let en_bool = (val_b & 0b10) != 0;
-                        if en_bool {
-                            let data_bool = (val_a & 0b10) != 0;
-                            if data_bool { 0b10 } else { 0b01 }
+                        if val_b == 0b11 {
+                            0b11
+                        } else if val_b == 0b10 {
+                            if val_a == 0b11 {
+                                0b11
+                            } else if (val_a & 0b10) != 0 {
+                                0b10
+                            } else {
+                                0b01
+                            }
                         } else {
                             0b00
                         }
@@ -527,6 +547,11 @@ impl Simulator {
 
             total_steps += current_queue.len();
             if total_steps >= max_steps {
+                // Cleanly drain queues and reset in_queue flags so subsequent steps aren't wedged
+                for q in &mut self.event_queue {
+                    q.clear();
+                }
+                self.nodes.in_queue.clear();
                 return Err(format!(
                     "Oscillation detected: exceeded max_steps limit of {}",
                     max_steps

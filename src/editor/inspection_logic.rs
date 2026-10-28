@@ -1,6 +1,7 @@
 use crate::engine::{
     ChipBlueprint, Component, ComponentType, OutputSource, SourcePort, TargetPort, TraceNode,
 };
+use std::collections::HashSet;
 
 use super::Editor;
 
@@ -44,6 +45,20 @@ impl Editor {
     }
 
     pub fn get_node_state_at_path(&self, node: &TraceNode, path: &[usize]) -> bool {
+        let mut visited_paths = HashSet::new();
+        self.get_node_state_at_path_inner(node, path, &mut visited_paths)
+    }
+
+    fn get_node_state_at_path_inner(
+        &self,
+        node: &TraceNode,
+        path: &[usize],
+        visited_paths: &mut HashSet<(Vec<usize>, TraceNode)>,
+    ) -> bool {
+        if !visited_paths.insert((path.to_vec(), *node)) {
+            return false;
+        }
+
         if path.is_empty() {
             match node {
                 TraceNode::ChipInput(idx) => {
@@ -85,7 +100,7 @@ impl Editor {
                             component_idx: conn.src_comp_id,
                             port_idx: conn.src_port,
                         };
-                        return self.get_node_state_at_path(&src_node, &[]);
+                        return self.get_node_state_at_path_inner(&src_node, &[], visited_paths);
                     }
                 }
                 _ => {}
@@ -108,7 +123,7 @@ impl Editor {
                         component_idx: comp_id_in_parent,
                         port_idx: in_idx,
                     };
-                    self.get_node_state_at_path(&parent_node, parent_path)
+                    self.get_node_state_at_path_inner(&parent_node, parent_path, visited_paths)
                 }
                 OutputSource::Floating => false,
             }
@@ -118,6 +133,20 @@ impl Editor {
     }
 
     pub fn get_raw_node_state_at_path(&self, node: &TraceNode, path: &[usize]) -> u8 {
+        let mut visited_paths = HashSet::new();
+        self.get_raw_node_state_at_path_inner(node, path, &mut visited_paths)
+    }
+
+    fn get_raw_node_state_at_path_inner(
+        &self,
+        node: &TraceNode,
+        path: &[usize],
+        visited_paths: &mut HashSet<(Vec<usize>, TraceNode)>,
+    ) -> u8 {
+        if !visited_paths.insert((path.to_vec(), *node)) {
+            return 0b00;
+        }
+
         if path.is_empty() {
             match node {
                 TraceNode::ChipInput(idx) => {
@@ -159,7 +188,11 @@ impl Editor {
                             component_idx: conn.src_comp_id,
                             port_idx: conn.src_port,
                         };
-                        return self.get_raw_node_state_at_path(&src_node, &[]);
+                        return self.get_raw_node_state_at_path_inner(
+                            &src_node,
+                            &[],
+                            visited_paths,
+                        );
                     }
                 }
                 _ => {}
@@ -182,7 +215,7 @@ impl Editor {
                         component_idx: comp_id_in_parent,
                         port_idx: in_idx,
                     };
-                    self.get_raw_node_state_at_path(&parent_node, parent_path)
+                    self.get_raw_node_state_at_path_inner(&parent_node, parent_path, visited_paths)
                 }
                 OutputSource::Floating => 0b00,
             }
@@ -197,12 +230,29 @@ impl Editor {
         blueprint: &ChipBlueprint,
         path: &[usize],
     ) -> OutputSource {
+        let mut visited = HashSet::new();
+        self.trace_local_driver_visited(node, blueprint, path, &mut visited)
+    }
+
+    fn trace_local_driver_visited(
+        &self,
+        node: &TraceNode,
+        blueprint: &ChipBlueprint,
+        path: &[usize],
+        visited: &mut HashSet<TraceNode>,
+    ) -> OutputSource {
+        if !visited.insert(*node) {
+            return OutputSource::Floating;
+        }
+
         match node {
             TraceNode::CompOutput {
                 component_idx,
                 port_idx,
             } => {
-                let component = &blueprint.components[*component_idx];
+                let Some(component) = blueprint.components.get(*component_idx) else {
+                    return OutputSource::Floating;
+                };
                 match component.component_type {
                     ComponentType::Nand | ComponentType::Clock | ComponentType::TriStateBuffer => {
                         if let Some(gate_idx) = self
@@ -237,14 +287,14 @@ impl Editor {
                             component_idx: *component_idx,
                             port_idx: 0,
                         };
-                        self.trace_local_driver(&in_node, blueprint, path)
+                        self.trace_local_driver_visited(&in_node, blueprint, path, visited)
                     }
                     ComponentType::BusJoiner | ComponentType::BusSplitter => {
                         let in_node = TraceNode::CompInput {
                             component_idx: *component_idx,
                             port_idx: *port_idx,
                         };
-                        self.trace_local_driver(&in_node, blueprint, path)
+                        self.trace_local_driver_visited(&in_node, blueprint, path, visited)
                     }
                     ComponentType::Input | ComponentType::Output | ComponentType::SevenSegment => {
                         OutputSource::Floating
@@ -269,13 +319,14 @@ impl Editor {
                         SourcePort::ComponentOutput {
                             component_idx: src_c,
                             port_idx: src_p,
-                        } => self.trace_local_driver(
+                        } => self.trace_local_driver_visited(
                             &TraceNode::CompOutput {
                                 component_idx: src_c,
                                 port_idx: src_p,
                             },
                             blueprint,
                             path,
+                            visited,
                         ),
                     }
                 } else {
@@ -294,13 +345,14 @@ impl Editor {
                         SourcePort::ComponentOutput {
                             component_idx: src_c,
                             port_idx: src_p,
-                        } => self.trace_local_driver(
+                        } => self.trace_local_driver_visited(
                             &TraceNode::CompOutput {
                                 component_idx: src_c,
                                 port_idx: src_p,
                             },
                             blueprint,
                             path,
+                            visited,
                         ),
                     }
                 } else {
