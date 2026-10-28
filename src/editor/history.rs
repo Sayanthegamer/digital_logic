@@ -3,8 +3,18 @@ use super::state::CanvasSnapshot;
 
 impl Editor {
     /// Captures the current visual state and pushes it to the undo stack.
-    /// This should be called *before* any destructive action.
+    /// Deduplicates consecutive identical circuit states so no-op clicks do not waste history slots.
     pub fn push_history_snapshot(&mut self) {
+        if let Some(last) = self.history.undo_stack.back()
+            && last.components == self.circuit.components
+            && last.connections == self.circuit.connections
+            && last.annotations == self.circuit.annotations
+            && last.wire_nudges == self.circuit.wire_nudges
+            && last.wire_offsets == self.circuit.wire_offsets
+        {
+            return;
+        }
+
         let snapshot = CanvasSnapshot {
             components: self.circuit.components.clone(),
             connections: self.circuit.connections.clone(),
@@ -53,10 +63,10 @@ impl Editor {
             self.circuit.wire_nudges = prev_state.wire_nudges.clone();
             self.circuit.wire_offsets = prev_state.wire_offsets.clone();
 
-            // Recompile the simulation engine
+            // Recompile the simulation engine (which also recomputes wire detours/offsets)
             self.compile();
 
-            // Re-apply preserved wire nudges and offsets after compile
+            // Re-apply preserved wire nudges and explicit offsets after compile
             self.circuit.wire_nudges = prev_state.wire_nudges;
             self.circuit.wire_offsets = prev_state.wire_offsets;
             self.rebuild_spatial_grid();
@@ -101,7 +111,7 @@ impl Editor {
             // Recompile the simulation engine
             self.compile();
 
-            // Re-apply preserved wire nudges and offsets after compile
+            // Re-apply preserved wire nudges and explicit offsets after compile
             self.circuit.wire_nudges = next_state.wire_nudges;
             self.circuit.wire_offsets = next_state.wire_offsets;
             self.rebuild_spatial_grid();

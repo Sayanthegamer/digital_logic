@@ -22,7 +22,7 @@ pub mod serde_vec2 {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct VisualComponent {
     pub id: usize,
     pub comp_type: ComponentType,
@@ -97,7 +97,7 @@ pub enum ActiveTool {
     PlaceAnnotation,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct TextAnnotation {
     pub text: String,
     #[serde(with = "serde_vec2")]

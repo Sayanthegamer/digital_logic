@@ -574,10 +574,28 @@ impl Editor {
                     .read_to_string(&mut contents)
                     .is_ok()
                 {
-                    if let Ok(project) = serde_json::from_str::<ProjectFile>(&contents) {
+                    if let Ok(project) = serde_json::from_str::<ProjectFile>(&contents)
+                        && crate::engine::Simulator::validate_library(&project.library).is_ok()
+                    {
+                        let old_ungrouped_len = self.global_library.ungrouped.len();
+                        let old_total = self.global_library.to_flat_list().len();
                         self.global_library.import_from_project(&project.library);
+                        let new_ungrouped_len = self.global_library.ungrouped.len();
+                        let added = new_ungrouped_len.saturating_sub(old_ungrouped_len);
                         self.sync_engine_library();
+                        if added > 0 && old_total > old_ungrouped_len {
+                            let mut map = Vec::with_capacity(old_total);
+                            for i in 0..old_total {
+                                if i < old_ungrouped_len {
+                                    map.push(Some(i));
+                                } else {
+                                    map.push(Some(i + added));
+                                }
+                            }
+                            self.apply_library_index_map(&map);
+                        }
                         global_library::save_global_library(&self.global_library);
+                        self.compile();
                     }
                 }
             }

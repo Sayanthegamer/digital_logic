@@ -64,9 +64,10 @@ impl GlobalLibrary {
         &mut self,
         project_chips: &[ChipBlueprint],
     ) -> HashMap<usize, usize> {
-        let mut index_map = HashMap::new();
-
+        let old_ungrouped_len = self.ungrouped.len();
         let existing_flat = self.to_flat_list();
+        let existing_len = existing_flat.len();
+
         let mut existing_hashes: Vec<u64> = existing_flat
             .iter()
             .map(|bp| Self::blueprint_hash(bp, &HashMap::new()))
@@ -75,24 +76,21 @@ impl GlobalLibrary {
         let mut existing_names: Vec<String> =
             existing_flat.iter().map(|bp| bp.name.clone()).collect();
 
+        let mut temp_index_map = HashMap::new();
         let mut new_imports = Vec::new();
-        let new_flat_len = existing_flat.len();
 
-        // 1. Map all old indices to their new flat indices
+        // 1. Identify which project chips match existing blueprints vs. need to be newly imported
         for (old_idx, chip) in project_chips.iter().enumerate() {
-            let hash = Self::blueprint_hash(chip, &index_map);
+            let hash = Self::blueprint_hash(chip, &temp_index_map);
 
             if let Some(pos) = existing_hashes.iter().position(|&h| h == hash) {
-                // Same content already exists in the global library, map to its flat index
-                index_map.insert(old_idx, pos);
+                temp_index_map.insert(old_idx, pos);
             } else {
-                // Different content — needs to be imported.
-                let new_idx = new_flat_len + new_imports.len();
-                index_map.insert(old_idx, new_idx);
+                let temp_idx = existing_len + new_imports.len();
+                temp_index_map.insert(old_idx, temp_idx);
 
                 let mut import_chip = chip.clone();
                 if existing_names.contains(&import_chip.name) {
-                    // Auto-rename to avoid confusion
                     let mut suffix = 1;
                     loop {
                         let candidate = format!("{}_{}", chip.name, suffix);
@@ -110,21 +108,66 @@ impl GlobalLibrary {
             }
         }
 
-        // 2. Remap all internal components of the newly imported chips
+        let k = new_imports.len();
+        // Because `to_flat_list` orders `ungrouped` (0..old_ungrouped_len + k) before `folders`,
+        // appending `k` new imports to `self.ungrouped` places them at `old_ungrouped_len .. old_ungrouped_len + k`
+        // and shifts any existing folder chip (`pos >= old_ungrouped_len`) by `+ k`.
+        let resolve_final_idx = |temp_pos: usize| -> usize {
+            if temp_pos < old_ungrouped_len {
+                temp_pos
+            } else if temp_pos < existing_len {
+                temp_pos + k
+            } else {
+                old_ungrouped_len + (temp_pos - existing_len)
+            }
+        };
+
+        let mut final_index_map = HashMap::with_capacity(temp_index_map.len());
+        for (old_idx, temp_pos) in temp_index_map {
+            final_index_map.insert(old_idx, resolve_final_idx(temp_pos));
+        }
+
+        // 2. If new chips were inserted before `folders`, shift existing SubChip references to folder chips by `+ k`
+        if k > 0 && existing_len > old_ungrouped_len {
+            for chip in &mut self.ungrouped {
+                for comp in &mut chip.components {
+                    if let crate::engine::ComponentType::SubChip(ref mut sub_idx) =
+                        comp.component_type
+                        && *sub_idx >= old_ungrouped_len
+                    {
+                        *sub_idx += k;
+                    }
+                }
+            }
+            for folder in &mut self.folders {
+                for chip in &mut folder.chips {
+                    for comp in &mut chip.components {
+                        if let crate::engine::ComponentType::SubChip(ref mut sub_idx) =
+                            comp.component_type
+                            && *sub_idx >= old_ungrouped_len
+                        {
+                            *sub_idx += k;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Remap all internal components of the newly imported chips to their final flat indices
         for chip in &mut new_imports {
             for comp in &mut chip.components {
                 if let crate::engine::ComponentType::SubChip(ref mut sub_idx) = comp.component_type
-                    && let Some(&new_sub_idx) = index_map.get(sub_idx)
+                    && let Some(&new_sub_idx) = final_index_map.get(sub_idx)
                 {
                     *sub_idx = new_sub_idx;
                 }
             }
         }
 
-        // 3. Append the remapped new chips to the ungrouped section
+        // 4. Append the remapped new chips to the ungrouped section
         self.ungrouped.extend(new_imports);
 
-        index_map
+        final_index_map
     }
 
     /// Find the (folder_index, chip_index) for a chip at a given flat index.

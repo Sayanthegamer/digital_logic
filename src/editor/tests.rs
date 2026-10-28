@@ -1341,3 +1341,166 @@ fn test_auto_arrange_recomputes_wire_offsets_and_eliminates_bus_crossings() {
         crossings_count
     );
 }
+
+#[test]
+fn test_obstacle_avoiding_wire_detour_routes_around_intermediate_component() {
+    let mut editor = Editor::new();
+    editor.circuit.components.clear();
+    editor.circuit.connections.clear();
+
+    // Place Source Input at (100, 200), Blocking NAND right in the middle at (250, 190), and Target Output at (450, 200)
+    editor.circuit.components.push(VisualComponent {
+        id: 1,
+        comp_type: ComponentType::Input,
+        pos: Vec2::new(100.0, 200.0),
+        width: 70.0,
+        height: 40.0,
+        label: "SRC".to_string(),
+        clock_period: None,
+        color: None,
+        bus_width: None,
+    });
+    editor.circuit.components.push(VisualComponent {
+        id: 2,
+        comp_type: ComponentType::Nand,
+        pos: Vec2::new(250.0, 190.0),
+        width: 70.0,
+        height: 60.0,
+        label: "BLOCKER".to_string(),
+        clock_period: None,
+        color: None,
+        bus_width: None,
+    });
+    editor.circuit.components.push(VisualComponent {
+        id: 3,
+        comp_type: ComponentType::Output,
+        pos: Vec2::new(450.0, 200.0),
+        width: 70.0,
+        height: 40.0,
+        label: "TGT".to_string(),
+        clock_period: None,
+        color: None,
+        bus_width: None,
+    });
+
+    let conn = VisualConnection {
+        src_comp_id: 1,
+        src_port: 0,
+        tgt_comp_id: 3,
+        tgt_port: 0,
+    };
+    editor.circuit.connections.push(conn);
+    editor.rebuild_comp_map();
+    editor.recompute_wire_offsets(None);
+
+    let detour_y = editor
+        .get_connection_detour_y(&conn)
+        .expect("Wire blocked by intermediate component must receive a detour_y channel");
+    assert!(
+        !(190.0..=250.0).contains(&detour_y),
+        "Detour Y ({}) must bypass outside the blocker's vertical span (190..250)",
+        detour_y
+    );
+}
+
+#[test]
+fn test_import_from_project_with_non_empty_folders_preserves_flat_indices() {
+    let mut gl = crate::editor::global_library::GlobalLibrary::default();
+    gl.ungrouped.push(crate::engine::ChipBlueprint {
+        name: "UngroupedChip".to_string(),
+        inputs: 1,
+        outputs: 1,
+        input_names: vec!["A".to_string()],
+        output_names: vec!["Y".to_string()],
+        components: vec![],
+        connections: vec![],
+    });
+    gl.folders.push(crate::editor::global_library::ChipFolder {
+        name: "FolderA".to_string(),
+        color: None,
+        chips: vec![crate::engine::ChipBlueprint {
+            name: "FolderChip".to_string(),
+            inputs: 2,
+            outputs: 1,
+            input_names: vec!["A".to_string(), "B".to_string()],
+            output_names: vec!["Y".to_string()],
+            components: vec![crate::engine::Component {
+                component_type: ComponentType::Nand,
+                pos: (0.0, 0.0),
+                clock_period: None,
+                bus_width: None,
+            }],
+            connections: vec![],
+        }],
+    });
+
+    // Import a project containing a brand-new chip (idx 0) and an outer chip (idx 1) that instantiates idx 0
+    let proj_lib = vec![
+        crate::engine::ChipBlueprint {
+            name: "ImportedInner".to_string(),
+            inputs: 1,
+            outputs: 1,
+            input_names: vec!["I".to_string()],
+            output_names: vec!["O".to_string()],
+            components: vec![
+                crate::engine::Component {
+                    component_type: ComponentType::Nand,
+                    pos: (0.0, 0.0),
+                    clock_period: None,
+                    bus_width: None,
+                },
+                crate::engine::Component {
+                    component_type: ComponentType::Nand,
+                    pos: (50.0, 0.0),
+                    clock_period: None,
+                    bus_width: None,
+                },
+            ],
+            connections: vec![],
+        },
+        crate::engine::ChipBlueprint {
+            name: "ImportedOuter".to_string(),
+            inputs: 1,
+            outputs: 1,
+            input_names: vec!["I".to_string()],
+            output_names: vec!["O".to_string()],
+            components: vec![crate::engine::Component {
+                component_type: ComponentType::SubChip(0),
+                pos: (0.0, 0.0),
+                clock_period: None,
+                bus_width: None,
+            }],
+            connections: vec![],
+        },
+    ];
+
+    let index_map = gl.import_from_project(&proj_lib);
+    let flat = gl.to_flat_list();
+
+    let mapped_inner = index_map[&0];
+    let mapped_outer = index_map[&1];
+    assert_eq!(flat[mapped_inner].name, "ImportedInner");
+    assert_eq!(flat[mapped_outer].name, "ImportedOuter");
+    assert_eq!(
+        flat[mapped_outer].components[0].component_type,
+        ComponentType::SubChip(mapped_inner),
+        "ImportedOuter must point to ImportedInner's true flat index even when folders exist"
+    );
+}
+
+#[test]
+fn test_history_deduplicates_identical_snapshots() {
+    let mut editor = Editor::new();
+    editor.history.undo_stack.clear();
+
+    editor.push_history_snapshot();
+    assert_eq!(editor.history.undo_stack.len(), 1);
+
+    // Calling push_history_snapshot again without any circuit changes should be deduplicated
+    editor.push_history_snapshot();
+    assert_eq!(
+        editor.history.undo_stack.len(),
+        1,
+        "Identical consecutive snapshots should be deduplicated"
+    );
+}

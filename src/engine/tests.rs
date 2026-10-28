@@ -1306,3 +1306,96 @@ fn test_sleep_domain_defragmentation_remaps_sleeping_gates_bitset() {
         "control input gate must not be marked as sleeping after defragmentation"
     );
 }
+
+#[test]
+fn test_static_validate_library_catches_cycles_and_bad_ports() {
+    // 1. Recursive 2-chip cycle (Chip 0 -> Chip 1 -> Chip 0)
+    let cyclic_lib = vec![
+        ChipBlueprint {
+            name: "A".to_string(),
+            inputs: 1,
+            outputs: 1,
+            input_names: vec!["I".to_string()],
+            output_names: vec!["O".to_string()],
+            components: vec![Component {
+                component_type: ComponentType::SubChip(1),
+                pos: (0.0, 0.0),
+                clock_period: None,
+                bus_width: None,
+            }],
+            connections: vec![],
+        },
+        ChipBlueprint {
+            name: "B".to_string(),
+            inputs: 1,
+            outputs: 1,
+            input_names: vec!["I".to_string()],
+            output_names: vec!["O".to_string()],
+            components: vec![Component {
+                component_type: ComponentType::SubChip(0),
+                pos: (0.0, 0.0),
+                clock_period: None,
+                bus_width: None,
+            }],
+            connections: vec![],
+        },
+    ];
+    let res = Simulator::validate_library(&cyclic_lib);
+    assert!(res.is_err());
+    assert!(res.unwrap_err().contains("Recursion cycle detected"));
+
+    // 2. Valid DAG library passes static validation
+    let valid_lib = vec![
+        ChipBlueprint {
+            name: "Inner".to_string(),
+            inputs: 2,
+            outputs: 1,
+            input_names: vec!["A".to_string(), "B".to_string()],
+            output_names: vec!["Y".to_string()],
+            components: vec![Component {
+                component_type: ComponentType::Nand,
+                pos: (0.0, 0.0),
+                clock_period: None,
+                bus_width: None,
+            }],
+            connections: vec![
+                Connection {
+                    source: SourcePort::ChipInput(0),
+                    target: TargetPort::ComponentInput {
+                        component_idx: 0,
+                        port_idx: 0,
+                    },
+                },
+                Connection {
+                    source: SourcePort::ChipInput(1),
+                    target: TargetPort::ComponentInput {
+                        component_idx: 0,
+                        port_idx: 1,
+                    },
+                },
+                Connection {
+                    source: SourcePort::ComponentOutput {
+                        component_idx: 0,
+                        port_idx: 0,
+                    },
+                    target: TargetPort::ChipOutput(0),
+                },
+            ],
+        },
+        ChipBlueprint {
+            name: "Outer".to_string(),
+            inputs: 2,
+            outputs: 1,
+            input_names: vec!["A".to_string(), "B".to_string()],
+            output_names: vec!["Y".to_string()],
+            components: vec![Component {
+                component_type: ComponentType::SubChip(0),
+                pos: (0.0, 0.0),
+                clock_period: None,
+                bus_width: None,
+            }],
+            connections: vec![],
+        },
+    ];
+    assert!(Simulator::validate_library(&valid_lib).is_ok());
+}
