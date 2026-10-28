@@ -12,9 +12,12 @@
         android:roundIcon="@mipmap/ic_launcher">
         <activity
             android:name="rust.logic_simulator.MainActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden|keyboard"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|uiMode"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:exported="true">
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="logic_simulator" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

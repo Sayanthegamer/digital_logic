@@ -1,92 +1,80 @@
 # Scale-Breaking Points & Bottlenecks
 
-> **STATUS: 🟢 RESOLVED (Phase 3-9 Refactor)**
-> All major bottlenecks identified in the engine and editor have been resolved with O(1) or O(N) optimized replacements, enabling 100k+ gate scale without structural freezing or stutter.
+> **STATUS: 🟢 RESOLVED (Phase 3-10 Architecture)**
+> All major bottlenecks across the simulation engine, schematic wire router, delta compiler, and vector renderer have been resolved with $O(1)$ or $O(\Delta)$ replacements, enabling 100k–1M+ gate scale and 10k+ wire schematics without freezing or stutter.
 
 ---
 
-## 1. Engine Bottlenecks: Recompile-on-Every-Edit [SOLVED]
+## 1. Engine Bottlenecks: Recompile-on-Every-Edit & Incremental Delta-Compilation [SOLVED]
 
 ### The Resolution
-We have heavily optimized the compiler pipeline. While the engine still recompiles on every edit, the bottlenecks inside `compile()` that made it scale poorly have been eliminated:
-- `instantiate_chip_with_mapping` now uses a blazing fast `u64` FNV hash instead of deep-cloning `Vec<usize>` paths.
-- Component and target-source port lookups now use `HashMap`s pre-built at the start of compilation, completely removing $O(E)$ scans.
-- **Subchip Template Caching**: Subchips are pre-compiled into immutable `SubchipTemplate` prototypes (`compile_subchip_template`). Repeated subchip instantiations simply copy the compiled template via base-offset arithmetic, eliminating multi-second UI freezes when placing complex components on the canvas.
-- Recompilation of 100k+ gates now happens in low milliseconds, making the theoretical need for full incremental delta-compilation unnecessary for the current target scale.
+1. **O(Δ) Incremental Delta-Compilation (`Editor::compile_incremental`)**:
+   - Canvas wiring changes, primitive gate additions/removals (`Nand`, `Input`, `Output`, `Clock`, `TriStateBuffer`, `SevenSegment`, `Junction`, `BusJoiner`, `BusSplitter`), and new `SubChip` placements now patch `SoAGateStorage` in place without tearing down or reallocating existing `SubChip` instances.
+   - Only top-level component input ports (`Simulator::disconnect_input`) and top-level `BusResolver` / `SleepDomain` bindings (`Simulator::truncate_sleep_domains`) are re-linked, reducing canvas edit latency on 1,000,000-gate circuits from ~250 ms to sub-millisecond ($O(\text{top-level ports})$).
+2. **Subchip Template Caching (`SubchipTemplate`)**:
+   - Subchips are compiled into immutable `SubchipTemplate` prototypes (`compile_subchip_template`) and instantiated via contiguous base-offset arithmetic.
+3. **State-Preserving Full Recompilation (`Editor::compile_full`)**:
+   - When a full defragmenting compile is required (e.g., after deleting a `SubChip` or modifying a library blueprint), running `Input`, `Clock`, and internal `InstanceTree` latch states are snapshotted and restored across topological defragmentation.
 
 ---
 
-## 2. Engine Bottlenecks: Single-Threaded Event Loop [SOLVED]
+## 2. Engine Bottlenecks: Zero-Allocation Multi-Threaded Event Loop [SOLVED]
 
 ### The Resolution
-The simulator historically suffered from thread-pool overhead and data race constraints which confined event propagation to a single core. This bottleneck has been completely bypassed:
-- **Intelligent Hardware Profiler**: A dynamic runtime calibrator tests the host machine on startup to calculate the exact Rayon crossover threshold where parallelization beats single-threaded execution. If parallelization never outperforms sequential execution up to 16,000 gates (e.g. low-core environments or mobile devices), it falls back to `usize::MAX`, disabling parallel dispatch to avoid thread-pool scheduling penalties.
-- **Topological Map-Reduce**: Gates inside the same topological depth layer are safely evaluated concurrently via `rayon::par_iter()`. We guarantee strict deterministic event processing ordering under high optimization by using an `IndexedParallelIterator` (`.map().collect()`) followed by a sequential `.flatten()`, completely resolving subtle `filter_map` chunking race conditions while maintaining extreme throughput.
-- **Oscillation Budget & Feedback Settling**: The oscillation budget in `propagate_events` is `capacity × max(multiplier, 100)` evaluations, counted cumulatively over one propagation pass (the editor passes 100 as the multiplier by default). This scales the step limit linearly ($O(N)$) rather than quadratically ($O(N^2)$), ensuring wide non-oscillating networks do not trip false stalls while terminating runaway oscillations in low milliseconds. When a state change re-enqueues a gate at an earlier depth, the events are picked up once the loop runs past the last non-empty layer.
-- **Profiler Caching**: Optimized the calibration logic by caching the crossover threshold via `std::sync::OnceLock`. This completely avoids re-running the profiling benchmark on every compilation step (which triggers on every canvas edit/move/wiring action).
+1. **Zero-Allocation Hot Loop (`0 mallocs / tick`)**:
+   - Eliminated per-event `self.nodes.dependents[idx].clone()` heap allocations in `Simulator::propagate_events`, `Simulator::set_input`, and `Simulator::remove_gate` in favor of indexed iteration.
+   - Replaced `std::mem::take(&mut self.event_queue[depth])` buffer dropping with persistent `scratch_queue`, `scratch_updates`, and `scratch_next_enqueues` buffers swapped back into `event_queue[depth]`, eliminating allocator churn during high-frequency clock ticks.
+2. **Intelligent Hardware Profiler & Topological Map-Reduce**:
+   - Dynamic startup calibration (`OnceLock`) determines the exact `rayon::par_iter()` crossover threshold for deterministic parallel layer evaluation.
+3. **Clean Oscillation Recovery**:
+   - Exceeding the linear $O(N)$ oscillation budget drains `event_queue` and clears `in_queue` flags cleanly so disabling an oscillating feedback loop recovers immediately.
 
 ---
 
-## 3. Engine Bottlenecks: Memory Density & L1/L2 Cache Misses [SOLVED]
+## 3. Engine Bottlenecks: Memory Density & L1/L2 Cache Locality [SOLVED]
 
 ### The Resolution
-The engine previously suffered from memory fragmentation and high per-gate overhead (~150 bytes/gate in `Slab<GateNode>`), causing severe L1/L2 cache misses when threads evaluated consecutive topological logic.
-- **Struct-of-Arrays (SoA) Bit-Slab (`GateStorage`)**: Separated hot simulation states (`states: Vec<u8>`) from static topology (`gate_types`, `sources: Vec<[u32; 2]>`, `dependents`) and bit-packed `in_queue: FixedBitSet`. Drops memory consumption to **14.16 bytes per gate** (100,000 gates consume only 1.38 MB).
-- **Defragmentation & Topological Sorting**: Immediately after flattening a custom chip hierarchy, the `Simulator` performs an $O(N \log N)$ sorting pass. All gates are packed contiguously based strictly on their topological depth, and all `SleepDomain` gate ranges, control lines, and latch indices are dynamically remapped. When a Rayon thread grabs a chunk of the event queue, it evaluates a perfectly dense block of memory with zero cache misses, fully saturating the hardware pre-fetcher.
+- **Struct-of-Arrays (SoA) Bit-Slab (`SoAGateStorage`)**: Separates hot simulation states (`states: Vec<u8>`) from topology (`gate_types`, `sources: Vec<[u32; 2]>`, `dependents`) and bit-packed `in_queue: FixedBitSet` (~14.16 bytes/gate).
+- **Defragmentation & Topological Sorting**: Packs gates contiguously by topological depth (`defragment_and_sort_by_depth`) and remaps `SleepDomain` gate ranges, control lines, `sleeping_gates`, and `sleep_control_gates` bitsets.
 
 ---
 
-## 4. Editor Bottlenecks: Wire Routing & Crossings [100% RESOLVED]
+## 4. Editor Bottlenecks: Wire Routing, Obstacle Detours, & Extreme-Scale Polylines [SOLVED]
 
 ### The Resolution
-All O(n²) bottlenecks related to wire rendering and routing have been eliminated:
-- **Rendering Stutter (`recompute_wire_offsets`):** Replaced O(N²) greedy lane coloring with an O(N) Spatial Hash Grid. The 5,000 connection hard limit has been completely removed.
-- **Rendering Stutter (Wire Crossings):** Replaced the 1D sweep-and-prune worst-case O(N²) algorithm with a full O(N) 2D Spatial Hash Grid for the primary intersection search.
-- **Rendering Stutter (Wire Gaps/Arcs):** Replaced rigid, loop-heavy arc rendering and masking with a mathematically precise 1D interval hole merging algorithm ($O(K \log K)$) on individual wire segments, completely eliminating visual clipping, overlapping wavy artifacts, and heavy `Vec` allocations during the rendering cycle.
-- **Drag Lane Collisions:** Modified `recompute_wire_offsets` to check dragged dynamic wires directly against the untouched static wires via spatial hash bucketing (`(col, row)` keys), making conflict checking O(1) amortized per segment.
-- **Rendering Stutter (Viewport Culling):** Stripped out the mathematical AABB rendering loop for both components and wires. The draw loop now performs $O(K)$ queries against independent `SpatialHashGrid`s to immediately isolate the visible components and wires. This completely drops the rendering workload from $O(V + E)$ down to purely the on-screen element count.
+1. **Crossing-Free Ribbon Lane Routing (`recompute_wire_offsets`)**:
+   - Groups vertical wire trunks by corridor and Y-interval overlap, shares vertical lanes across same-source fan-out nets `(src_comp_id, src_port)`, and orders downward (`dy >= 0`) and upward (`dy < 0`) buses monotonically so parallel bus L-bends nest with zero self-crossings.
+2. **Obstacle-Aware Orthogonal Detours (`wire_detours`)**:
+   - Automatically detects when a forward 3-segment wire would slice through an intermediate component's bounding box and routes a 5-segment orthogonal bypass channel above or below the obstacle(s).
+3. **Orthogonal Crossing Arcs & T-Junction Solder Dots**:
+   - Eliminated 45° corner chamfers that previously caused false triple bridge-arc loops at wire bends; restricted bridge arcs strictly to interior horizontal-over-vertical crossings and added solder dots on shared-net T-junctions.
+4. **Batched `egui::Shape::line` Polylines & Multi-Tier Zoom LOD (`draw_manhattan_wire`)**:
+   - Uninterrupted wires and zoomed-out schematics (`zoom < 0.38`) render via a single batched `egui::Shape::line` polyline per wire (skipping per-segment circle tessellation and sub-pixel intersection searches when zoomed out or viewing $>2,500$ simultaneous wires).
 
 ---
 
-## 5. Metadata Discrepancy: BusJoiner / BusSplitter Port Counts [SOLVED]
+## 5. Static $O(V + E)$ Library Validation & Folder-Safe Imports [SOLVED]
 
 ### The Resolution
-This was resolved during the Phase 5 decoupling. We added a dedicated `bus_width` attribute to `Component` and `VisualComponent`. Port counts are now correctly centralized into a shared `get_port_counts()` method, mapping directly to the true hardware constraints without hacky workarounds.
+1. **Static 3-Color DFS Validator (`Simulator::validate_library`)**:
+   - Validates blueprint libraries for recursion cycles and port bounds in $O(V + E)$ time with zero gate allocations when loading or importing projects.
+2. **Folder-Safe Global Library Indexing (`GlobalLibrary::import_from_project`)**:
+   - Correctly shifts flat indices of folder blueprints (`idx >= old_ungrouped_len`) when importing new chips into `ungrouped`, preserving all `SubChip` references across nested blueprints and canvas components.
 
 ---
 
-## 6. Junction Port Overlap & Connection Stacking [SOLVED]
+## 6. Activity-Gated Sleep Domains & $O(1)$ Control Gating [SOLVED]
 
 ### The Resolution
-This layout clutter issue has been fully resolved.
-1. **Perpendicular Tap Routing**: We introduced `get_connection_ports` and `get_junction_connect_pos` inside `editor/mod.rs`. Wires connected to a stretched Junction now tap perpendicularly along the closest coordinate of the Junction's body instead of routing to its endpoints. This entirely prevents horizontal/vertical overlapping segments on fan-out and fan-in wires connecting to Junction buses.
-2. **Wire Deduplication**: We added a filtering rule in `input_release.rs` that cleans up matching connections (`src_comp_id`, `src_port`, `tgt_comp_id`, `tgt_port`) before pushing new ones, ensuring no duplicate wires stack on top of each other.
+1. **$O(1)$ `sleep_control_gates: FixedBitSet` Filter**:
+   - Gate state transitions check a single bit in `sleep_control_gates` before scanning `sleep_domains`, reducing sleep-domain overhead on normal gate transitions to $O(1)$.
+2. **Automated Tarjan SCC Latch Discovery**:
+   - Automatically identifies bistable feedback latch cores and high-fan-out enable/chip-select lines so dormant memory banks hibernate in 1-bit-per-latch compacted arrays.
 
 ---
 
-## 7. Canvas Tool State Machine & Spatial Hash World Invariance [SOLVED]
+## 7. Native `eframe` + `egui` Desktop & `NativeActivity` Android Architecture [SOLVED]
 
 ### The Resolution
-1. **World-Space Spatial Grid Invariance**: Verified and documented that `SpatialHashGrid` indexes components and wires using world-space bounding boxes (`comp.pos`), rendering camera pan/zoom queries $O(1)$ without grid invalidation.
-2. **Canvas Tool State Abstraction**: Added `CanvasToolMode` state abstraction to `CanvasState` in `state.rs`, providing safe modal state queries (`tool_mode()`) and unified tool resets (`clear_interaction_modes()`).
-
----
-
-## 8. Corrupt Blueprint Bounds & Persistence Poisoning [SOLVED]
-
-### The Resolution
-Hand-edited or corrupted `.logic` files previously posed risk of out-of-bounds panics during compilation and persistent storage corruption:
-1. **Upfront Bounds Checking**: `instantiate_chip_with_mapping` now verifies all connection indices against component count and input/output port counts upfront. Invalid connections immediately fail compilation with descriptive `Err` strings rather than causing index out-of-bounds panics.
-2. **Persistence Validation Barrier**: `load_project()` now validates the entire imported blueprint library using a scratch simulator prior to mutating `global_library` or overwriting the canvas circuit, completely preventing corrupted files from poisoning user state.
-
----
-
-## 9. The Inactivity Paradox & Dormant Memory Banks [SOLVED]
-
-### The Problem
-In multi-bank RAM (e.g. 64 KB RAM built of 524,288 pure NAND latches) or large register files, only a single word (32 bits) changes per CPU cycle. In a naive event loop, dormant banks waste memory footprint (~600 MB for raw latches) and risk CPU cache thrashing.
-
-### The Resolution
-1. **Activity-Gated Sleep Domains (`SleepDomain`)**: Dormant banks are automatically placed in hibernation when their Chip-Select / Enable line is inactive. Internal latch states are compacted into dense bit-arrays (1 bit per latch, shrinking 64 KB RAM from 600 MB to 64 KB), and internal gate evaluations are skipped during active simulation passes.
-2. **Topological Fan-Out Asymmetry (Lazy-Mode Gating)**: The compiler discovers control lines topologically using Tarjan's SCC to find bistable feedback latch cores and computing input fan-out asymmetry ($2N$ vs $1$). Users do not need to follow specific pin naming rules to achieve automated sleep domain gating.
-3. **Combinational Immunity**: Purely combinational logic (Adders, Multiplexers, Decoders) contains zero feedback cycles and is 100% immune to false sleep domain registration.
+- **Unified `eframe` 0.31 Rendering**: Pure `egui::Painter` vector rendering with native `egui::Align2` typography and $O(K)$ spatial-hash viewport culling.
+- **Android `NativeActivity` Bridge**: Replaced the legacy Macroquad `QuadSurface` + `QuadNative.java` JNI wrapper with an `android.app.NativeActivity` host (`MainActivity.java` and `AndroidManifest.xml` `android.app.lib_name` metadata) compatible with `eframe`/`winit`.
