@@ -1,6 +1,7 @@
+use crate::editor::drawing_shapes::*;
+use crate::editor::math::{RED, Vec2};
 use crate::editor::theme;
 use crate::engine::{Component, ComponentType, SourcePort, TargetPort, TraceNode};
-use macroquad::prelude::*;
 
 use super::Editor;
 
@@ -12,7 +13,8 @@ impl Editor {
         comps: &[Component],
     ) -> Vec2 {
         let comp = &comps[comp_idx];
-        let (inputs_count, outputs_count) = self.get_component_ports_count(comp.component_type);
+        let (inputs_count, outputs_count) =
+            self.get_component_ports_count_with_width(comp.component_type, comp.bus_width);
         let max_ports = inputs_count.max(outputs_count);
         let height = 40.0 + (max_ports as f32 * 16.0);
 
@@ -29,10 +31,11 @@ impl Editor {
         comps: &[Component],
     ) -> Vec2 {
         let comp = &comps[comp_idx];
-        let (inputs_count, outputs_count) = self.get_component_ports_count(comp.component_type);
+        let (inputs_count, outputs_count) =
+            self.get_component_ports_count_with_width(comp.component_type, comp.bus_width);
         let max_ports = inputs_count.max(outputs_count);
         let height = 40.0 + (max_ports as f32 * 16.0);
-        let (width, _) = self.get_component_dimensions(comp.component_type);
+        let (width, _) = self.get_component_dimensions_with_width(comp.component_type, comp.bus_width);
 
         let x = comp.pos.0 + width;
         let spacing = height / (outputs_count + 1) as f32;
@@ -40,14 +43,15 @@ impl Editor {
         Vec2::new(x, y)
     }
 
-    pub(crate) fn draw_inspection_view(&self) {
+    pub(crate) fn draw_inspection_view(&self, painter: &egui::Painter) {
         let (blueprint, internal_components) = match self.get_inspected_blueprint_and_components() {
             Some(res) => res,
             None => {
-                draw_text(
+                draw_text_label(
+                    painter,
                     "Failed to load inspection blueprint!",
-                    screen_width() / 2.0 - 150.0,
-                    screen_height() / 2.0,
+                    self.screen_width() / 2.0 - 150.0,
+                    self.screen_height() / 2.0,
                     20.0,
                     RED,
                 );
@@ -64,7 +68,8 @@ impl Editor {
         let mut max_y = f32::MIN;
 
         for comp in &internal_components {
-            let (w, h) = self.get_component_dimensions(comp.component_type);
+            let (w, h) =
+                self.get_component_dimensions_with_width(comp.component_type, comp.bus_width);
             min_x = min_x.min(comp.pos.0);
             max_x = max_x.max(comp.pos.0 + w);
             min_y = min_y.min(comp.pos.1);
@@ -107,13 +112,15 @@ impl Editor {
                 _ => theme::COMP_NAND.mq(),
             };
 
-            draw_circle(
+            draw_circle_filled(
+                painter,
                 screen_pos.x,
                 screen_pos.y,
                 6.0 * self.canvas.zoom,
                 port_color,
             );
-            draw_circle(
+            draw_circle_filled(
+                painter,
                 screen_pos.x,
                 screen_pos.y,
                 3.0 * self.canvas.zoom,
@@ -124,7 +131,8 @@ impl Editor {
                 .get(i)
                 .cloned()
                 .unwrap_or_else(|| format!("IN {}", i));
-            draw_text(
+            draw_text_label(
+                painter,
                 &label_text,
                 screen_pos.x - 45.0 * self.canvas.zoom,
                 screen_pos.y + 4.0 * self.canvas.zoom,
@@ -147,13 +155,15 @@ impl Editor {
                 _ => theme::COMP_NAND.mq(),
             };
 
-            draw_circle(
+            draw_circle_filled(
+                painter,
                 screen_pos.x,
                 screen_pos.y,
                 6.0 * self.canvas.zoom,
                 port_color,
             );
-            draw_circle(
+            draw_circle_filled(
+                painter,
                 screen_pos.x,
                 screen_pos.y,
                 3.0 * self.canvas.zoom,
@@ -164,7 +174,8 @@ impl Editor {
                 .get(j)
                 .cloned()
                 .unwrap_or_else(|| format!("OUT {}", j));
-            draw_text(
+            draw_text_label(
+                painter,
                 &label_text,
                 screen_pos.x + 15.0 * self.canvas.zoom,
                 screen_pos.y + 4.0 * self.canvas.zoom,
@@ -231,13 +242,26 @@ impl Editor {
                 }
                 _ => false,
             };
-            self.draw_manhattan_wire(src_pos, tgt_pos, offset, 0, state, false, None, is_bus, &[]);
+            self.draw_manhattan_wire(
+                painter,
+                src_pos,
+                tgt_pos,
+                offset,
+                0,
+                state,
+                false,
+                None,
+                is_bus,
+                &[],
+            );
         }
 
         // Draw internal components
         for (comp_idx, comp) in internal_components.iter().enumerate() {
-            let (inputs_count, outputs_count) = self.get_component_ports_count(comp.component_type);
-            let (width, height) = self.get_component_dimensions(comp.component_type);
+            let (inputs_count, outputs_count) =
+                self.get_component_ports_count_with_width(comp.component_type, comp.bus_width);
+            let (width, height) =
+                self.get_component_dimensions_with_width(comp.component_type, comp.bus_width);
 
             let comp_pos = Vec2::new(comp.pos.0, comp.pos.1);
             let screen_pos = self.to_screen_space(comp_pos);
@@ -247,28 +271,30 @@ impl Editor {
             let bg_color = theme::BG_PANEL.mq_with_alpha(0.95);
             let border_color = theme::BORDER.mq();
 
-            draw_rectangle(
+            draw_rounded_rect(
+                painter,
                 screen_pos.x,
                 screen_pos.y,
                 screen_width,
                 screen_height,
+                6.0 * self.canvas.zoom,
                 bg_color,
             );
-            draw_rectangle_lines(
+            draw_rounded_rect_lines(
+                painter,
                 screen_pos.x,
                 screen_pos.y,
                 screen_width,
                 screen_height,
+                6.0 * self.canvas.zoom,
                 1.5 * self.canvas.zoom,
                 border_color,
             );
 
-            // Draw Top Accent Stripe
             let accent_color = match comp.component_type {
                 ComponentType::Nand => theme::COMP_NAND.mq(),
                 ComponentType::Clock => theme::ACCENT_PRIMARY.mq(),
                 ComponentType::Input | ComponentType::Output => {
-                    // Check output port 0 to see if it is active in the flat simulation state path
                     let state = self.get_raw_node_state_at_path(
                         &TraceNode::CompOutput {
                             component_idx: comp_idx,
@@ -290,7 +316,8 @@ impl Editor {
                 }
             };
             let stripe_height = 4.0 * self.canvas.zoom;
-            draw_rectangle(
+            draw_rect(
+                painter,
                 screen_pos.x,
                 screen_pos.y,
                 screen_width,
@@ -298,25 +325,24 @@ impl Editor {
                 accent_color,
             );
 
-            // Draw label
-            let label = self.get_component_label(comp.component_type);
-            let font_size = (13.0 * self.canvas.zoom).max(6.0);
-            let text_size = measure_text(&label, self.font.as_ref(), font_size as u16, 1.0);
-            let text_x = screen_pos.x + (screen_width - text_size.width) / 2.0;
-            let text_y = screen_pos.y + (screen_height + text_size.height) / 2.0;
-            draw_text_ex(
-                &label,
-                text_x,
-                text_y,
-                TextParams {
-                    font: self.font.as_ref(),
-                    font_size: font_size as u16,
-                    color: theme::TEXT_PRIMARY.mq(),
-                    ..Default::default()
-                },
-            );
+            if comp.component_type != ComponentType::SevenSegment {
+                let label = self.get_component_label(comp.component_type);
+                let font_size = (13.0 * self.canvas.zoom).max(6.0);
+                let (text_w, text_h) = self.measure_text_dims(&label, font_size);
+                let text_x = screen_pos.x + (screen_width - text_w) / 2.0;
+                let text_y = screen_pos.y + (screen_height + text_h * 0.7) / 2.0;
+                draw_text_label(
+                    painter,
+                    &label,
+                    text_x,
+                    text_y,
+                    font_size,
+                    theme::TEXT_PRIMARY.mq(),
+                );
+            }
 
-            // Draw input circles
+            let mut seg_states = [false; 8];
+
             for i in 0..inputs_count {
                 let w_pos = self.get_bp_comp_input_port_pos(comp_idx, i, &internal_components);
                 let port_pos = self.to_screen_space(w_pos);
@@ -327,14 +353,24 @@ impl Editor {
                     },
                     &self.canvas.inspection_path,
                 );
+                if comp.component_type == ComponentType::SevenSegment && i < 8 {
+                    seg_states[i] = (state & 0b10) != 0;
+                }
                 let port_color = match state {
                     0b00 => theme::ACCENT_GENERIC.mq(),
                     0b01 => theme::ACCENT_INACTIVE.mq(),
                     0b10 => theme::ACCENT_PRIMARY.mq(),
                     _ => theme::COMP_NAND.mq(),
                 };
-                draw_circle(port_pos.x, port_pos.y, 4.0 * self.canvas.zoom, port_color);
-                draw_circle(
+                draw_circle_filled(
+                    painter,
+                    port_pos.x,
+                    port_pos.y,
+                    4.0 * self.canvas.zoom,
+                    port_color,
+                );
+                draw_circle_filled(
+                    painter,
                     port_pos.x,
                     port_pos.y,
                     2.0 * self.canvas.zoom,
@@ -342,7 +378,16 @@ impl Editor {
                 );
             }
 
-            // Draw output circles
+            if comp.component_type == ComponentType::SevenSegment {
+                Self::draw_seven_segment_digits(
+                    painter,
+                    screen_pos.x + screen_width / 2.0,
+                    screen_pos.y + screen_height / 2.0,
+                    self.canvas.zoom,
+                    &seg_states,
+                );
+            }
+
             for o in 0..outputs_count {
                 let w_pos = self.get_bp_comp_output_port_pos(comp_idx, o, &internal_components);
                 let port_pos = self.to_screen_space(w_pos);
@@ -361,8 +406,15 @@ impl Editor {
                     _ => theme::COMP_NAND.mq(),
                 };
 
-                draw_circle(port_pos.x, port_pos.y, 4.0 * self.canvas.zoom, port_color);
-                draw_circle(
+                draw_circle_filled(
+                    painter,
+                    port_pos.x,
+                    port_pos.y,
+                    4.0 * self.canvas.zoom,
+                    port_color,
+                );
+                draw_circle_filled(
+                    painter,
                     port_pos.x,
                     port_pos.y,
                     2.0 * self.canvas.zoom,
@@ -373,17 +425,19 @@ impl Editor {
 
         // Draw info overlay
         let title = format!("LOOK INSIDE: {}", blueprint.name);
-        draw_text(
+        draw_text_label(
+            painter,
             &title,
             15.0,
-            20.0,
+            60.0,
             16.0,
             theme::ACCENT_PRIMARY.mq_with_alpha(0.95),
         );
-        draw_text(
-            "Inspection Mode (Read-Only) | Drag mouse wheel/right-click to pan | Scroll to zoom",
+        draw_text_label(
+            painter,
+            "Inspection Mode (Read-Only) | Drag right-click to pan | Scroll to zoom",
             15.0,
-            40.0,
+            80.0,
             12.0,
             theme::TEXT_SECONDARY.mq_with_alpha(0.8),
         );

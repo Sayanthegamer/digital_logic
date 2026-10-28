@@ -22,6 +22,7 @@ mod input_simulation;
 mod inspection_logic;
 mod inspection_ui;
 mod layout;
+pub mod math;
 mod persistence;
 mod spatial_hash;
 pub mod state;
@@ -39,18 +40,15 @@ mod wire_junctions;
 mod tests;
 
 // Re-export public types
+pub use math::{Color, GRAY, GREEN, RED, Rect, Vec2, vec2};
 pub use persistence::ProjectFile;
 use state::{CanvasState, EngineState, UiState};
 pub use types::*;
 
 use crate::engine::{ChipBlueprint, Component, ComponentType, Connection, SourcePort, TargetPort};
-use macroquad::prelude::*;
 
 pub struct Editor {
     pub circuit: circuit_model::CircuitModel,
-
-    // Crisp Vector Font
-    pub font: Option<Font>,
 
     // Sub-states
     pub engine: EngineState,
@@ -109,16 +107,8 @@ fn remap_blueprint_subchips(bp: &mut ChipBlueprint, map: &[Option<usize>]) {
 
 impl Editor {
     pub fn new() -> Self {
-        let font = {
-            let font_bytes = include_bytes!("../../assets/Inter-Regular.ttf");
-            std::panic::catch_unwind(|| load_ttf_font_from_bytes(font_bytes))
-                .ok()
-                .and_then(|res| res.ok())
-        };
-
         let mut editor = Self {
             circuit: circuit_model::CircuitModel::default(),
-            font,
             engine: EngineState::default(),
             ui: UiState::default(),
             canvas: CanvasState::default(),
@@ -140,6 +130,50 @@ impl Editor {
         editor.rebuild_comp_map();
         editor.compile();
         editor
+    }
+
+    #[inline(always)]
+    pub fn screen_width(&self) -> f32 {
+        self.ui.screen_size.0.max(1.0)
+    }
+
+    #[inline(always)]
+    pub fn screen_height(&self) -> f32 {
+        self.ui.screen_size.1.max(1.0)
+    }
+
+    /// Deterministic text width/height measurement (used for layout & hit-testing).
+    #[inline(always)]
+    pub fn measure_text_dims(&self, text: &str, font_size: f32) -> (f32, f32) {
+        let width = (text.chars().count() as f32) * font_size * 0.56;
+        (width, font_size)
+    }
+
+    /// Executes one full frame of the eframe application (UI panels, input, simulation ticks, and 2D canvas rendering).
+    pub fn step_frame(&mut self, ctx: &egui::Context) {
+        let screen_rect = ctx.screen_rect();
+        self.ui.screen_size = (screen_rect.width(), screen_rect.height());
+        let (time, dt) = ctx.input(|i| (i.time, i.stable_dt.clamp(1e-4, 0.25)));
+        self.ui.elapsed_time = time;
+        self.ui.frame_dt = dt;
+        self.ui.fps = (1.0 / dt).round() as i32;
+
+        // 1. Draw full-screen 2D logic canvas in the background layer
+        let bg_painter = ctx.layer_painter(egui::LayerId::background());
+        self.draw_on_painter(&bg_painter);
+
+        // 2. Process and render egui panels & overlays
+        self.draw_gui(ctx);
+
+        // 3. Snapshot frame input from egui and update editor/simulation state
+        self.canvas.frame_input =
+            state::FrameInput::from_egui(ctx, self.canvas.last_mouse_pos);
+        self.update();
+
+        // 4. Flush any pending viewport commands (fullscreen / resolution changes)
+        for cmd in self.ui.pending_viewport_commands.drain(..) {
+            ctx.send_viewport_cmd(cmd);
+        }
     }
 
     pub fn rebuild_comp_map(&mut self) {
@@ -770,10 +804,18 @@ impl Editor {
 
         // 3. Remap undo and redo history stacks
         for snap in &mut self.history.undo_stack {
-            remap_visual_components_and_connections(&mut snap.components, &mut snap.connections, map);
+            remap_visual_components_and_connections(
+                &mut snap.components,
+                &mut snap.connections,
+                map,
+            );
         }
         for snap in &mut self.history.redo_stack {
-            remap_visual_components_and_connections(&mut snap.components, &mut snap.connections, map);
+            remap_visual_components_and_connections(
+                &mut snap.components,
+                &mut snap.connections,
+                map,
+            );
         }
 
         // 4. Remap internal SubChip references inside engine.library and global_library

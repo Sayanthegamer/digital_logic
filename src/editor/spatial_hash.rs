@@ -1,4 +1,4 @@
-use macroquad::prelude::*;
+use crate::editor::math::{Rect, Vec2};
 use std::collections::{HashMap, HashSet};
 
 const CELL_SIZE: f32 = 120.0;
@@ -194,7 +194,6 @@ impl super::Editor {
             }
         }
         if missing > 0 {
-            // Note: `#![windows_subsystem = "windows"]` hides stdout, so this won't print in release mode.
             println!("Total missing from expected cells: {}", missing);
         }
     }

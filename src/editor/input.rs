@@ -1,5 +1,5 @@
 use super::Editor;
-use macroquad::prelude::*;
+use crate::editor::math::Vec2;
 
 impl Editor {
     pub fn to_world_space(&self, screen_pos: Vec2) -> Vec2 {
@@ -12,12 +12,11 @@ impl Editor {
 
     pub fn update(&mut self) {
         if self.ui.mode != crate::editor::state::AppMode::Editor {
-            // Reset right drag tracking when entering/leaving menus
             self.canvas.right_drag_dist = 0.0;
             return;
         }
 
-        let mouse_pos_screen = mouse_position().into();
+        let mouse_pos_screen = self.canvas.frame_input.mouse_pos_screen;
         let mouse_pos_world = self.to_world_space(mouse_pos_screen);
 
         let mouse_delta = if self.canvas.last_mouse_pos == Vec2::ZERO {

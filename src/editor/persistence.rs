@@ -127,6 +127,10 @@ impl Editor {
                 self.canvas.selected_comp_id = None;
                 self.canvas.selected_annotation_idx = None;
                 self.canvas.inspection_path.clear();
+                // Clear previous simulator states before compiling a freshly loaded project
+                self.engine.visual_to_sim_map.clear();
+                self.engine.instance_tree = crate::engine::types::InstanceTree::default();
+                self.engine.active_clocks.clear();
                 self.compile();
                 return true;
             }
@@ -207,7 +211,6 @@ impl Editor {
                 p.push("project_save.logic");
             }
 
-            // Prefer loading from the new external directory.
             if let Some(ref p) = external_path
                 && p.exists()
                 && self.load_from_path(p)
@@ -215,19 +218,14 @@ impl Editor {
                 return true;
             }
 
-            // Fallback to the legacy internal directory.
             if let Some(ref p) = internal_path
                 && p.exists()
                 && self.load_from_path(p)
             {
-                // Best-effort migration to the new external location.
                 if let (Some(external_dir), Some(external_path)) = (external_dir, external_path) {
-                    if let Err(err) = std::fs::create_dir_all(&external_dir) {
-                        eprintln!("Failed to create external files dir {external_dir:?}: {err}");
-                    } else if let Err(err) = std::fs::copy(p, &external_path) {
-                        eprintln!("Failed to migrate save to {external_path:?}: {err}");
-                    } else if let Err(err) = std::fs::remove_file(p) {
-                        eprintln!("Failed to remove legacy save {p:?}: {err}");
+                    let _ = std::fs::create_dir_all(&external_dir);
+                    if std::fs::copy(p, &external_path).is_ok() {
+                        let _ = std::fs::remove_file(p);
                     }
                 }
                 return true;
@@ -243,24 +241,17 @@ pub(crate) fn get_android_external_files_dir()
 -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     use jni::objects::{JObject, JValue};
 
-    let env_ptr = unsafe { miniquad::native::android::attach_jni_env() };
-    if env_ptr.is_null() {
-        return Err("attach_jni_env returned null".into());
-    }
-    let mut env = unsafe { jni::JNIEnv::from_raw(env_ptr as *mut jni::sys::JNIEnv)? };
-
-    let activity_ptr = unsafe { miniquad::native::android::ACTIVITY };
-    if activity_ptr.is_null() {
-        return Err("ACTIVITY jobject is null".into());
-    }
-    let context_obj = unsafe { JObject::from_raw(activity_ptr as jni::sys::jobject) };
+    let ctx = ndk_context::android_context();
+    let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast())? };
+    let mut env = vm.attach_current_thread()?;
+    let context_obj = unsafe { JObject::from_raw(ctx.context().cast()) };
 
     let file_obj = env
         .call_method(
             &context_obj,
             "getExternalFilesDir",
             "(Ljava/lang/String;)Ljava/io/File;",
-            &[JValue::Object(JObject::null().as_ref())],
+            &[JValue::Object(&JObject::null())],
         )?
         .l()?;
     if file_obj.is_null() {
@@ -279,17 +270,10 @@ pub(crate) fn get_android_internal_files_dir()
 -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     use jni::objects::JObject;
 
-    let env_ptr = unsafe { miniquad::native::android::attach_jni_env() };
-    if env_ptr.is_null() {
-        return Err("attach_jni_env returned null".into());
-    }
-    let mut env = unsafe { jni::JNIEnv::from_raw(env_ptr as *mut jni::sys::JNIEnv)? };
-
-    let activity_ptr = unsafe { miniquad::native::android::ACTIVITY };
-    if activity_ptr.is_null() {
-        return Err("ACTIVITY jobject is null".into());
-    }
-    let context_obj = unsafe { JObject::from_raw(activity_ptr as jni::sys::jobject) };
+    let ctx = ndk_context::android_context();
+    let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast())? };
+    let mut env = vm.attach_current_thread()?;
+    let context_obj = unsafe { JObject::from_raw(ctx.context().cast()) };
 
     let file_obj = env
         .call_method(&context_obj, "getFilesDir", "()Ljava/io/File;", &[])?

@@ -1,7 +1,7 @@
 use crate::editor::Editor;
 use crate::editor::types::{TextAnnotation, VisualComponent, VisualConnection};
 use crate::engine::ComponentType;
-use macroquad::prelude::*;
+
 
 #[test]
 fn test_custom_port_naming_collision() {

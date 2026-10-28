@@ -1,5 +1,4 @@
 use super::Editor;
-use macroquad::prelude::*;
 
 impl Editor {
     pub fn run_simulation_ticks(&mut self) {
@@ -33,15 +32,13 @@ impl Editor {
 
     pub fn update_resolution_revert_timer(&mut self) {
         if let Some(mut timer) = self.ui.resolution_revert_timer {
-            timer -= get_frame_time();
+            timer -= self.ui.frame_dt;
             if timer <= 0.0 {
-                // Revert to prev settings
                 self.ui.is_fullscreen = self.ui.prev_is_fullscreen;
                 self.ui.resolution_idx = self.ui.prev_resolution_idx;
                 self.ui.temp_is_fullscreen = self.ui.prev_is_fullscreen;
                 self.ui.temp_resolution_idx = self.ui.prev_resolution_idx;
 
-                macroquad::window::set_fullscreen(self.ui.is_fullscreen);
                 let resolutions = &[
                     (800, 600),
                     (1024, 768),
@@ -50,7 +47,14 @@ impl Editor {
                     (1920, 1080),
                 ];
                 let r = resolutions[self.ui.resolution_idx];
-                macroquad::window::request_new_screen_size(r.0 as f32, r.1 as f32);
+                self.ui
+                    .pending_viewport_commands
+                    .push(egui::ViewportCommand::Fullscreen(self.ui.is_fullscreen));
+                self.ui
+                    .pending_viewport_commands
+                    .push(egui::ViewportCommand::InnerSize(egui::vec2(
+                        r.0 as f32, r.1 as f32,
+                    )));
 
                 self.ui.resolution_revert_timer = None;
             } else {

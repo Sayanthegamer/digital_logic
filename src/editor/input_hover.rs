@@ -1,6 +1,6 @@
 use super::Editor;
+use crate::editor::math::Vec2;
 use crate::engine::ComponentType;
-use macroquad::prelude::*;
 
 impl Editor {
     pub fn update_hovered_port(
@@ -13,12 +13,10 @@ impl Editor {
         if !egui_wants_pointer && self.canvas.inspection_path.is_empty() {
             let mut hovered_chip = false;
             for comp in &self.circuit.components {
-                // Junctions are connectable across their whole body; don't block snapping when hovering them.
                 if comp.comp_type == ComponentType::Junction {
                     continue;
                 }
 
-                // Define the chip's inner body (excluding a small margin for ports)
                 if mouse_pos_world.x >= comp.pos.x + 8.0
                     && mouse_pos_world.x <= comp.pos.x + comp.width - 8.0
                     && mouse_pos_world.y >= comp.pos.y + 4.0
@@ -30,9 +28,8 @@ impl Editor {
             }
 
             if !hovered_chip {
-                let mut closest_dist = 25.0; // Reduced screen radius for snapping
+                let mut closest_dist = 25.0;
                 for comp in &self.circuit.components {
-                    // Special-case Junction: allow hovering anywhere along the bar.
                     if comp.comp_type == ComponentType::Junction {
                         let a = self.to_screen_space(comp.input_port_pos(0, 1));
                         let b = self.to_screen_space(comp.output_port_pos(0, 1));
@@ -48,7 +45,6 @@ impl Editor {
 
                         if dist < closest_dist {
                             closest_dist = dist;
-                            // When dragging a wire, prefer target ports of the opposite type.
                             let want_input = if let Some((_, _, start_is_input)) =
                                 self.canvas.active_wire_drag
                             {
@@ -66,7 +62,6 @@ impl Editor {
                         Some(comp.bus_width()),
                     );
 
-                    // Check inputs
                     for i in 0..inputs_count {
                         let port_pos = comp.input_port_pos(i, inputs_count);
                         let screen_port_pos = self.to_screen_space(port_pos);
@@ -77,7 +72,6 @@ impl Editor {
                         }
                     }
 
-                    // Check outputs
                     for o in 0..outputs_count {
                         let port_pos = comp.output_port_pos(o, outputs_count);
                         let screen_port_pos = self.to_screen_space(port_pos);

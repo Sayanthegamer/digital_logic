@@ -1,9 +1,9 @@
+use crate::editor::math::Vec2;
 use crate::editor::state::{CanvasSnapshot, EditingTarget};
 use crate::engine::{
     ChipBlueprint, CompiledClock, Component, ComponentType, Connection, GateType, OutputSource,
     Simulator, SourcePort, TargetPort,
 };
-use macroquad::prelude::Vec2;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -1099,8 +1099,8 @@ impl Editor {
         let (view_x, view_y, view_w, view_h) = self.ui.canvas_viewport.unwrap_or((
             0.0,
             0.0,
-            macroquad::window::screen_width(),
-            macroquad::window::screen_height(),
+            self.screen_width(),
+            self.screen_height(),
         ));
 
         let zoom_x = view_w / padded_width;

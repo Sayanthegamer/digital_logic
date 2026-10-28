@@ -1,10 +1,94 @@
 use crate::editor::color_coding::ContextMenuTarget;
-use crate::editor::types::{ActiveTool, VisualConnection};
+use crate::editor::math::Vec2;
+use crate::editor::types::{ActiveTool, TextAnnotation, VisualComponent, VisualConnection};
 use crate::engine::{ChipBlueprint, CompiledClock, Simulator};
-use macroquad::prelude::Vec2;
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::editor::types::{TextAnnotation, VisualComponent};
+#[derive(Clone, Debug, Default)]
+pub struct FrameInput {
+    pub mouse_pos_screen: Vec2,
+    pub scroll_delta_y: f32,
+    pub left_pressed: bool,
+    pub left_down: bool,
+    pub left_released: bool,
+    pub right_pressed: bool,
+    pub right_down: bool,
+    pub right_released: bool,
+    pub shift_down: bool,
+    pub ctrl_down: bool,
+    pub delete_pressed: bool,
+    pub space_pressed: bool,
+    pub c_pressed: bool,
+    pub escape_pressed: bool,
+    pub s_pressed: bool,
+    pub l_pressed: bool,
+    pub g_pressed: bool,
+    pub f6_pressed: bool,
+    pub f11_pressed: bool,
+    pub f12_pressed: bool,
+    pub key1_or_i_pressed: bool,
+    pub key2_or_o_pressed: bool,
+    pub key3_or_n_pressed: bool,
+    pub key4_or_k_pressed: bool,
+    pub key5_or_t_pressed: bool,
+    pub tab_pressed: bool,
+    pub enter_pressed: bool,
+    pub touch_points: Vec<Vec2>,
+}
+
+impl FrameInput {
+    pub fn from_egui(ctx: &egui::Context, fallback_pos: Vec2) -> Self {
+        ctx.input(|i| {
+            let mouse_pos_screen = i
+                .pointer
+                .interact_pos()
+                .or_else(|| i.pointer.hover_pos())
+                .map(Vec2::from_pos2)
+                .unwrap_or(fallback_pos);
+
+            let mut touch_points = Vec::new();
+            for event in &i.events {
+                if let egui::Event::Touch { pos, phase, .. } = event
+                    && matches!(phase, egui::TouchPhase::Start | egui::TouchPhase::Move)
+                {
+                    touch_points.push(Vec2::from_pos2(*pos));
+                }
+            }
+
+            Self {
+                mouse_pos_screen,
+                scroll_delta_y: i.raw_scroll_delta.y,
+                left_pressed: i.pointer.button_pressed(egui::PointerButton::Primary),
+                left_down: i.pointer.button_down(egui::PointerButton::Primary),
+                left_released: i.pointer.button_released(egui::PointerButton::Primary),
+                right_pressed: i.pointer.button_pressed(egui::PointerButton::Secondary),
+                right_down: i.pointer.button_down(egui::PointerButton::Secondary),
+                right_released: i.pointer.button_released(egui::PointerButton::Secondary),
+                shift_down: i.modifiers.shift,
+                ctrl_down: i.modifiers.ctrl || i.modifiers.command,
+                delete_pressed: i.key_pressed(egui::Key::Delete)
+                    || i.key_pressed(egui::Key::Backspace),
+                space_pressed: i.key_pressed(egui::Key::Space),
+                c_pressed: i.key_pressed(egui::Key::C),
+                escape_pressed: i.key_pressed(egui::Key::Escape),
+                s_pressed: i.key_pressed(egui::Key::S),
+                l_pressed: i.key_pressed(egui::Key::L),
+                g_pressed: i.key_pressed(egui::Key::G),
+                f6_pressed: i.key_pressed(egui::Key::F6),
+                f11_pressed: i.key_pressed(egui::Key::F11),
+                f12_pressed: i.key_pressed(egui::Key::F12),
+                key1_or_i_pressed: i.key_pressed(egui::Key::Num1) || i.key_pressed(egui::Key::I),
+                key2_or_o_pressed: i.key_pressed(egui::Key::Num2) || i.key_pressed(egui::Key::O),
+                key3_or_n_pressed: i.key_pressed(egui::Key::Num3) || i.key_pressed(egui::Key::N),
+                key4_or_k_pressed: i.key_pressed(egui::Key::Num4) || i.key_pressed(egui::Key::K),
+                key5_or_t_pressed: i.key_pressed(egui::Key::Num5) || i.key_pressed(egui::Key::T),
+                tab_pressed: i.key_pressed(egui::Key::Tab),
+                enter_pressed: i.key_pressed(egui::Key::Enter),
+                touch_points,
+            }
+        })
+    }
+}
 
 #[derive(Clone)]
 pub struct CanvasSnapshot {
@@ -104,6 +188,13 @@ pub struct UiState {
     pub egui_wants_pointer: bool,
     pub egui_wants_keyboard: bool,
 
+    // Frame timing and viewport metrics (populated by eframe)
+    pub screen_size: (f32, f32),
+    pub elapsed_time: f64,
+    pub frame_dt: f32,
+    pub fps: i32,
+    pub pending_viewport_commands: Vec<egui::ViewportCommand>,
+
     pub show_android_file_dialog: Option<AndroidFileDialogMode>,
     pub android_file_dialog_input: String,
     pub android_file_dialog_status: String,
@@ -157,6 +248,12 @@ impl Default for UiState {
             egui_wants_pointer: false,
             egui_wants_keyboard: false,
 
+            screen_size: (1280.0, 720.0),
+            elapsed_time: 0.0,
+            frame_dt: 1.0 / 60.0,
+            fps: 60,
+            pending_viewport_commands: Vec::new(),
+
             show_android_file_dialog: None,
             android_file_dialog_input: "my_project.logic".to_string(),
             android_file_dialog_status: String::new(),
@@ -192,6 +289,7 @@ pub struct CanvasState {
     pub spatial_grid: crate::editor::spatial_hash::SpatialHashGrid<usize>,
     pub wire_spatial_grid:
         crate::editor::spatial_hash::SpatialHashGrid<crate::editor::types::VisualConnection>,
+    pub frame_input: FrameInput,
     pub last_mouse_pos: Vec2,
     pub selected_tool: Option<ActiveTool>,
     pub active_wire_drag: Option<(usize, usize, bool)>,
@@ -262,6 +360,7 @@ impl Default for CanvasState {
             spatial_grid: crate::editor::spatial_hash::SpatialHashGrid::new(),
             wire_spatial_grid: crate::editor::spatial_hash::SpatialHashGrid::new(),
             render_scratch: std::cell::RefCell::new(WireRenderScratch::default()),
+            frame_input: FrameInput::default(),
             last_mouse_pos: Vec2::new(0.0, 0.0),
             selected_tool: None,
             active_wire_drag: None,

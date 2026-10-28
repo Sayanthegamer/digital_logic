@@ -1,14 +1,13 @@
+use crate::editor::drawing_shapes::*;
+use crate::editor::math::{Color, GRAY, GREEN, RED, Rect, Vec2, vec2};
 use crate::editor::theme;
+use crate::editor::types::VisualConnection;
 use crate::engine::ComponentType;
-use macroquad::prelude::*;
 
 use super::Editor;
-use crate::editor::types::VisualConnection;
-
-use crate::editor::drawing_shapes::*;
 
 #[inline]
-fn get_seg_color(active: bool) -> Color {
+pub(crate) fn get_seg_color(active: bool) -> Color {
     if active {
         theme::COMP_SEVENSEG.mq()
     } else {
@@ -25,13 +24,16 @@ impl Editor {
                 .is_some_and(|c| c.comp_type == ComponentType::BusSplitter && conn.tgt_port == 0)
     }
 
-    pub fn draw(&mut self) {
+    pub fn draw_on_painter(&mut self, painter: &egui::Painter) {
+        let sw = self.screen_width();
+        let sh = self.screen_height();
+
         // Clear background with dark slate-navy
-        clear_background(theme::BG_CANVAS.mq());
+        draw_rect(painter, 0.0, 0.0, sw, sh, theme::BG_CANVAS.mq());
 
         // Draw grid - performance optimized camera fading
         if self.canvas.zoom >= 0.25 {
-            let cell_size = 40.0 * self.canvas.zoom;
+            let cell_size = (40.0 * self.canvas.zoom).max(4.0);
             let offset_x = self.canvas.pan.x % cell_size;
             let offset_y = self.canvas.pan.y % cell_size;
 
@@ -43,25 +45,23 @@ impl Editor {
 
             let grid_color = theme::BORDER.mq_with_alpha(grid_alpha);
 
-            for x in (0..=(screen_width() as i32 / cell_size as i32 + 1))
-                .map(|i| i as f32 * cell_size + offset_x)
+            for x in (0..=(sw as i32 / cell_size as i32 + 1)).map(|i| i as f32 * cell_size + offset_x)
             {
-                draw_line(x, 0.0, x, screen_height(), 1.0, grid_color);
+                draw_line_seg(painter, x, 0.0, x, sh, 1.0, grid_color);
             }
-            for y in (0..=(screen_height() as i32 / cell_size as i32 + 1))
-                .map(|i| i as f32 * cell_size + offset_y)
+            for y in (0..=(sh as i32 / cell_size as i32 + 1)).map(|i| i as f32 * cell_size + offset_y)
             {
-                draw_line(0.0, y, screen_width(), y, 1.0, grid_color);
+                draw_line_seg(painter, 0.0, y, sw, y, 1.0, grid_color);
             }
         }
 
         if !self.canvas.inspection_path.is_empty() {
-            self.draw_inspection_view();
+            self.draw_inspection_view(painter);
             return;
         }
 
         let top_left = self.to_world_space(vec2(0.0, 0.0));
-        let bottom_right = self.to_world_space(vec2(screen_width(), screen_height()));
+        let bottom_right = self.to_world_space(vec2(sw, sh));
         let viewport_pad = 500.0;
         let viewport_rect = Rect::new(
             top_left.x - viewport_pad,
@@ -76,8 +76,14 @@ impl Editor {
             comp_map.insert(comp.id, comp);
         }
 
-        // Precompute wire intersections so we can skip drawing the upper wire line through bridge arcs
-        let intersections = self.find_wire_intersections();
+        // 1. Query visible wires from spatial hash grid first, then find intersections only on visible wires
+        let visible_wires = self.canvas.wire_spatial_grid.query_rect(viewport_rect);
+        let mut sorted_visible_wires: Vec<&crate::editor::types::VisualConnection> =
+            visible_wires.iter().collect();
+        sorted_visible_wires
+            .sort_unstable_by_key(|w| (w.src_comp_id, w.src_port, w.tgt_comp_id, w.tgt_port));
+
+        let intersections = self.find_wire_intersections(&sorted_visible_wires);
         let mut upper_gaps: std::collections::HashMap<
             crate::editor::types::VisualConnection,
             Vec<(Vec2, f32)>,
@@ -93,13 +99,6 @@ impl Editor {
             }
         }
 
-        // 1. Draw Wires / Connections
-        let visible_wires = self.canvas.wire_spatial_grid.query_rect(viewport_rect);
-        let mut sorted_visible_wires: Vec<&crate::editor::types::VisualConnection> =
-            visible_wires.iter().collect();
-        sorted_visible_wires
-            .sort_unstable_by_key(|w| (w.src_comp_id, w.src_port, w.tgt_comp_id, w.tgt_port));
-
         for wire in sorted_visible_wires {
             let src_comp = comp_map.get(&wire.src_comp_id).copied();
             let tgt_comp = comp_map.get(&wire.tgt_comp_id).copied();
@@ -109,7 +108,6 @@ impl Editor {
                 let src_pos = self.to_screen_space(src_p);
                 let tgt_pos = self.to_screen_space(tgt_p);
 
-                // Query state using port mapping table
                 let wire_state = if let Some(&gate_idx) = self
                     .engine
                     .port_to_sim_gate_map
@@ -137,6 +135,7 @@ impl Editor {
                     .unwrap_or(empty_gaps);
 
                 self.draw_manhattan_wire(
+                    painter,
                     src_pos,
                     tgt_pos,
                     offset,
@@ -164,7 +163,7 @@ impl Editor {
             } else {
                 self.to_screen_space(src.output_port_pos(src_port, src_outputs))
             };
-            let mut end_pos: Vec2 = mouse_position().into();
+            let mut end_pos: Vec2 = self.canvas.frame_input.mouse_pos_screen;
 
             // Magnetic Snapping
             if let Some((tgt_id, tgt_port, tgt_is_input)) = self.canvas.hovered_port
@@ -183,17 +182,18 @@ impl Editor {
                 };
             }
 
-            draw_line(
+            draw_line_seg(
+                painter,
                 start_pos.x,
                 start_pos.y,
                 end_pos.x,
                 end_pos.y,
                 3.0 * self.canvas.zoom,
-                theme::ACCENT_PRIMARY.mq_with_alpha(0.8), // Light blue preview wire
+                theme::ACCENT_PRIMARY.mq_with_alpha(0.8),
             );
 
-            // Draw end circle
-            draw_circle(
+            draw_circle_filled(
+                painter,
                 end_pos.x,
                 end_pos.y,
                 4.0 * self.canvas.zoom,
@@ -205,21 +205,12 @@ impl Editor {
         for (idx, ann) in self.circuit.annotations.iter().enumerate() {
             let screen_pos = self.to_screen_space(ann.pos);
             let target_font_size = (15.0 * self.canvas.zoom).max(8.0);
-            let base_font_size = 32.0;
-            let font_scale = target_font_size / base_font_size;
 
-            // Frustum culling for annotations
-            let text_w = measure_text(
-                &ann.text,
-                self.font.as_ref(),
-                base_font_size as u16,
-                font_scale,
-            )
-            .width;
+            let (text_w, _) = self.measure_text_dims(&ann.text, target_font_size);
             if screen_pos.x + text_w < 0.0
-                || screen_pos.x > screen_width()
+                || screen_pos.x > sw
                 || screen_pos.y < 0.0
-                || screen_pos.y - target_font_size > screen_height()
+                || screen_pos.y - target_font_size > sh
             {
                 continue;
             }
@@ -230,22 +221,19 @@ impl Editor {
             } else {
                 theme::TEXT_SECONDARY.mq_with_alpha(0.8)
             };
-            draw_text_ex(
+            draw_text_label(
+                painter,
                 &ann.text,
                 screen_pos.x,
                 screen_pos.y,
-                TextParams {
-                    font: self.font.as_ref(),
-                    font_size: base_font_size as u16,
-                    font_scale,
-                    color,
-                    ..Default::default()
-                },
+                target_font_size,
+                color,
             );
 
             if is_selected {
                 let pad = 4.0 * self.canvas.zoom;
-                draw_rectangle_lines(
+                draw_rect_lines(
+                    painter,
                     screen_pos.x - pad,
                     screen_pos.y - target_font_size - pad + 3.0 * self.canvas.zoom,
                     text_w + pad * 2.0,
@@ -264,24 +252,22 @@ impl Editor {
         }
 
         // 2. Draw Components
-        // (viewport_rect is already computed above)
-
         let mut visible_comp_ids: Vec<usize> = self
             .canvas
             .spatial_grid
             .query_rect(viewport_rect)
             .into_iter()
             .collect();
-        visible_comp_ids.sort_unstable(); // Restore deterministic drawing Z-order
+        visible_comp_ids.sort_unstable();
 
         self.ui.drawn_components = visible_comp_ids.len();
 
         if self.ui.debug_cull_bounds {
             let r = viewport_rect;
-            let vp_screen_pos = self.to_screen_space(macroquad::prelude::Vec2::new(r.x, r.y));
-            let vp_screen_end =
-                self.to_screen_space(macroquad::prelude::Vec2::new(r.x + r.w, r.y + r.h));
-            draw_rectangle_lines(
+            let vp_screen_pos = self.to_screen_space(Vec2::new(r.x, r.y));
+            let vp_screen_end = self.to_screen_space(Vec2::new(r.x + r.w, r.y + r.h));
+            draw_rect_lines(
+                painter,
                 vp_screen_pos.x,
                 vp_screen_pos.y,
                 vp_screen_end.x - vp_screen_pos.x,
@@ -295,7 +281,8 @@ impl Editor {
                 let comp_width = comp.width * self.canvas.zoom;
                 let comp_height = comp.height * self.canvas.zoom;
                 if visible_comp_ids.contains(&comp.id) {
-                    draw_rectangle_lines(
+                    draw_rect_lines(
+                        painter,
                         screen_pos.x,
                         screen_pos.y,
                         comp_width,
@@ -304,7 +291,8 @@ impl Editor {
                         GREEN,
                     );
                 } else {
-                    draw_rectangle_lines(
+                    draw_rect_lines(
+                        painter,
                         screen_pos.x,
                         screen_pos.y,
                         comp_width,
@@ -325,7 +313,6 @@ impl Editor {
             let comp_width = comp.width * self.canvas.zoom;
             let comp_height = comp.height * self.canvas.zoom;
 
-            // Determine body color based on component type and activity
             let is_input_active = if comp.comp_type == ComponentType::Input {
                 if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&comp.id) {
                     self.engine.simulator.get_state(gate_idx)
@@ -333,25 +320,24 @@ impl Editor {
                     false
                 }
             } else if comp.comp_type == ComponentType::Output {
-                let mut output_active = false;
                 if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&comp.id) {
-                    output_active = self.engine.simulator.get_state(gate_idx);
+                    self.engine.simulator.get_state(gate_idx)
+                } else {
+                    false
                 }
-                output_active
             } else {
                 false
             };
 
             if comp.comp_type == ComponentType::Junction {
-                // Render Junctions using their actual width/height so stretch visuals match hit area.
                 let center_x = screen_pos.x + comp_width / 2.0;
                 let center_y = screen_pos.y + comp_height / 2.0;
 
                 let corner_radius = 6.0 * self.canvas.zoom;
                 let thickness = 1.5 * self.canvas.zoom;
 
-                // Bar body
                 draw_rounded_rect(
+                    painter,
                     screen_pos.x,
                     screen_pos.y,
                     comp_width,
@@ -360,6 +346,7 @@ impl Editor {
                     theme::TEXT_PRIMARY.mq_with_alpha(0.25),
                 );
                 draw_rounded_rect_lines(
+                    painter,
                     screen_pos.x,
                     screen_pos.y,
                     comp_width,
@@ -369,15 +356,15 @@ impl Editor {
                     theme::BORDER.mq(),
                 );
 
-                // Center dot for clarity
                 let radius = 4.5 * self.canvas.zoom;
-                draw_circle(center_x, center_y, radius, theme::TEXT_PRIMARY.mq());
+                draw_circle_filled(painter, center_x, center_y, radius, theme::TEXT_PRIMARY.mq());
 
                 if self.canvas.selected_comp_id == Some(comp.id)
                     || self.canvas.selected_comp_ids.contains(&comp.id)
                 {
                     let offset = 3.0 * self.canvas.zoom;
                     draw_rounded_rect_lines(
+                        painter,
                         screen_pos.x - offset,
                         screen_pos.y - offset,
                         comp_width + offset * 2.0,
@@ -390,9 +377,6 @@ impl Editor {
 
                 continue;
             }
-
-            // Draw component box with rounded corners and drop shadow
-            // Drop shadow removed for performance / Blueprint style
 
             let accent_color = if let Some(color_override) = comp
                 .color
@@ -422,9 +406,9 @@ impl Editor {
 
             let corner_radius = 6.0 * self.canvas.zoom;
 
-            // Ultra-Low LOD (Zoom < 0.1): Just draw flat solid rectangle
             if self.canvas.zoom < 0.1 {
-                draw_rectangle(
+                draw_rect(
+                    painter,
                     screen_pos.x,
                     screen_pos.y,
                     comp_width,
@@ -434,8 +418,8 @@ impl Editor {
                 continue;
             }
 
-            // Blueprint Style: Opaque background with thick colored borders
             draw_rounded_rect(
+                painter,
                 screen_pos.x,
                 screen_pos.y,
                 comp_width,
@@ -444,6 +428,7 @@ impl Editor {
                 theme::BG_CANVAS.mq(),
             );
             draw_rounded_rect_lines(
+                painter,
                 screen_pos.x,
                 screen_pos.y,
                 comp_width,
@@ -453,25 +438,24 @@ impl Editor {
                 accent_color,
             );
 
-            // Draw glowing selection border if selected
             if self.canvas.selected_comp_id == Some(comp.id)
                 || self.canvas.selected_comp_ids.contains(&comp.id)
             {
                 let offset = 3.0 * self.canvas.zoom;
                 draw_rounded_rect_lines(
+                    painter,
                     screen_pos.x - offset,
                     screen_pos.y - offset,
                     comp_width + offset * 2.0,
                     comp_height + offset * 2.0,
                     corner_radius + offset,
                     1.5 * self.canvas.zoom,
-                    theme::ACCENT_PRIMARY.mq_with_alpha(0.8), // Glowing cyan
+                    theme::ACCENT_PRIMARY.mq_with_alpha(0.8),
                 );
             }
 
-            // Draw text label / Semantic state
             if comp.comp_type != ComponentType::SevenSegment && self.canvas.zoom >= 0.35 {
-                let base_font_size = 13.0;
+                let font_size = 13.0 * self.canvas.zoom;
 
                 let display_label = match comp.comp_type {
                     ComponentType::Input | ComponentType::Output => {
@@ -484,42 +468,30 @@ impl Editor {
                     _ => comp.label.clone(),
                 };
 
-                let text_size = measure_text(
-                    &display_label,
-                    self.font.as_ref(),
-                    base_font_size as u16,
-                    self.canvas.zoom,
-                );
-                let text_x = screen_pos.x + (comp_width - text_size.width) / 2.0;
-                let text_y = screen_pos.y + (comp_height + text_size.height) / 2.0;
+                let (text_w, text_h) = self.measure_text_dims(&display_label, font_size);
+                let text_x = screen_pos.x + (comp_width - text_w) / 2.0;
+                let text_y = screen_pos.y + (comp_height + text_h * 0.7) / 2.0;
 
-                draw_text_ex(
+                draw_text_label(
+                    painter,
                     &display_label,
                     text_x,
                     text_y,
-                    TextParams {
-                        font: self.font.as_ref(),
-                        font_size: base_font_size as u16,
-                        font_scale: self.canvas.zoom,
-                        color: theme::TEXT_PRIMARY.mq(),
-                        ..Default::default()
-                    },
+                    font_size,
+                    theme::TEXT_PRIMARY.mq(),
                 );
             }
 
-            // Low LOD (Zoom < 0.25): Skip drawing individual ports, just draw wire connections
             if self.canvas.zoom < 0.25 {
                 continue;
             }
 
-            // Draw port circles
             let (inputs_count, outputs_count) =
                 self.get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
             let port_radius = 4.0 * self.canvas.zoom;
 
             let mut seg_states = [false; 8];
 
-            // Input ports on left
             #[allow(clippy::needless_range_loop)]
             for i in 0..inputs_count {
                 let port_pos = self.to_screen_space(comp.input_port_pos(i, inputs_count));
@@ -534,21 +506,23 @@ impl Editor {
                 }
 
                 let port_color = if input_active {
-                    theme::ACCENT_PRIMARY.mq() // Electric cyan
+                    theme::ACCENT_PRIMARY.mq()
                 } else {
-                    theme::ACCENT_INACTIVE.mq() // Muted slate gray
+                    theme::ACCENT_INACTIVE.mq()
                 };
 
                 if input_active {
-                    draw_circle(
+                    draw_circle_filled(
+                        painter,
                         port_pos.x,
                         port_pos.y,
                         port_radius + 2.0 * self.canvas.zoom,
                         theme::ACCENT_PRIMARY.mq_with_alpha(0.2),
                     );
                 }
-                draw_circle(port_pos.x, port_pos.y, port_radius, port_color);
-                draw_circle(
+                draw_circle_filled(painter, port_pos.x, port_pos.y, port_radius, port_color);
+                draw_circle_filled(
+                    painter,
                     port_pos.x,
                     port_pos.y,
                     2.0 * self.canvas.zoom,
@@ -556,7 +530,6 @@ impl Editor {
                 );
             }
 
-            // Output ports on right
             for o in 0..outputs_count {
                 let port_pos = self.to_screen_space(comp.output_port_pos(o, outputs_count));
 
@@ -570,21 +543,23 @@ impl Editor {
                     };
 
                 let port_color = if output_active {
-                    theme::ACCENT_PRIMARY.mq() // Electric cyan
+                    theme::ACCENT_PRIMARY.mq()
                 } else {
-                    theme::ACCENT_INACTIVE.mq() // Muted slate gray
+                    theme::ACCENT_INACTIVE.mq()
                 };
 
                 if output_active {
-                    draw_circle(
+                    draw_circle_filled(
+                        painter,
                         port_pos.x,
                         port_pos.y,
                         port_radius + 2.0 * self.canvas.zoom,
                         theme::ACCENT_PRIMARY.mq_with_alpha(0.2),
                     );
                 }
-                draw_circle(port_pos.x, port_pos.y, port_radius, port_color);
-                draw_circle(
+                draw_circle_filled(painter, port_pos.x, port_pos.y, port_radius, port_color);
+                draw_circle_filled(
+                    painter,
                     port_pos.x,
                     port_pos.y,
                     2.0 * self.canvas.zoom,
@@ -598,8 +573,6 @@ impl Editor {
                 && self.canvas.zoom >= 0.35
             {
                 let target_text_size_px = (10.0 * self.canvas.zoom).max(5.0);
-                let base_font_size = 32.0;
-                let font_scale = target_text_size_px / base_font_size;
 
                 for i in 0..inputs_count {
                     let port_pos = self.to_screen_space(comp.input_port_pos(i, inputs_count));
@@ -608,17 +581,13 @@ impl Editor {
                         .get(i)
                         .cloned()
                         .unwrap_or_else(|| format!("{}", i));
-                    draw_text_ex(
+                    draw_text_label(
+                        painter,
                         &name,
                         port_pos.x + 6.0 * self.canvas.zoom,
                         port_pos.y + 3.0 * self.canvas.zoom,
-                        TextParams {
-                            font: self.font.as_ref(),
-                            font_size: base_font_size as u16,
-                            font_scale,
-                            color: theme::TEXT_SECONDARY.mq(),
-                            ..Default::default()
-                        },
+                        target_text_size_px,
+                        theme::TEXT_SECONDARY.mq(),
                     );
                 }
                 for o in 0..outputs_count {
@@ -628,106 +597,33 @@ impl Editor {
                         .get(o)
                         .cloned()
                         .unwrap_or_else(|| format!("{}", o));
-                    let text_w =
-                        measure_text(&name, self.font.as_ref(), base_font_size as u16, font_scale)
-                            .width;
-                    draw_text_ex(
+                    let (text_w, _) = self.measure_text_dims(&name, target_text_size_px);
+                    draw_text_label(
+                        painter,
                         &name,
                         port_pos.x - 6.0 * self.canvas.zoom - text_w,
                         port_pos.y + 3.0 * self.canvas.zoom,
-                        TextParams {
-                            font: self.font.as_ref(),
-                            font_size: base_font_size as u16,
-                            font_scale,
-                            color: theme::TEXT_SECONDARY.mq(),
-                            ..Default::default()
-                        },
+                        target_text_size_px,
+                        theme::TEXT_SECONDARY.mq(),
                     );
                 }
             }
 
             if comp.comp_type == ComponentType::SevenSegment {
-                let cx = screen_pos.x + comp_width / 2.0;
-                let cy = screen_pos.y + comp_height / 2.0;
-                let w = 15.0 * self.canvas.zoom;
-                let h = 15.0 * self.canvas.zoom;
-                let thick = 4.0 * self.canvas.zoom;
-
-                // Segment A (top)
-                draw_line(
-                    cx - w,
-                    cy - 2.0 * h,
-                    cx + w,
-                    cy - 2.0 * h,
-                    thick,
-                    get_seg_color(seg_states[0]),
-                );
-                // Segment B (top right)
-                draw_line(
-                    cx + w,
-                    cy - 2.0 * h,
-                    cx + w,
-                    cy,
-                    thick,
-                    get_seg_color(seg_states[1]),
-                );
-                // Segment C (bottom right)
-                draw_line(
-                    cx + w,
-                    cy,
-                    cx + w,
-                    cy + 2.0 * h,
-                    thick,
-                    get_seg_color(seg_states[2]),
-                );
-                // Segment D (bottom)
-                draw_line(
-                    cx - w,
-                    cy + 2.0 * h,
-                    cx + w,
-                    cy + 2.0 * h,
-                    thick,
-                    get_seg_color(seg_states[3]),
-                );
-                // Segment E (bottom left)
-                draw_line(
-                    cx - w,
-                    cy,
-                    cx - w,
-                    cy + 2.0 * h,
-                    thick,
-                    get_seg_color(seg_states[4]),
-                );
-                // Segment F (top left)
-                draw_line(
-                    cx - w,
-                    cy - 2.0 * h,
-                    cx - w,
-                    cy,
-                    thick,
-                    get_seg_color(seg_states[5]),
-                );
-                // Segment G (middle)
-                draw_line(cx - w, cy, cx + w, cy, thick, get_seg_color(seg_states[6]));
-
-                // Segment "minus" (port 7)
-                // Port ordering: A, B, C, D, E, F, G, minus
-                // Positioned to the left of the digit (as a negative sign indicator)
-                draw_line(
-                    cx - w - 20.0 * self.canvas.zoom,
-                    cy,
-                    cx - w - 10.0 * self.canvas.zoom,
-                    cy,
-                    thick,
-                    get_seg_color(seg_states[7]),
+                Self::draw_seven_segment_digits(
+                    painter,
+                    screen_pos.x + comp_width / 2.0,
+                    screen_pos.y + comp_height / 2.0,
+                    self.canvas.zoom,
+                    &seg_states,
                 );
             }
         }
 
-        // Draw selection box (Windows style)
+        // Draw selection box
         if let Some(start) = self.canvas.selection_box_start {
             let start_screen = self.to_screen_space(start);
-            let end_screen = Vec2::from(mouse_position());
+            let end_screen = self.canvas.frame_input.mouse_pos_screen;
 
             let x_min = start_screen.x.min(end_screen.x);
             let x_max = start_screen.x.max(end_screen.x);
@@ -737,16 +633,16 @@ impl Editor {
             let w = x_max - x_min;
             let h = y_max - y_min;
 
-            // Draw filled selection box with translucent blue
-            draw_rectangle(
+            draw_rect(
+                painter,
                 x_min,
                 y_min,
                 w,
                 h,
                 theme::ACCENT_PRIMARY.mq_with_alpha(0.15),
             );
-            // Draw selection box border line
-            draw_rectangle_lines(
+            draw_rect_lines(
+                painter,
                 x_min,
                 y_min,
                 w,
@@ -760,7 +656,8 @@ impl Editor {
         for &(start, end) in &self.canvas.alignment_guides {
             let p1 = self.to_screen_space(start);
             let p2 = self.to_screen_space(end);
-            draw_line(
+            draw_line_seg(
+                painter,
                 p1.x,
                 p1.y,
                 p2.x,
@@ -769,6 +666,7 @@ impl Editor {
                 theme::ACCENT_PRIMARY.mq_with_alpha(0.8),
             );
         }
+
         // Draw magnetic hover ring
         if let Some((comp_id, port_idx, is_input)) = self.canvas.hovered_port
             && let Some(comp) = self.get_component(comp_id)
@@ -781,31 +679,32 @@ impl Editor {
                 self.to_screen_space(comp.output_port_pos(port_idx, outputs_count))
             };
 
-            // Draw a pulsing glowing ring
-            let t = get_time() as f32;
-            let pulse = (t * 8.0).sin() * 0.5 + 0.5; // 0.0 to 1.0
+            let t = self.ui.elapsed_time as f32;
+            let pulse = (t * 8.0).sin() * 0.5 + 0.5;
             let radius = 6.0 * self.canvas.zoom + pulse * 4.0 * self.canvas.zoom;
 
             draw_circle_lines(
+                painter,
                 pos.x,
                 pos.y,
                 radius,
                 2.0 * self.canvas.zoom,
                 theme::ACCENT_PRIMARY.mq_with_alpha(0.8 - pulse * 0.4),
             );
-            draw_circle(
+            draw_circle_filled(
+                painter,
                 pos.x,
                 pos.y,
                 radius,
                 theme::ACCENT_PRIMARY.mq_with_alpha(0.2 - pulse * 0.1),
             );
         }
-        // Draw keyboard tab focus indicator
+
+        // Draw Keyboard Tab Focus Ring
         if let Some((comp_id, port_opt)) = self.canvas.tab_focus
             && let Some(comp) = self.get_component(comp_id)
         {
             if let Some((port_idx, is_input)) = port_opt {
-                // Draw a square bracket around the port
                 let (in_count, out_count) = self
                     .get_component_ports_count_with_width(comp.comp_type, Some(comp.bus_width()));
                 let pos = if is_input {
@@ -813,41 +712,121 @@ impl Editor {
                 } else {
                     self.to_screen_space(comp.output_port_pos(port_idx, out_count))
                 };
-                draw_rectangle_lines(
-                    pos.x - 6.0,
-                    pos.y - 6.0,
-                    12.0,
-                    12.0,
-                    2.0,
+                draw_circle_lines(
+                    painter,
+                    pos.x,
+                    pos.y,
+                    8.0 * self.canvas.zoom,
+                    2.5 * self.canvas.zoom,
                     theme::ACCENT_ACTIVE.mq(),
                 );
             } else {
-                // Draw a dashed highlight around the component
                 let screen_pos = self.to_screen_space(comp.pos);
-                let w = comp.width * self.canvas.zoom;
-                let h = comp.height * self.canvas.zoom;
-                draw_rectangle_lines(
-                    screen_pos.x - 4.0,
-                    screen_pos.y - 4.0,
-                    w + 8.0,
-                    h + 8.0,
-                    2.0,
+                let pad = 6.0 * self.canvas.zoom;
+                draw_rounded_rect_lines(
+                    painter,
+                    screen_pos.x - pad,
+                    screen_pos.y - pad,
+                    comp.width * self.canvas.zoom + pad * 2.0,
+                    comp.height * self.canvas.zoom + pad * 2.0,
+                    8.0 * self.canvas.zoom,
+                    2.0 * self.canvas.zoom,
                     theme::ACCENT_ACTIVE.mq(),
                 );
             }
         }
+    }
 
-        // Draw instructions at top-left
-        draw_text_ex(
-            "Left Click: Place/Connect/Toggle | Drag: Move | Right Click/Del: Delete | Scroll: Zoom | Right Drag: Pan",
-            15.0,
-            20.0,
-            TextParams {
-                font: self.font.as_ref(),
-                font_size: 14,
-                color: theme::TEXT_SECONDARY.mq_with_alpha(0.8),
-                ..Default::default()
-            },
+    pub(crate) fn draw_seven_segment_digits(
+        painter: &egui::Painter,
+        cx: f32,
+        cy: f32,
+        zoom: f32,
+        seg_states: &[bool; 8],
+    ) {
+        let w = 15.0 * zoom;
+        let h = 15.0 * zoom;
+        let thick = 4.0 * zoom;
+
+        // Segment A (top)
+        draw_line_seg(
+            painter,
+            cx - w,
+            cy - 2.0 * h,
+            cx + w,
+            cy - 2.0 * h,
+            thick,
+            get_seg_color(seg_states[0]),
+        );
+        // Segment B (top right)
+        draw_line_seg(
+            painter,
+            cx + w,
+            cy - 2.0 * h,
+            cx + w,
+            cy,
+            thick,
+            get_seg_color(seg_states[1]),
+        );
+        // Segment C (bottom right)
+        draw_line_seg(
+            painter,
+            cx + w,
+            cy,
+            cx + w,
+            cy + 2.0 * h,
+            thick,
+            get_seg_color(seg_states[2]),
+        );
+        // Segment D (bottom)
+        draw_line_seg(
+            painter,
+            cx - w,
+            cy + 2.0 * h,
+            cx + w,
+            cy + 2.0 * h,
+            thick,
+            get_seg_color(seg_states[3]),
+        );
+        // Segment E (bottom left)
+        draw_line_seg(
+            painter,
+            cx - w,
+            cy,
+            cx - w,
+            cy + 2.0 * h,
+            thick,
+            get_seg_color(seg_states[4]),
+        );
+        // Segment F (top left)
+        draw_line_seg(
+            painter,
+            cx - w,
+            cy - 2.0 * h,
+            cx - w,
+            cy,
+            thick,
+            get_seg_color(seg_states[5]),
+        );
+        // Segment G (middle)
+        draw_line_seg(
+            painter,
+            cx - w,
+            cy,
+            cx + w,
+            cy,
+            thick,
+            get_seg_color(seg_states[6]),
+        );
+        // Segment minus (port 7)
+        draw_line_seg(
+            painter,
+            cx - w - 20.0 * zoom,
+            cy,
+            cx - w - 10.0 * zoom,
+            cy,
+            thick,
+            get_seg_color(seg_states[7]),
         );
     }
 }

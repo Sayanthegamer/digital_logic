@@ -1,8 +1,8 @@
+pub use crate::editor::math::{Color, Rect, Vec2, vec2};
 use crate::engine::ComponentType;
-use macroquad::prelude::*;
 
 pub mod serde_vec2 {
-    use macroquad::prelude::Vec2;
+    use crate::editor::math::Vec2;
     use serde::{self, Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S>(vec: &Vec2, serializer: S) -> Result<S::Ok, S::Error>

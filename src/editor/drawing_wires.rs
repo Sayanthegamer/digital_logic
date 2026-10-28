@@ -1,5 +1,6 @@
+use crate::editor::drawing_shapes::*;
+use crate::editor::math::{Color, Vec2};
 use crate::editor::theme;
-use macroquad::prelude::*;
 
 use super::Editor;
 
@@ -7,6 +8,7 @@ impl Editor {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn draw_manhattan_wire(
         &self,
+        painter: &egui::Painter,
         src_pos: Vec2,
         tgt_pos: Vec2,
         routing_offset: f32,
@@ -27,7 +29,6 @@ impl Editor {
             thickness *= 2.2;
         }
 
-        // Use color override if provided, otherwise use state-based color
         let color = color_override.unwrap_or(base_color);
 
         let segments = Self::compute_wire_segments_screen(
@@ -54,7 +55,6 @@ impl Editor {
             for &(gap, lower_thickness) in gaps {
                 let t = (gap - a).dot(dir);
                 let proj = a + dir * t;
-                // dynamic gap radius perfectly matches the lower wire plus a fixed clearance
                 let gap_radius = lower_thickness / 2.0 + 3.0 * self.canvas.zoom;
 
                 if proj.distance(gap) < 2.0 * self.canvas.zoom
@@ -67,7 +67,7 @@ impl Editor {
 
             scratch
                 .holes
-                .sort_by(|h1, h2| h1.0.partial_cmp(&h2.0).unwrap());
+                .sort_by(|h1, h2| h1.0.partial_cmp(&h2.0).unwrap_or(std::cmp::Ordering::Equal));
             scratch.merged_holes.clear();
             for h in &scratch.holes {
                 if let Some(last) = scratch.merged_holes.last_mut()
@@ -87,7 +87,6 @@ impl Editor {
                 }
                 current_t = current_t.max(h.1);
 
-                // Add ONE dynamic bridge arc for the entire merged hole
                 let center_t = (h.0 + h.1) / 2.0;
                 let radius = (h.1 - h.0) / 2.0;
                 let center = a + dir * center_t;
@@ -111,52 +110,54 @@ impl Editor {
         // Active glow bloom effect under active wires
         if is_active || is_selected {
             let glow_color = if is_selected {
-                theme::ACCENT_PRIMARY.mq_with_alpha(0.4) // Strong cyan glow for selection
+                theme::ACCENT_PRIMARY.mq_with_alpha(0.4)
             } else {
-                color // Glow matches the wire color
+                color
             };
             let glow_color = Color::new(glow_color.r, glow_color.g, glow_color.b, 0.2);
             let glow_thickness =
                 thickness + (if is_selected { 6.0 } else { 4.0 }) * self.canvas.zoom;
             for &(p1, p2, draw_start, draw_end) in &scratch.final_segments {
                 if draw_start {
-                    draw_circle(p1.x, p1.y, glow_thickness / 2.0, glow_color);
+                    draw_circle_filled(painter, p1.x, p1.y, glow_thickness / 2.0, glow_color);
                 }
                 if draw_end {
-                    draw_circle(p2.x, p2.y, glow_thickness / 2.0, glow_color);
+                    draw_circle_filled(painter, p2.x, p2.y, glow_thickness / 2.0, glow_color);
                 }
-                draw_line(p1.x, p1.y, p2.x, p2.y, glow_thickness, glow_color);
+                draw_line_seg(painter, p1.x, p1.y, p2.x, p2.y, glow_thickness, glow_color);
             }
             for &(center, radius, dir) in &scratch.bridge_arcs {
-                Self::draw_bridge_arc(center, radius, dir, glow_thickness, glow_color);
+                Self::draw_bridge_arc(painter, center, radius, dir, glow_thickness, glow_color);
             }
         }
 
         for &(p1, p2, draw_start, draw_end) in &scratch.final_segments {
             if draw_start {
-                draw_circle(p1.x, p1.y, thickness / 2.0, color);
+                draw_circle_filled(painter, p1.x, p1.y, thickness / 2.0, color);
             }
             if draw_end {
-                draw_circle(p2.x, p2.y, thickness / 2.0, color);
+                draw_circle_filled(painter, p2.x, p2.y, thickness / 2.0, color);
             }
-            draw_line(p1.x, p1.y, p2.x, p2.y, thickness, color);
+            draw_line_seg(painter, p1.x, p1.y, p2.x, p2.y, thickness, color);
         }
         for &(center, radius, dir) in &scratch.bridge_arcs {
-            Self::draw_bridge_arc(center, radius, dir, thickness, color);
+            Self::draw_bridge_arc(painter, center, radius, dir, thickness, color);
         }
 
         // Draw concentric terminal circle/indicator at target
         let port_radius = 4.0 * self.canvas.zoom;
         if is_active {
-            draw_circle(
+            draw_circle_filled(
+                painter,
                 tgt_pos.x,
                 tgt_pos.y,
                 port_radius + 2.0 * self.canvas.zoom,
                 theme::ACCENT_PRIMARY.mq_with_alpha(0.2),
             );
         }
-        draw_circle(tgt_pos.x, tgt_pos.y, port_radius, color);
-        draw_circle(
+        draw_circle_filled(painter, tgt_pos.x, tgt_pos.y, port_radius, color);
+        draw_circle_filled(
+            painter,
             tgt_pos.x,
             tgt_pos.y,
             2.0 * self.canvas.zoom,
@@ -164,7 +165,14 @@ impl Editor {
         );
     }
 
-    fn draw_bridge_arc(center: Vec2, radius: f32, dir: Vec2, thickness: f32, wire_color: Color) {
+    fn draw_bridge_arc(
+        painter: &egui::Painter,
+        center: Vec2,
+        radius: f32,
+        dir: Vec2,
+        thickness: f32,
+        wire_color: Color,
+    ) {
         let segments = 12 + (radius / 5.0) as usize;
 
         let mut normal = Vec2::new(dir.y, -dir.x);
@@ -179,7 +187,7 @@ impl Editor {
             let p0 = center - dir * (radius * t0.cos()) + normal * (radius * t0.sin());
             let p1 = center - dir * (radius * t1.cos()) + normal * (radius * t1.sin());
 
-            draw_line(p0.x, p0.y, p1.x, p1.y, thickness, wire_color);
+            draw_line_seg(painter, p0.x, p0.y, p1.x, p1.y, thickness, wire_color);
         }
     }
 

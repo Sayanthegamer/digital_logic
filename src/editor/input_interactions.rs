@@ -1,5 +1,5 @@
 use super::Editor;
-use macroquad::prelude::*;
+use crate::editor::math::Vec2;
 
 impl Editor {
     pub fn handle_canvas_interactions(
@@ -8,22 +8,21 @@ impl Editor {
         mouse_delta: Vec2,
         egui_wants_pointer: bool,
     ) {
-        let touch_events = touches();
-        let is_multi_touch = touch_events.len() >= 2;
+        let is_multi_touch = self.canvas.frame_input.touch_points.len() >= 2;
 
         if !egui_wants_pointer && !is_multi_touch && self.canvas.inspection_path.is_empty() {
-            if is_mouse_button_pressed(MouseButton::Left) {
+            if self.canvas.frame_input.left_pressed {
                 self.handle_canvas_left_press(mouse_pos_world);
-            } else if is_mouse_button_down(MouseButton::Left) {
+            } else if self.canvas.frame_input.left_down {
                 self.handle_canvas_left_drag(mouse_pos_world, mouse_delta);
-            } else if is_mouse_button_released(MouseButton::Left) {
+            } else if self.canvas.frame_input.left_released {
                 self.handle_canvas_left_release(mouse_pos_world);
             }
         }
 
         if !egui_wants_pointer
             && self.canvas.inspection_path.is_empty()
-            && (is_key_pressed(KeyCode::Delete) || is_key_pressed(KeyCode::Backspace))
+            && self.canvas.frame_input.delete_pressed
         {
             self.handle_canvas_deletion();
         }

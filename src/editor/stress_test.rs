@@ -1,7 +1,7 @@
 use super::Editor;
+use crate::editor::math::Vec2;
 use crate::editor::types::{VisualComponent, VisualConnection};
 use crate::engine::ComponentType;
-use macroquad::prelude::Vec2;
 
 impl Editor {
     /// Generates a massive recursively packaged synthetic circuit
@@ -136,14 +136,6 @@ impl Editor {
         self.engine.library.push(base_bp);
 
         // 2. Recursively package! Each level contains 4 instances of the previous level.
-        // Level 0: 4 NANDs
-        // Level 1: 4 * 4 = 16 NANDs
-        // Level 2: 4 * 16 = 64 NANDs
-        // Level 3: 4 * 64 = 256 NANDs
-        // Level 4: 4 * 256 = 1,024 NANDs
-        // Level 5: 4 * 1024 = 4,096 NANDs
-        // Level 6: 4 * 4096 = 16,384 NANDs
-
         let target_depth = size.max(1);
         for depth in 1..=target_depth {
             let prev_idx = depth - 1;
@@ -308,7 +300,7 @@ impl Editor {
         // The base blueprint "Level_0_XOR" is at index 0.
         // Drill down into it:
         self.unpack_blueprint_to_canvas(0);
-        self.canvas.pan = macroquad::prelude::Vec2::new(100.0, 100.0);
+        self.canvas.pan = Vec2::new(100.0, 100.0);
         println!(
             "Hot-Reload Proving Test: You are now editing the Level_0_XOR blueprint (Index 0). \nMake a change and click 'Save Changes & Return'!"
         );

@@ -1,146 +1,141 @@
 use super::Editor;
+use crate::editor::math::Vec2;
 use crate::editor::theme;
 
-pub fn setup_egui() {
-    egui_macroquad::ui(|ctx| {
-        let mut fonts = egui::FontDefinitions::default();
-        fonts.font_data.insert(
-            "material_icons".to_owned(),
-            egui::FontData::from_static(include_bytes!("../../assets/MaterialIcons-Regular.ttf"))
-                .into(),
-        );
-        fonts
-            .families
-            .get_mut(&egui::FontFamily::Proportional)
-            .unwrap()
-            .insert(1, "material_icons".to_owned());
-        fonts
-            .families
-            .get_mut(&egui::FontFamily::Monospace)
-            .unwrap()
-            .push("material_icons".to_owned());
-        ctx.set_fonts(fonts);
-    });
+pub fn setup_egui_context(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        "inter_regular".to_owned(),
+        egui::FontData::from_static(include_bytes!("../../assets/Inter-Regular.ttf")).into(),
+    );
+    fonts.font_data.insert(
+        "material_icons".to_owned(),
+        egui::FontData::from_static(include_bytes!("../../assets/MaterialIcons-Regular.ttf"))
+            .into(),
+    );
+    if let Some(prop) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
+        prop.insert(0, "inter_regular".to_owned());
+        prop.insert(1, "material_icons".to_owned());
+    }
+    if let Some(mono) = fonts.families.get_mut(&egui::FontFamily::Monospace) {
+        mono.push("material_icons".to_owned());
+    }
+    ctx.set_fonts(fonts);
 }
 
 impl Editor {
-    pub fn draw_gui(&mut self) {
-        let mut egui_wants_pointer = false;
-        let is_mobile = macroquad::window::screen_width() < 720.0;
+    pub fn draw_gui(&mut self, ctx: &egui::Context) {
+        let is_mobile = self.screen_width() < 720.0;
 
-        egui_macroquad::ui(|ctx| {
-            self.ui.ui_scale = self.ui.ui_scale.clamp(0.5, 3.0);
-            ctx.set_pixels_per_point(self.ui.ui_scale);
+        self.ui.ui_scale = self.ui.ui_scale.clamp(0.5, 3.0);
+        ctx.set_pixels_per_point(self.ui.ui_scale);
 
-            // Dark elegant theme styling overrides with large touch-friendly targets
-            let mut style = (*ctx.style()).clone();
-            style.visuals.dark_mode = true;
-            style.visuals.widgets.active.bg_fill = theme::ACCENT_ACTIVE.egui();
-            style.visuals.widgets.hovered.bg_fill = theme::BORDER.egui();
-            style.visuals.widgets.noninteractive.bg_fill = theme::BG_PANEL.egui();
-            style.visuals.window_fill = theme::BG_PANEL.egui();
-            style.visuals.window_stroke = egui::Stroke::new(1.0_f32, theme::BORDER.egui());
-            style.visuals.window_corner_radius = egui::CornerRadius::same(12);
-            style.spacing.button_padding = egui::vec2(14.0, 10.0);
-            style.spacing.item_spacing = egui::vec2(12.0, 12.0);
-            ctx.set_style(style);
+        // Dark elegant theme styling overrides with large touch-friendly targets
+        let mut style = (*ctx.style()).clone();
+        style.visuals.dark_mode = true;
+        style.visuals.widgets.active.bg_fill = theme::ACCENT_ACTIVE.egui();
+        style.visuals.widgets.hovered.bg_fill = theme::BORDER.egui();
+        style.visuals.widgets.noninteractive.bg_fill = theme::BG_PANEL.egui();
+        style.visuals.window_fill = theme::BG_PANEL.egui();
+        style.visuals.window_stroke = egui::Stroke::new(1.0_f32, theme::BORDER.egui());
+        style.visuals.window_corner_radius = egui::CornerRadius::same(12);
+        style.spacing.button_padding = egui::vec2(14.0, 10.0);
+        style.spacing.item_spacing = egui::vec2(12.0, 12.0);
+        ctx.set_style(style);
 
-            use crate::editor::state::AppMode;
-            let is_editor = self.ui.mode == AppMode::Editor;
+        use crate::editor::state::AppMode;
+        let is_editor = self.ui.mode == AppMode::Editor;
 
-            match self.ui.mode {
-                AppMode::MainMenu => {
-                    self.draw_main_menu(ctx);
-                }
-                AppMode::Credits => {
-                    self.draw_credits(ctx);
-                }
-                AppMode::ManageChips => {
-                    self.draw_manage_chips(ctx);
-                }
-                AppMode::GlobalLibraryManager => {
-                    self.draw_global_library_manager(ctx);
-                }
-                AppMode::Editor => {}
+        match self.ui.mode {
+            AppMode::MainMenu => {
+                self.draw_main_menu(ctx);
+            }
+            AppMode::Credits => {
+                self.draw_credits(ctx);
+            }
+            AppMode::ManageChips => {
+                self.draw_manage_chips(ctx);
+            }
+            AppMode::GlobalLibraryManager => {
+                self.draw_global_library_manager(ctx);
+            }
+            AppMode::Editor => {}
+        }
+
+        if is_editor {
+            // Error panel if simulation has oscillated/errored
+            if let Some(ref err) = self.engine.propagation_error {
+                egui::TopBottomPanel::top("error_panel").show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(255, 80, 80),
+                            "⚠️ Simulation Error:",
+                        );
+                        ui.label(err);
+                    });
+                });
             }
 
-            if is_editor {
-                // Error panel if simulation has oscillated/errored
-                if let Some(ref err) = self.engine.propagation_error {
-                    egui::TopBottomPanel::top("error_panel").show(ctx, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.colored_label(
-                                egui::Color32::from_rgb(255, 80, 80),
-                                "⚠️ Simulation Error:",
-                            );
-                            ui.label(err);
-                        });
+            // Edit Blueprint Panel
+            if let crate::editor::state::EditingTarget::LibraryChip(bp_idx) =
+                self.canvas.editing_target
+            {
+                let mut requested_repack = false;
+                let mut requested_cancel = false;
+                egui::TopBottomPanel::top("editing_chip_panel").show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        let bp_name = self
+                            .engine
+                            .library
+                            .get(bp_idx)
+                            .map(|bp| bp.name.clone())
+                            .unwrap_or_default();
+                        ui.colored_label(
+                            egui::Color32::from_rgb(100, 255, 100),
+                            format!("✏️ Editing Blueprint: {}", bp_name),
+                        );
+                        ui.add_space(20.0);
+                        if ui
+                            .button(format!("{} Save Changes & Return", theme::ICON_SAVE))
+                            .clicked()
+                        {
+                            requested_repack = true;
+                        }
+                        if ui
+                            .button(format!("{} Cancel Changes & Return", theme::ICON_CLOSE))
+                            .clicked()
+                        {
+                            requested_cancel = true;
+                        }
                     });
+                });
+
+                if requested_repack {
+                    self.save_and_repack_blueprint();
+                } else if requested_cancel {
+                    self.cancel_and_return();
                 }
+            }
 
-                // Edit Blueprint Panel
-                if let crate::editor::state::EditingTarget::LibraryChip(bp_idx) =
-                    self.canvas.editing_target
-                {
-                    let mut requested_repack = false;
-                    let mut requested_cancel = false;
-                    egui::TopBottomPanel::top("editing_chip_panel").show(ctx, |ui| {
-                        ui.horizontal(|ui| {
-                            let bp_name = self
-                                .engine
-                                .library
-                                .get(bp_idx)
-                                .map(|bp| bp.name.clone())
-                                .unwrap_or_default();
-                            ui.colored_label(
-                                egui::Color32::from_rgb(100, 255, 100),
-                                format!("✏️ Editing Blueprint: {}", bp_name),
-                            );
-                            ui.add_space(20.0);
-                            if ui
-                                .button(format!("{} Save Changes & Return", theme::ICON_SAVE))
-                                .clicked()
-                            {
-                                requested_repack = true;
-                            }
-                            if ui
-                                .button(format!("{} Cancel Changes & Return", theme::ICON_CLOSE))
-                                .clicked()
-                            {
-                                requested_cancel = true;
-                            }
-                        });
-                    });
+            if is_mobile {
+                self.draw_mobile_editor_ui(ctx);
+            } else {
+                self.draw_desktop_editor_ui(ctx);
+            }
 
-                    if requested_repack {
-                        self.save_and_repack_blueprint();
-                    } else if requested_cancel {
-                        self.cancel_and_return();
-                    }
-                }
+            if self.ui.show_debug_suite {
+                self.draw_debug_suite(ctx);
+            }
+        }
 
-                if is_mobile {
-                    self.draw_mobile_editor_ui(ctx);
-                } else {
-                    self.draw_desktop_editor_ui(ctx);
-                }
+        self.draw_settings_dialog(ctx);
+        #[cfg(target_os = "android")]
+        self.draw_android_file_dialog(ctx);
+        self.draw_context_menu(ctx);
 
-                if self.ui.show_debug_suite {
-                    self.draw_debug_suite(ctx);
-                }
-            } // END OF is_editor BLOCK
-
-            self.draw_settings_dialog(ctx);
-            #[cfg(target_os = "android")]
-            self.draw_android_file_dialog(ctx);
-            self.draw_context_menu(ctx);
-
-            egui_wants_pointer = ctx.wants_pointer_input()
-                || ctx.wants_keyboard_input()
-                || ctx.is_pointer_over_area();
-            self.ui.egui_wants_keyboard = ctx.wants_keyboard_input();
-        });
-        self.ui.egui_wants_pointer = egui_wants_pointer;
+        self.ui.egui_wants_pointer =
+            ctx.wants_pointer_input() || ctx.wants_keyboard_input() || ctx.is_pointer_over_area();
+        self.ui.egui_wants_keyboard = ctx.wants_keyboard_input();
     }
 
     fn draw_debug_suite(&mut self, ctx: &egui::Context) {
@@ -153,7 +148,7 @@ impl Editor {
         .resizable(true)
         .show(ctx, |ui| {
             ui.heading("Performance Limits");
-            let fps = macroquad::time::get_fps();
+            let fps = self.ui.fps;
             ui.label(format!("FPS: {}", fps));
             ui.label(format!("Ticks per Frame: {}", self.engine.ticks_per_frame));
             ui.label(format!(
@@ -220,7 +215,7 @@ impl Editor {
         self.ui.show_debug_suite = open;
 
         if self.ui.debug_continuous_log {
-            let current_time = macroquad::time::get_time();
+            let current_time = self.ui.elapsed_time;
             if current_time - self.ui.last_debug_log_time >= 1.0 {
                 self.export_debug_log();
                 self.ui.last_debug_log_time = current_time;
@@ -235,8 +230,8 @@ impl Editor {
             .append(true)
             .open("debug_suite.log")
         {
-            let fps = macroquad::time::get_fps();
-            let time = macroquad::time::get_time();
+            let fps = self.ui.fps;
+            let time = self.ui.elapsed_time;
             let _ = writeln!(
                 file,
                 "[{:.2}s] FPS: {}, Ticks/Frame: {}, Total Gates: {}, Drawn/Total Comps: {}/{}, Threading: {}",
@@ -297,17 +292,16 @@ impl Editor {
 
                         ui.add_space(4.0);
 
-                        // Preset colors row
                         ui.horizontal(|ui| {
                             let presets: &[[f32; 4]] = &[
-                                [1.0, 0.55, 0.15, 1.0],  // Amber
-                                [0.00, 0.70, 1.00, 1.0], // Cyan
-                                [0.15, 0.85, 0.40, 1.0], // Green
-                                [0.90, 0.22, 0.27, 1.0], // Red
-                                [0.40, 0.45, 0.85, 1.0], // Indigo
-                                [0.85, 0.60, 0.90, 1.0], // Purple
-                                [1.0, 0.85, 0.20, 1.0],  // Yellow
-                                [0.95, 0.50, 0.60, 1.0], // Pink
+                                [1.0, 0.55, 0.15, 1.0],
+                                [0.00, 0.70, 1.00, 1.0],
+                                [0.15, 0.85, 0.40, 1.0],
+                                [0.90, 0.22, 0.27, 1.0],
+                                [0.40, 0.45, 0.85, 1.0],
+                                [0.85, 0.60, 0.90, 1.0],
+                                [1.0, 0.85, 0.20, 1.0],
+                                [0.95, 0.50, 0.60, 1.0],
                             ];
                             for preset in presets {
                                 let c = egui::Color32::from_rgba_unmultiplied(
@@ -356,17 +350,16 @@ impl Editor {
 
                         ui.add_space(4.0);
 
-                        // Preset colors row
                         ui.horizontal(|ui| {
                             let presets: &[[f32; 4]] = &[
-                                [1.0, 0.55, 0.15, 1.0],  // Amber
-                                [0.00, 0.70, 1.00, 1.0], // Cyan
-                                [0.15, 0.85, 0.40, 1.0], // Green
-                                [0.90, 0.22, 0.27, 1.0], // Red
-                                [0.40, 0.45, 0.85, 1.0], // Indigo
-                                [0.85, 0.60, 0.90, 1.0], // Purple
-                                [1.0, 0.85, 0.20, 1.0],  // Yellow
-                                [0.95, 0.50, 0.60, 1.0], // Pink
+                                [1.0, 0.55, 0.15, 1.0],
+                                [0.00, 0.70, 1.00, 1.0],
+                                [0.15, 0.85, 0.40, 1.0],
+                                [0.90, 0.22, 0.27, 1.0],
+                                [0.40, 0.45, 0.85, 1.0],
+                                [0.85, 0.60, 0.90, 1.0],
+                                [1.0, 0.85, 0.20, 1.0],
+                                [0.95, 0.50, 0.60, 1.0],
                             ];
                             for preset in presets {
                                 let c = egui::Color32::from_rgba_unmultiplied(
@@ -407,7 +400,8 @@ impl Editor {
     }
 
     fn draw_mobile_editor_ui(&mut self, ctx: &egui::Context) {
-        // 1. Tiny Transparent FAB for Menu & Play/Pause at the top
+        let sh = self.screen_height();
+
         egui::Window::new("Mobile FAB")
             .anchor(egui::Align2::LEFT_TOP, egui::vec2(15.0, 15.0))
             .collapsible(false)
@@ -437,7 +431,6 @@ impl Editor {
                         self.engine.is_playing = !self.engine.is_playing;
                     }
                     if ui.button(theme::ICON_STOP).clicked() {
-                        // Budget multiplier of 100 scales the evaluation cap linearly with capacity (100 * capacity).
                         let budget_multiplier = 100;
                         match self.engine.simulator.propagate_events(budget_multiplier) {
                             Ok(_) => self.engine.propagation_error = None,
@@ -447,7 +440,6 @@ impl Editor {
                 });
             });
 
-        // 2. Full Control Drawer (overlay)
         if self.ui.show_menu_mobile {
             egui::Window::new("Simulator Drawer")
                 .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, 0.0))
@@ -457,7 +449,7 @@ impl Editor {
                 .default_width(320.0)
                 .show(ctx, |ui| {
                     egui::ScrollArea::vertical()
-                        .max_height(macroquad::window::screen_height() * 0.7)
+                        .max_height(sh * 0.7)
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
                                 if !self.canvas.inspection_path.is_empty() {
@@ -474,7 +466,6 @@ impl Editor {
                                     ui.separator();
                                 }
 
-                                // Simulator Stats & Options
                                 ui.heading("Options");
                                 ui.horizontal(|ui| {
                                     if ui.button(format!("{} Save", theme::ICON_SAVE)).clicked() {
@@ -528,14 +519,12 @@ impl Editor {
 
                                 ui.separator();
 
-                                // Parts Catalog inside drawer
                                 if self.canvas.inspection_path.is_empty() {
                                     ui.heading("Parts Catalog");
                                     self.draw_catalog_ui(ui);
                                     ui.separator();
                                 }
 
-                                // Properties section inside drawer
                                 self.draw_properties_ui(ui);
 
                                 ui.add_space(10.0);
@@ -555,13 +544,14 @@ impl Editor {
     }
 
     fn draw_desktop_editor_ui(&mut self, ctx: &egui::Context) {
+        let (screen_w, screen_h) = (self.screen_width(), self.screen_height());
+
         // 1. Top Controls Panel
         egui::TopBottomPanel::top("controls_panel")
             .frame(egui::Frame::side_top_panel(&ctx.style()).inner_margin(8.0))
             .show(ctx, |ui| {
                 let mut scroll_by = self.ui.controls_scroll_request.take();
 
-                // Handle vertical mouse wheel as horizontal scroll
                 let scroll_delta = ui.input(|i| i.raw_scroll_delta);
                 if scroll_delta.y != 0.0 {
                     scroll_by = Some(scroll_delta.y * 3.0);
@@ -621,7 +611,6 @@ impl Editor {
                                 self.engine.is_playing = !self.engine.is_playing;
                             }
                             if ui.button(format!("{} Step", theme::ICON_STOP)).clicked() {
-                                // Budget multiplier of 100 scales the evaluation cap linearly with capacity (100 * capacity).
                                 let budget_multiplier = 100;
                                 match self.engine.simulator.propagate_events(budget_multiplier) {
                                     Ok(_) => self.engine.propagation_error = None,
@@ -646,12 +635,6 @@ impl Editor {
 
                             // RECENTER BUTTON CALCULATION
                             if !self.circuit.components.is_empty() {
-                                let (screen_w, screen_h) = (
-                                    macroquad::prelude::screen_width(),
-                                    macroquad::prelude::screen_height(),
-                                );
-
-                                // Use the real canvas viewport (remaining rect after egui panels).
                                 let (vx, vy, vw, vh) = self
                                     .ui
                                     .canvas_viewport
@@ -667,10 +650,8 @@ impl Editor {
                                 for comp in &self.circuit.components {
                                     let p1 = (comp.pos * self.canvas.zoom) + self.canvas.pan;
                                     let p2 = p1
-                                        + macroquad::prelude::Vec2::new(comp.width, comp.height)
-                                            * self.canvas.zoom;
+                                        + Vec2::new(comp.width, comp.height) * self.canvas.zoom;
 
-                                    // Show recenter if any element is even partially out of view.
                                     if p1.x < view_min_x
                                         || p2.x > view_max_x
                                         || p1.y < view_min_y
@@ -713,20 +694,17 @@ impl Editor {
                                         let w = (max_x - min_x).max(100.0);
                                         let h = (max_y - min_y).max(100.0);
 
-                                        // Target zoom to fit all components into the actual viewport.
                                         let zoom_x = view_w / (w + padding * 2.0);
                                         let zoom_y = view_h / (h + padding * 2.0);
                                         self.canvas.zoom = zoom_x.min(zoom_y).clamp(0.01, 5.0);
 
-                                        // Target pan to center content in the viewport.
                                         let center_x = (min_x + max_x) / 2.0;
                                         let center_y = (min_y + max_y) / 2.0;
-                                        self.canvas.pan = macroquad::prelude::Vec2::new(
+                                        self.canvas.pan = Vec2::new(
                                             view_min_x + view_w / 2.0,
                                             view_min_y + view_h / 2.0,
-                                        ) - macroquad::prelude::Vec2::new(
-                                            center_x, center_y,
-                                        ) * self.canvas.zoom;
+                                        ) - Vec2::new(center_x, center_y)
+                                            * self.canvas.zoom;
                                     }
                                     ui.separator();
                                 }
@@ -881,9 +859,15 @@ impl Editor {
                             self.ui.resolution_idx = self.ui.temp_resolution_idx;
                             self.ui.ui_scale = self.ui.temp_ui_scale;
 
-                            macroquad::window::set_fullscreen(self.ui.is_fullscreen);
                             let r = resolutions[self.ui.resolution_idx];
-                            macroquad::window::request_new_screen_size(r.0 as f32, r.1 as f32);
+                            self.ui
+                                .pending_viewport_commands
+                                .push(egui::ViewportCommand::Fullscreen(self.ui.is_fullscreen));
+                            self.ui
+                                .pending_viewport_commands
+                                .push(egui::ViewportCommand::InnerSize(egui::vec2(
+                                    r.0 as f32, r.1 as f32,
+                                )));
 
                             if size_changed {
                                 self.ui.resolution_revert_timer = Some(10.0);
@@ -911,7 +895,10 @@ impl Editor {
                 .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
                 .show(ctx, |ui| {
                     if !self.ui.android_file_dialog_status.is_empty() {
-                        ui.colored_label(egui::Color32::LIGHT_GREEN, &self.ui.android_file_dialog_status);
+                        ui.colored_label(
+                            egui::Color32::LIGHT_GREEN,
+                            &self.ui.android_file_dialog_status,
+                        );
                         ui.add_space(5.0);
                     }
 
@@ -943,7 +930,8 @@ impl Editor {
 
                         ui.add_space(10.0);
                         if ui.button("Save File").clicked() {
-                            let mut filename = self.ui.android_file_dialog_input.trim().to_string();
+                            let mut filename =
+                                self.ui.android_file_dialog_input.trim().to_string();
                             if filename.is_empty() {
                                 filename = "project_save.logic".to_string();
                             }
@@ -957,12 +945,15 @@ impl Editor {
                                 let mut path = dir;
                                 path.push(&filename);
                                 if let Err(err) = self.save_to_path(path) {
-                                    self.ui.android_file_dialog_status = format!("Save failed: {err}");
+                                    self.ui.android_file_dialog_status =
+                                        format!("Save failed: {err}");
                                 } else {
-                                    self.ui.android_file_dialog_status = format!("Saved as {filename}");
+                                    self.ui.android_file_dialog_status =
+                                        format!("Saved as {filename}");
                                 }
                             } else {
-                                self.ui.android_file_dialog_status = "Failed to resolve save directory".to_string();
+                                self.ui.android_file_dialog_status =
+                                    "Failed to resolve save directory".to_string();
                             }
                         }
                     }
@@ -980,15 +971,20 @@ impl Editor {
                                 if ui.selectable_label(selected, &file).clicked() {
                                     self.ui.android_file_dialog_input = file.clone();
                                     if mode == crate::editor::state::AndroidFileDialogMode::Load {
-                                        if let Ok(dir) = super::persistence::get_android_external_files_dir()
-                                            .or_else(|_| super::persistence::get_android_internal_files_dir())
+                                        if let Ok(dir) =
+                                            super::persistence::get_android_external_files_dir()
+                                                .or_else(|_| {
+                                                    super::persistence::get_android_internal_files_dir()
+                                                })
                                         {
                                             let mut path = dir;
                                             path.push(&file);
                                             if self.load_from_path(&path) {
-                                                self.ui.android_file_dialog_status = format!("Loaded {file}");
+                                                self.ui.android_file_dialog_status =
+                                                    format!("Loaded {file}");
                                             } else {
-                                                self.ui.android_file_dialog_status = format!("Failed to load {file}");
+                                                self.ui.android_file_dialog_status =
+                                                    format!("Failed to load {file}");
                                             }
                                         }
                                     }

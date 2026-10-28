@@ -1,4 +1,4 @@
-use macroquad::prelude::*;
+use crate::editor::math::{Color, Rect, Vec2};
 
 use super::Editor;
 use super::theme;
@@ -144,7 +144,6 @@ impl Editor {
         }
 
         // Spatial Sorting: Sort connections so lane assignment is deterministic and ordered
-        // We sort by main vertical corridor ideal X, then Y span start, then Y source coordinate
         conn_data.sort_by(|a, b| {
             let a_x = a.vertical_segs.first().map(|s| s.ideal_x).unwrap_or(0.0);
             let b_x = b.vertical_segs.first().map(|s| s.ideal_x).unwrap_or(0.0);
@@ -161,10 +160,6 @@ impl Editor {
         let cell_size_y = 100.0;
         let cell_size_x = 20.0;
 
-        // Note: This grid is NOT dead code. While static wires are checked brute-force below,
-        // this grid spatially hashes the dynamic wires (conn_data) against each other.
-        // During a full recompile (where conn_data contains ALL wires), this grid ensures
-        // the collision check remains O(N) instead of degrading to O(N^2).
         let mut grid: std::collections::HashMap<
             (i32, i32),
             Vec<(usize, VerticalSeg, VisualConnection)>,
@@ -179,11 +174,8 @@ impl Editor {
                 let start_row = (s1.y_min / cell_size_y).floor() as i32;
                 let end_row = (s1.y_max / cell_size_y).floor() as i32;
 
-                // Query neighboring spatial buckets (col-1 to col+1, start_row to end_row)
-                // to avoid a plain nested O(N^2) scan over 0..i.
                 for c in (col - 1)..=(col + 1) {
                     for r in start_row..=end_row {
-                        // 1. Check against dynamically placed wires in current pass
                         if let Some(bucket) = grid.get(&(c, r)) {
                             for (assigned_lane, s2, _) in bucket {
                                 if occupied_lanes.contains(assigned_lane) {
@@ -199,7 +191,6 @@ impl Editor {
                             }
                         }
 
-                        // 2. Check against static wires if we are only recomputing affected components (O(1) Spatial Hash Grid Lookup)
                         if let Some(affected) = affected_comps
                             && let Some(bucket) = self.circuit.wire_lane_grid.get(&(c, r))
                         {
@@ -230,7 +221,6 @@ impl Editor {
                 lane += 1;
             }
 
-            // Actually bucket conn_data segments into grid by (col, row)
             for s in &conn_item.vertical_segs {
                 let col = (s.ideal_x / cell_size_x).floor() as i32;
                 let start_row = (s.y_min / cell_size_y).floor() as i32;
@@ -248,8 +238,6 @@ impl Editor {
                 }
             }
 
-            // Convert lane number to pixel offset
-            // Alternating pattern: 0, 6, -6, 12, -12...
             let pixel_offset = if lane % 2 == 0 {
                 (lane / 2) as f32 * 6.0
             } else {
@@ -270,7 +258,6 @@ impl Editor {
         conn: &crate::engine::Connection,
         blueprint: &crate::engine::ChipBlueprint,
     ) -> f32 {
-        // Find all connections sharing the same source
         let mut sharing: Vec<&crate::engine::Connection> = blueprint
             .connections
             .iter()
@@ -345,7 +332,7 @@ impl Editor {
         } else {
             let offset_x = routing_offset.abs() * 0.7 * zoom;
             let offset_y = routing_offset * zoom;
-            let target_stagger = (tgt_port as f32 * 6.0) * zoom; // Stagger backward routing
+            let target_stagger = (tgt_port as f32 * 6.0) * zoom;
 
             let stub_src = src_pos.x + 20.0 * zoom + offset_x;
             let stub_tgt = tgt_pos.x - 20.0 * zoom - offset_x - target_stagger;
@@ -421,16 +408,16 @@ impl Editor {
         Self::compute_wire_segments_screen(src_pos, tgt_pos, routing_offset, tgt_port, 1.0)
     }
 
-    /// Find all wire intersections (junctions and crossings) across all connections.
-    pub fn find_wire_intersections(&self) -> Vec<WireIntersection> {
+    /// Find all wire intersections (junctions and crossings) across visible connections.
+    pub fn find_wire_intersections(&self, visible_wires: &[&VisualConnection]) -> Vec<WireIntersection> {
         let mut all_segments = Vec::new();
         let mut seg_id_counter = 0;
 
-        let sw = macroquad::window::screen_width();
-        let sh = macroquad::window::screen_height();
+        let sw = self.screen_width();
+        let sh = self.screen_height();
         let screen_rect = Rect::new(-20.0, -20.0, sw + 40.0, sh + 40.0);
 
-        for (conn_idx, wire) in self.circuit.connections.iter().enumerate() {
+        for (conn_idx, &wire) in visible_wires.iter().enumerate() {
             let src_comp = self.get_component(wire.src_comp_id);
             let tgt_comp = self.get_component(wire.tgt_comp_id);
 
@@ -475,7 +462,7 @@ impl Editor {
         }
 
         // Spatial Grid for O(N) intersection search
-        let cell_size = 50.0 * self.canvas.zoom;
+        let cell_size = (50.0 * self.canvas.zoom).max(4.0);
         let mut grid: std::collections::HashMap<(i32, i32), Vec<IdentifiedSegment>> =
             std::collections::HashMap::new();
 
@@ -502,7 +489,7 @@ impl Editor {
             std::collections::HashSet::new();
         let mut checked_pairs: std::collections::HashSet<(usize, usize)> =
             std::collections::HashSet::new();
-        let epsilon = 2.0 * self.canvas.zoom;
+        let epsilon = (2.0 * self.canvas.zoom).max(0.5);
 
         for cell in grid.values() {
             for i in 0..cell.len() {
@@ -538,8 +525,8 @@ impl Editor {
                         }
                         seen_points.insert((bucket_x, bucket_y));
 
-                        let conn_i = &self.circuit.connections[s1.conn_idx];
-                        let conn_j = &self.circuit.connections[s2.conn_idx];
+                        let conn_i = visible_wires[s1.conn_idx];
+                        let conn_j = visible_wires[s2.conn_idx];
 
                         let connected = wires_share_endpoint(conn_i, conn_j);
                         if connected {
@@ -556,19 +543,16 @@ impl Editor {
                                 } else {
                                     (s1.conn_idx, s2.conn_idx, true)
                                 }
+                            } else if s1.conn_idx > s2.conn_idx {
+                                (s2.conn_idx, s1.conn_idx, seg_i_horizontal)
                             } else {
-                                // Arbitrary deterministic ordering for non-orthogonal intersections (e.g. chamfers)
-                                if s1.conn_idx > s2.conn_idx {
-                                    (s2.conn_idx, s1.conn_idx, seg_i_horizontal)
-                                } else {
-                                    (s1.conn_idx, s2.conn_idx, seg_j_horizontal)
-                                }
+                                (s1.conn_idx, s2.conn_idx, seg_j_horizontal)
                             };
 
-                        let lower_conn = &self.circuit.connections[lower_conn_idx];
+                        let lower_conn = visible_wires[lower_conn_idx];
                         let (lower_color, lower_thickness) = self.get_connection_style(lower_conn);
 
-                        let upper_conn = &self.circuit.connections[upper_conn_idx];
+                        let upper_conn = visible_wires[upper_conn_idx];
                         let (upper_color, upper_thickness) = self.get_connection_style(upper_conn);
 
                         intersections.push(WireIntersection {
@@ -589,33 +573,20 @@ impl Editor {
         intersections
     }
 
-    /// Draw junction indicators (filled dots for connected).
-    pub fn draw_wire_junctions(&self, intersections: &[WireIntersection]) {
-        for intersection in intersections {
-            match intersection.junction_type {
-                JunctionType::Connected => {} // Ignored for now (dots drawn elsewhere?)
-                JunctionType::Crossing => {} // Bridge arcs are now drawn dynamically in draw_manhattan_wire
-            }
-        }
-    }
+    pub fn draw_wire_junctions(&self, _intersections: &[WireIntersection]) {}
 }
 
-/// Check if a segment is horizontal (vs vertical).
 fn is_horizontal(a: Vec2, b: Vec2) -> bool {
     (a.y - b.y).abs() < (a.x - b.x).abs()
 }
 
-/// Check if two VisualConnections share any endpoint (connected junction).
 fn wires_share_endpoint(a: &VisualConnection, b: &VisualConnection) -> bool {
-    // They share a source or target component+port
     (a.src_comp_id == b.src_comp_id && a.src_port == b.src_port)
         || (a.tgt_comp_id == b.tgt_comp_id && a.tgt_port == b.tgt_port)
         || (a.src_comp_id == b.tgt_comp_id && a.src_port == b.tgt_port)
         || (a.tgt_comp_id == b.src_comp_id && a.tgt_port == b.src_port)
 }
 
-/// Find the intersection point of two axis-aligned (orthogonal) line segments, if any.
-/// Returns None if they're parallel or don't actually cross.
 fn segment_intersection(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2, _epsilon: f32) -> Option<Vec2> {
     let denom = (a1.x - a2.x) * (b1.y - b2.y) - (a1.y - a2.y) * (b1.x - b2.x);
     if denom.abs() < 1e-5 {
@@ -624,7 +595,6 @@ fn segment_intersection(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2, _epsilon: f32) -
     let t = ((a1.x - b1.x) * (b1.y - b2.y) - (a1.y - b1.y) * (b1.x - b2.x)) / denom;
     let u = ((a1.x - b1.x) * (a1.y - a2.y) - (a1.y - b1.y) * (a1.x - a2.x)) / denom;
 
-    // Allow a small epsilon for intersection at the endpoints
     if (-0.01..=1.01).contains(&t) && (-0.01..=1.01).contains(&u) {
         Some(Vec2::new(
             a1.x + t * (a2.x - a1.x),

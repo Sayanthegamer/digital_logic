@@ -1,5 +1,5 @@
+use crate::editor::math::Vec2;
 use crate::editor::types::{VisualComponent, VisualConnection};
-use macroquad::prelude::Vec2;
 use std::collections::{HashMap, VecDeque};
 
 struct LayoutNode {

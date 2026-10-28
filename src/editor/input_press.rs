@@ -1,25 +1,21 @@
 use super::Editor;
 use super::types::*;
+use crate::editor::math::{Rect, Vec2};
 use crate::engine::ComponentType;
-use macroquad::prelude::*;
 
 impl Editor {
     pub fn handle_canvas_left_press(&mut self, mouse_pos_world: Vec2) {
-        // Click on a port or component
         let mut clicked_something = false;
 
-        let bypass_wiring = is_key_down(KeyCode::LeftShift)
-            || is_key_down(KeyCode::RightShift)
-            || is_key_down(KeyCode::LeftControl)
-            || is_key_down(KeyCode::RightControl);
+        let shift_down = self.canvas.frame_input.shift_down;
+        let ctrl_down = self.canvas.frame_input.ctrl_down;
+        let bypass_wiring = shift_down || ctrl_down;
 
-        // Check ports first (wiring starts here)
         if !bypass_wiring && let Some((comp_id, port_idx, is_input)) = self.canvas.hovered_port {
             self.canvas.active_wire_drag = Some((comp_id, port_idx, is_input));
             clicked_something = true;
         }
 
-        // Check clicking inside components (dragging, toggling)
         if !clicked_something {
             let mut found_comp = None;
             for comp in self.circuit.components.iter().rev() {
@@ -38,10 +34,9 @@ impl Editor {
                 self.canvas.selected_annotation_idx = None;
                 self.canvas.last_clicked_annotation_idx = None;
 
-                // Handle multi-selection tracking
                 if self.canvas.selected_comp_ids.contains(&comp.id) {
                     // Already selected, keep multi-selection
-                } else if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) {
+                } else if shift_down {
                     self.canvas.selected_comp_ids.insert(comp.id);
                 } else {
                     self.canvas.selected_comp_ids.clear();
@@ -49,13 +44,11 @@ impl Editor {
                     self.canvas.selected_comp_ids.insert(comp.id);
                 }
 
-                // Start dragging (Input components are also draggable now!)
                 self.canvas.dragging_comp_id = Some(comp.id);
                 self.canvas.drag_offset = mouse_pos_world;
                 self.canvas.drag_dist_pixels = 0.0;
                 self.canvas.drag_snapshot_pushed = false;
 
-                // Store starting positions of all selected components
                 self.canvas.drag_start_positions.clear();
                 self.canvas.drag_start_sizes.clear();
                 for &id in &self.canvas.selected_comp_ids {
@@ -69,10 +62,9 @@ impl Editor {
                 }
                 clicked_something = true;
             } else {
-                // Check if we clicked an annotation
                 let mut clicked_ann = None;
                 for (idx, ann) in self.circuit.annotations.iter().enumerate() {
-                    let text_w = measure_text(&ann.text, self.font.as_ref(), 15, 1.0).width;
+                    let (text_w, _) = self.measure_text_dims(&ann.text, 15.0);
                     let rect = Rect::new(ann.pos.x - 5.0, ann.pos.y - 14.0, text_w + 10.0, 20.0);
                     if rect.contains(mouse_pos_world) {
                         clicked_ann = Some(idx);
@@ -81,7 +73,7 @@ impl Editor {
                 }
 
                 if let Some(idx) = clicked_ann {
-                    let now = get_time();
+                    let now = self.ui.elapsed_time;
                     if Some(idx) == self.canvas.last_clicked_annotation_idx
                         && now - self.canvas.last_click_time < 0.3
                     {
@@ -98,14 +90,11 @@ impl Editor {
                     self.canvas.drag_offset = self.circuit.annotations[idx].pos - mouse_pos_world;
                     clicked_something = true;
                 } else {
-                    // Clicked empty space
                     self.canvas.selected_comp_id = None;
                     self.canvas.selected_annotation_idx = None;
                     self.canvas.last_clicked_annotation_idx = None;
 
-                    // Start drag selection box if no placement tool is active
                     if self.canvas.selected_tool.is_none() {
-                        // Check if a wire was clicked
                         let mut clicked_wire = None;
                         let comp_by_id: std::collections::HashMap<usize, &VisualComponent> =
                             self.circuit.components.iter().map(|c| (c.id, c)).collect();
@@ -142,7 +131,7 @@ impl Editor {
                         }
 
                         if let Some(wire) = clicked_wire {
-                            if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) {
+                            if shift_down {
                                 self.canvas.selected_connections.insert(wire);
                             } else {
                                 self.canvas.selected_comp_ids.clear();
@@ -161,7 +150,6 @@ impl Editor {
             }
         }
 
-        // If nothing was clicked and a tool is active, place the component or annotation
         if !clicked_something && let Some(tool) = self.canvas.selected_tool {
             match tool {
                 ActiveTool::PlaceComponent(comp_type) => {
@@ -216,10 +204,6 @@ impl Editor {
                 }
                 ActiveTool::PlaceAnnotation => {
                     self.push_history_snapshot();
-                    let _snapped_pos = Vec2::new(
-                        (mouse_pos_world.x / 20.0).round() * 20.0,
-                        (mouse_pos_world.y / 20.0).round() * 20.0,
-                    );
                     self.circuit.annotations.push(TextAnnotation {
                         text: "Text Note".to_string(),
                         pos: mouse_pos_world,

@@ -1,5 +1,5 @@
+use crate::editor::math::Color;
 use egui::Color32;
-use macroquad::color::Color;
 
 // --- Colors ---
 
@@ -29,6 +29,15 @@ impl ThemeColor {
             (self.g * 255.0) as u8,
             (self.b * 255.0) as u8,
             (self.a * 255.0) as u8,
+        )
+    }
+
+    pub fn egui_with_alpha(&self, alpha: f32) -> Color32 {
+        Color32::from_rgba_unmultiplied(
+            (self.r * 255.0) as u8,
+            (self.g * 255.0) as u8,
+            (self.b * 255.0) as u8,
+            (alpha.clamp(0.0, 1.0) * 255.0) as u8,
         )
     }
 

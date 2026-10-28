@@ -1,5 +1,5 @@
 #![windows_subsystem = "windows"]
 
 fn main() {
-    logic_simulator::main();
+    let _ = logic_simulator::main();
 }

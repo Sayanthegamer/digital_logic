@@ -1,6 +1,6 @@
 use super::Editor;
 use super::types::VisualComponent;
-use macroquad::prelude::*;
+use crate::editor::math::Vec2;
 
 impl Editor {
     pub fn handle_right_click_context_menu(
@@ -12,7 +12,7 @@ impl Editor {
             return;
         }
 
-        if is_mouse_button_released(MouseButton::Right) && self.canvas.right_drag_dist < 5.0 {
+        if self.canvas.frame_input.right_released && self.canvas.right_drag_dist < 5.0 {
             // Short right-click — check if over a component
             for comp in &self.circuit.components {
                 if mouse_pos_world.x >= comp.pos.x
@@ -22,7 +22,6 @@ impl Editor {
                 {
                     let screen_pos = self.to_screen_space(mouse_pos_world);
                     self.ui.context_menu_pos = (screen_pos.x, screen_pos.y);
-                    // Initialize picker with current override or default
                     self.ui.context_menu_color = self
                         .circuit
                         .color_overrides

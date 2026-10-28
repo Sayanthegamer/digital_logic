@@ -3,7 +3,7 @@
 use logic_simulator::editor::ProjectFile;
 use logic_simulator::editor::types::*;
 use logic_simulator::engine::types::*;
-use macroquad::prelude::Vec2;
+
 
 /// Builder for all chip blueprints in the hierarchy
 pub struct ChipLibraryBuilder {

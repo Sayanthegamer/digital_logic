@@ -5,47 +5,29 @@ pub mod editor;
 pub mod engine;
 
 use editor::Editor;
-use macroquad::prelude::*;
 
-pub async fn run() {
-    let mut editor = Editor::new();
-    editor::gui::setup_egui();
-    egui_macroquad::draw(); // Flush the setup frame before the main loop starts
-
-    loop {
-        // Process egui UI logic first (updates egui_wants_pointer for the current frame)
-        editor.draw_gui();
-
-        // Update logic editor state using the fresh input state
-        editor.update();
-
-        // Draw 2D logic canvas (wires, gates)
-        editor.draw();
-
-        // Render egui panels on top of the canvas
-        egui_macroquad::draw();
-
-        // Wait for next frame
-        next_frame().await;
+impl eframe::App for Editor {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.step_frame(ctx);
+        ctx.request_repaint();
     }
 }
 
-fn window_conf() -> Conf {
-    Conf {
-        window_title: "Digital Logic Simulator".to_string(),
-        high_dpi: true,
-        sample_count: 4,
+pub fn main() -> eframe::Result<()> {
+    let native_options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title("Digital Logic Simulator")
+            .with_inner_size([1280.0, 720.0])
+            .with_min_inner_size([640.0, 480.0]),
         ..Default::default()
-    }
-}
+    };
 
-#[macroquad::main(window_conf)]
-pub async fn main() {
-    run().await;
-}
-
-#[cfg(target_os = "android")]
-#[unsafe(no_mangle)]
-pub extern "C" fn quad_main() {
-    main();
+    eframe::run_native(
+        "Digital Logic Simulator",
+        native_options,
+        Box::new(|cc| {
+            editor::gui::setup_egui_context(&cc.egui_ctx);
+            Ok(Box::new(Editor::new()))
+        }),
+    )
 }

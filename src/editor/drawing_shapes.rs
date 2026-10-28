@@ -1,26 +1,48 @@
-use macroquad::prelude::*;
+use crate::editor::math::Color;
 
-pub(crate) fn draw_rounded_rect(x: f32, y: f32, w: f32, h: f32, r: f32, color: Color) {
-    let r = r.min(w / 2.0).min(h / 2.0);
-    if r <= 0.0 {
-        draw_rectangle(x, y, w, h, color);
-        return;
-    }
-    // Main horizontal center
-    draw_rectangle(x + r, y, w - 2.0 * r, h, color);
-    // Left vertical strip
-    draw_rectangle(x, y + r, r, h - 2.0 * r, color);
-    // Right vertical strip
-    draw_rectangle(x + w - r, y + r, r, h - 2.0 * r, color);
-
-    // Four corner circles
-    draw_circle(x + r, y + r, r, color);
-    draw_circle(x + w - r, y + r, r, color);
-    draw_circle(x + r, y + h - r, r, color);
-    draw_circle(x + w - r, y + h - r, r, color);
+#[inline(always)]
+pub(crate) fn draw_rect(painter: &egui::Painter, x: f32, y: f32, w: f32, h: f32, color: Color) {
+    let rect = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(w, h));
+    painter.rect_filled(rect, 0.0, color.to_egui());
 }
 
+#[inline(always)]
+pub(crate) fn draw_rect_lines(
+    painter: &egui::Painter,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    thickness: f32,
+    color: Color,
+) {
+    let rect = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(w, h));
+    painter.rect_stroke(
+        rect,
+        0.0,
+        egui::Stroke::new(thickness, color.to_egui()),
+        egui::StrokeKind::Middle,
+    );
+}
+
+#[inline(always)]
+pub(crate) fn draw_rounded_rect(
+    painter: &egui::Painter,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    r: f32,
+    color: Color,
+) {
+    let r = r.min(w / 2.0).min(h / 2.0).max(0.0);
+    let rect = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(w, h));
+    painter.rect_filled(rect, r, color.to_egui());
+}
+
+#[inline(always)]
 pub(crate) fn draw_rounded_rect_lines(
+    painter: &egui::Painter,
     x: f32,
     y: f32,
     w: f32,
@@ -29,39 +51,73 @@ pub(crate) fn draw_rounded_rect_lines(
     thickness: f32,
     color: Color,
 ) {
-    let r = r.min(w / 2.0).min(h / 2.0);
-    if r <= 0.0 {
-        draw_rectangle_lines(x, y, w, h, thickness, color);
-        return;
-    }
-    // Draw 4 straight edge lines
-    draw_line(x + r, y, x + w - r, y, thickness, color);
-    draw_line(x + r, y + h, x + w - r, y + h, thickness, color);
-    draw_line(x, y + r, x, y + h - r, thickness, color);
-    draw_line(x + w, y + r, x + w, y + h - r, thickness, color);
+    let r = r.min(w / 2.0).min(h / 2.0).max(0.0);
+    let rect = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(w, h));
+    painter.rect_stroke(
+        rect,
+        r,
+        egui::Stroke::new(thickness, color.to_egui()),
+        egui::StrokeKind::Middle,
+    );
+}
 
-    // Draw 4 corner arcs
-    let segments = 6;
-    let draw_arc = |cx: f32, cy: f32, start_angle: f32, end_angle: f32| {
-        let mut last_point = Vec2::new(cx + r * start_angle.cos(), cy + r * start_angle.sin());
-        for i in 1..=segments {
-            let angle = start_angle + (end_angle - start_angle) * (i as f32 / segments as f32);
-            let point = Vec2::new(cx + r * angle.cos(), cy + r * angle.sin());
-            draw_line(
-                last_point.x,
-                last_point.y,
-                point.x,
-                point.y,
-                thickness,
-                color,
-            );
-            last_point = point;
-        }
-    };
+#[inline(always)]
+pub(crate) fn draw_line_seg(
+    painter: &egui::Painter,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    thickness: f32,
+    color: Color,
+) {
+    painter.line_segment(
+        [egui::pos2(x1, y1), egui::pos2(x2, y2)],
+        egui::Stroke::new(thickness, color.to_egui()),
+    );
+}
 
-    use std::f32::consts::PI;
-    draw_arc(x + r, y + r, PI, 1.5 * PI);
-    draw_arc(x + w - r, y + r, 1.5 * PI, 2.0 * PI);
-    draw_arc(x + w - r, y + h - r, 0.0, 0.5 * PI);
-    draw_arc(x + r, y + h - r, 0.5 * PI, PI);
+#[inline(always)]
+pub(crate) fn draw_circle_filled(
+    painter: &egui::Painter,
+    x: f32,
+    y: f32,
+    r: f32,
+    color: Color,
+) {
+    painter.circle_filled(egui::pos2(x, y), r.max(0.0), color.to_egui());
+}
+
+#[inline(always)]
+pub(crate) fn draw_circle_lines(
+    painter: &egui::Painter,
+    x: f32,
+    y: f32,
+    r: f32,
+    thickness: f32,
+    color: Color,
+) {
+    painter.circle_stroke(
+        egui::pos2(x, y),
+        r.max(0.0),
+        egui::Stroke::new(thickness, color.to_egui()),
+    );
+}
+
+#[inline(always)]
+pub(crate) fn draw_text_label(
+    painter: &egui::Painter,
+    text: &str,
+    x: f32,
+    y_baseline: f32,
+    font_size: f32,
+    color: Color,
+) {
+    painter.text(
+        egui::pos2(x, y_baseline - font_size * 0.85),
+        egui::Align2::LEFT_TOP,
+        text,
+        egui::FontId::proportional(font_size.max(4.0)),
+        color.to_egui(),
+    );
 }

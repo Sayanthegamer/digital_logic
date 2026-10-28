@@ -1,4 +1,4 @@
-use macroquad::color::Color;
+use crate::editor::math::Color;
 use std::collections::HashMap;
 
 use super::types::VisualConnection;

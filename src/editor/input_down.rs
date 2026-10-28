@@ -1,5 +1,5 @@
 use super::Editor;
-use macroquad::prelude::*;
+use crate::editor::math::{Rect, Vec2};
 
 impl Editor {
     pub fn handle_canvas_left_drag(&mut self, mouse_pos_world: Vec2, mouse_delta: Vec2) {
@@ -94,7 +94,7 @@ impl Editor {
                 }
             }
 
-            let shift_pressed = is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift);
+            let shift_pressed = self.canvas.frame_input.shift_down;
 
             if !self.canvas.drag_snapshot_pushed {
                 self.push_history_snapshot();
@@ -127,8 +127,6 @@ impl Editor {
 
                         let old_rect = Rect::new(c.pos.x, c.pos.y, c.width, c.height);
 
-                        // Stretching logic instead of moving
-                        // We stretch horizontally or vertically depending on dominant translation
                         if translation.x.abs() > translation.y.abs() {
                             if is_right {
                                 c.pos.x = start_pos.x;
@@ -224,7 +222,7 @@ impl Editor {
                                     .alignment_guides
                                     .push((Vec2::new(my_x, -10000.0), Vec2::new(my_x, 10000.0)));
                                 x_guides += 1;
-                                break; // Only one guide per other component per axis
+                                break;
                             }
                         }
                     }
@@ -247,7 +245,7 @@ impl Editor {
                                     .alignment_guides
                                     .push((Vec2::new(-10000.0, my_y), Vec2::new(10000.0, my_y)));
                                 y_guides += 1;
-                                break; // Only one guide per other component per axis
+                                break;
                             }
                         }
                     }

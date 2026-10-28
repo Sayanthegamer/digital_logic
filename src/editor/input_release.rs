@@ -1,7 +1,7 @@
 use super::Editor;
 use super::types::*;
+use crate::editor::math::{Rect, Vec2};
 use crate::engine::ComponentType;
-use macroquad::prelude::*;
 
 fn get_wire_bounds(src_pos: Vec2, tgt_pos: Vec2, offset: f32, tgt_port: usize) -> Rect {
     let segments = Editor::compute_wire_segments_world(src_pos, tgt_pos, offset, tgt_port);
@@ -90,7 +90,6 @@ impl Editor {
                         self.canvas.selected_comp_ids.iter().next().copied();
                 }
             } else {
-                // Clicked empty space: clear selection
                 self.canvas.selected_comp_ids.clear();
                 self.canvas.selected_connections.clear();
                 self.canvas.selected_comp_id = None;
@@ -133,7 +132,6 @@ impl Editor {
                         .retain(|c| !(c.tgt_comp_id == in_id && c.tgt_port == in_port));
                 }
 
-                // Deduplicate connection
                 self.circuit.connections.retain(|c| {
                     !(c.src_comp_id == out_id
                         && c.src_port == out_port
