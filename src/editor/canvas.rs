@@ -47,9 +47,10 @@ fn restore_tree_gate_states(
     {
         sim.nodes.states[gate_idx] = prev_state;
         sim.enqueue_internal(gate_idx);
-        let deps = sim.nodes.dependents[gate_idx].clone();
-        for dep in deps {
-            sim.enqueue_internal(dep as usize);
+        let deps_len = sim.nodes.dependents[gate_idx].len();
+        for i in 0..deps_len {
+            let dep = sim.nodes.dependents[gate_idx][i] as usize;
+            sim.enqueue_internal(dep);
         }
     }
     for (&sub_id, sub_tree) in &tree.sub_instances {

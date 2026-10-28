@@ -85,20 +85,10 @@ impl Editor {
                     }
                 }
 
-                // Validate the library before importing it
-                let mut scratch_sim = crate::engine::Simulator::new();
-                for (i, _) in project.library.iter().enumerate() {
-                    let mut clocks = Vec::new();
-                    let mut stack = Vec::new();
-                    if let Err(e) = scratch_sim.instantiate_chip_with_mapping(
-                        i,
-                        &project.library,
-                        &mut clocks,
-                        &mut stack,
-                    ) {
-                        eprintln!("Failed to validate project library blueprint {i}: {e}");
-                        return false;
-                    }
+                // Statically validate the library DAG and port bounds in O(V + E) time
+                if let Err(e) = crate::engine::Simulator::validate_library(&project.library) {
+                    eprintln!("Failed to validate project library: {e}");
+                    return false;
                 }
 
                 // Import project-local chips into the global library and get index mapping

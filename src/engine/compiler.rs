@@ -362,6 +362,99 @@ impl<'a> CompilerContext<'a> {
 }
 
 impl Simulator {
+    /// Statically validates an entire library of `ChipBlueprint`s in O(V + E) time
+    /// without allocating any primitive simulation gates. Checks for:
+    /// - Out-of-bounds `SubChip` indices
+    /// - Recursive `SubChip` dependency cycles (via 3-color DFS)
+    /// - Out-of-bounds component or port indices on connections
+    pub fn validate_library(library: &[ChipBlueprint]) -> Result<(), String> {
+        // 0 = unvisited, 1 = visiting (on stack), 2 = validated
+        let mut state = vec![0u8; library.len()];
+
+        fn dfs_validate(
+            bp_idx: usize,
+            library: &[ChipBlueprint],
+            state: &mut [u8],
+        ) -> Result<(), String> {
+            if state[bp_idx] == 1 {
+                return Err("Recursion cycle detected in custom chip blueprints".to_string());
+            }
+            if state[bp_idx] == 2 {
+                return Ok(());
+            }
+            state[bp_idx] = 1;
+
+            let blueprint = library
+                .get(bp_idx)
+                .ok_or_else(|| format!("Blueprint not found at index {}", bp_idx))?;
+
+            for comp in &blueprint.components {
+                if let ComponentType::SubChip(sub_idx) = comp.component_type {
+                    if sub_idx >= library.len() {
+                        return Err(format!("Blueprint not found at index {}", sub_idx));
+                    }
+                    dfs_validate(sub_idx, library, state)?;
+                }
+            }
+
+            for conn in &blueprint.connections {
+                match conn.source {
+                    SourcePort::ComponentOutput {
+                        component_idx,
+                        port_idx,
+                    } => {
+                        if component_idx >= blueprint.components.len() {
+                            return Err(format!("Invalid source component index {}", component_idx));
+                        }
+                        let comp = &blueprint.components[component_idx];
+                        let (_, out_ports) =
+                            comp.component_type.get_port_counts(comp.bus_width, library);
+                        if port_idx >= out_ports {
+                            return Err(format!("Invalid source port index {}", port_idx));
+                        }
+                    }
+                    SourcePort::ChipInput(idx) => {
+                        if idx >= blueprint.inputs {
+                            return Err(format!("Invalid chip input index {}", idx));
+                        }
+                    }
+                }
+
+                match conn.target {
+                    TargetPort::ComponentInput {
+                        component_idx,
+                        port_idx,
+                    } => {
+                        if component_idx >= blueprint.components.len() {
+                            return Err(format!("Invalid target component index {}", component_idx));
+                        }
+                        let comp = &blueprint.components[component_idx];
+                        let (in_ports, _) =
+                            comp.component_type.get_port_counts(comp.bus_width, library);
+                        if port_idx >= in_ports {
+                            return Err(format!("Invalid target port index {}", port_idx));
+                        }
+                    }
+                    TargetPort::ChipOutput(idx) => {
+                        if idx >= blueprint.outputs {
+                            return Err(format!("Invalid chip output index {}", idx));
+                        }
+                    }
+                }
+            }
+
+            state[bp_idx] = 2;
+            Ok(())
+        }
+
+        for i in 0..library.len() {
+            if state[i] == 0 {
+                dfs_validate(i, library, &mut state)?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn instantiate_chip_with_mapping(
         &mut self,
         blueprint_idx: usize,

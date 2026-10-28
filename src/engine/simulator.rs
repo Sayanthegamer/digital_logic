@@ -10,6 +10,12 @@ pub struct Simulator {
     pub dynamic_threshold: usize,
     pub sleep_domains: Vec<SleepDomain>,
     pub sleeping_gates: FixedBitSet,
+    /// O(1) bitset marking gates that act as `control_gate` for at least one `SleepDomain`.
+    pub sleep_control_gates: FixedBitSet,
+    /// Reusable scratch buffers to eliminate per-tick heap allocations in `propagate_events`.
+    scratch_queue: Vec<usize>,
+    scratch_updates: Vec<(usize, u8)>,
+    scratch_next_enqueues: Vec<usize>,
 }
 
 impl Default for Simulator {
@@ -26,6 +32,10 @@ impl Simulator {
             dynamic_threshold: crate::engine::profiler::detect_parallel_crossover_threshold(),
             sleep_domains: Vec::new(),
             sleeping_gates: FixedBitSet::new(),
+            sleep_control_gates: FixedBitSet::new(),
+            scratch_queue: Vec::new(),
+            scratch_updates: Vec::new(),
+            scratch_next_enqueues: Vec::new(),
         }
     }
 
@@ -34,6 +44,10 @@ impl Simulator {
         self.event_queue.clear();
         self.sleep_domains.clear();
         self.sleeping_gates.clear();
+        self.sleep_control_gates.clear();
+        self.scratch_queue.clear();
+        self.scratch_updates.clear();
+        self.scratch_next_enqueues.clear();
     }
 
     pub fn set_single_threaded(&mut self, single: bool) {
@@ -45,6 +59,12 @@ impl Simulator {
     }
 
     pub fn register_sleep_domain(&mut self, mut domain: SleepDomain) {
+        if domain.control_gate >= self.sleep_control_gates.len() {
+            self.sleep_control_gates
+                .grow((domain.control_gate + 64).max(self.sleep_control_gates.len() * 2));
+        }
+        self.sleep_control_gates.insert(domain.control_gate);
+
         if domain.control_gate < self.nodes.states.len() {
             let ctrl_val = self.nodes.states[domain.control_gate];
             if domain.should_sleep(ctrl_val) {
@@ -90,10 +110,10 @@ impl Simulator {
             return;
         }
 
-        // 1. Tell all dependents to forget about us
-        let deps = self.nodes.dependents[gate_idx].clone();
-        for dep_u32 in deps {
-            let dep_idx = dep_u32 as usize;
+        // 1. Tell all dependents to forget about us without cloning the dependents Vec
+        let deps_len = self.nodes.dependents[gate_idx].len();
+        for i in 0..deps_len {
+            let dep_idx = self.nodes.dependents[gate_idx][i] as usize;
             let mut needs_enqueue = false;
             if self.nodes.contains(dep_idx) {
                 if self.nodes.sources[dep_idx][0] == gate_idx as u32 {
@@ -133,7 +153,7 @@ impl Simulator {
     }
 
     /// Sets the value of an Input gate.
-    /// If the state changes, enqueues all dependents for evaluation.
+    /// If the state changes, enqueues all dependents for evaluation without heap allocation.
     pub fn set_input(&mut self, gate_idx: usize, value: bool) {
         assert!(
             self.nodes.contains(gate_idx),
@@ -153,9 +173,10 @@ impl Simulator {
             // Trigger sleep domain state transitions if this gate controls a domain
             self.sync_sleep_domains_for_control_gate(gate_idx, new_state);
 
-            let deps = self.nodes.dependents[gate_idx].clone();
-            for dep_u32 in deps {
-                self.enqueue(dep_u32 as usize);
+            let deps_len = self.nodes.dependents[gate_idx].len();
+            for i in 0..deps_len {
+                let dep_idx = self.nodes.dependents[gate_idx][i] as usize;
+                self.enqueue(dep_idx);
             }
         }
     }
@@ -164,6 +185,7 @@ impl Simulator {
         self.enqueue(gate_idx);
     }
 
+    #[inline(always)]
     fn enqueue(&mut self, gate_idx: usize) {
         // Gates inside sleeping domains are skipped from scheduling
         if gate_idx < self.sleeping_gates.len() && self.sleeping_gates.contains(gate_idx) {
@@ -180,8 +202,11 @@ impl Simulator {
         }
     }
 
+    #[inline]
     fn sync_sleep_domains_for_control_gate(&mut self, ctrl_gate_idx: usize, new_state: u8) {
-        if self.sleep_domains.is_empty() {
+        if ctrl_gate_idx >= self.sleep_control_gates.len()
+            || !self.sleep_control_gates.contains(ctrl_gate_idx)
+        {
             return;
         }
 
@@ -396,14 +421,21 @@ impl Simulator {
             }
         }
 
-        // Remap sleep domains and rebuild sleeping_gates bitset to match new indices
+        // Remap sleep domains and rebuild sleeping_gates + sleep_control_gates bitsets to match new indices
         self.sleeping_gates.clear();
+        self.sleep_control_gates.clear();
         for domain in &mut self.sleep_domains {
             if domain.control_gate < old_to_new.len()
                 && old_to_new[domain.control_gate] != usize::MAX
             {
                 domain.control_gate = old_to_new[domain.control_gate];
             }
+            if domain.control_gate >= self.sleep_control_gates.len() {
+                self.sleep_control_gates
+                    .grow(domain.control_gate + 64);
+            }
+            self.sleep_control_gates.insert(domain.control_gate);
+
             for g in &mut domain.gates {
                 if *g < old_to_new.len() && old_to_new[*g] != usize::MAX {
                     *g = old_to_new[*g];
@@ -457,8 +489,11 @@ impl Simulator {
                 continue;
             }
 
-            let current_queue = std::mem::take(&mut self.event_queue[depth]);
-            for &idx in &current_queue {
+            // Swap capacity with reusable scratch_queue instead of dropping Vec capacity every tick
+            self.scratch_queue.clear();
+            std::mem::swap(&mut self.event_queue[depth], &mut self.scratch_queue);
+
+            for &idx in &self.scratch_queue {
                 self.nodes.in_queue.set(idx, false);
             }
 
@@ -526,28 +561,34 @@ impl Simulator {
                 }
             };
 
-            let updates: Vec<(usize, u8)> = if current_queue.len() >= self.dynamic_threshold {
-                current_queue
-                    .par_iter()
-                    .map(compute_state)
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .flatten()
-                    .collect()
+            self.scratch_updates.clear();
+            if self.scratch_queue.len() >= self.dynamic_threshold {
+                let par_updates: Vec<Option<(usize, u8)>> =
+                    self.scratch_queue.par_iter().map(compute_state).collect();
+                self.scratch_updates.extend(par_updates.into_iter().flatten());
             } else {
-                current_queue.iter().filter_map(compute_state).collect()
-            };
+                self.scratch_updates
+                    .extend(self.scratch_queue.iter().filter_map(compute_state));
+            }
 
-            let mut next_enqueues = Vec::with_capacity(updates.len());
-            for (idx, new_state) in updates {
+            let batch_len = self.scratch_queue.len();
+            // Return allocated capacity back to event_queue[depth] if it is still empty
+            if self.event_queue[depth].is_empty() {
+                self.scratch_queue.clear();
+                std::mem::swap(&mut self.event_queue[depth], &mut self.scratch_queue);
+            }
+
+            self.scratch_next_enqueues.clear();
+            for i in 0..self.scratch_updates.len() {
+                let (idx, new_state) = self.scratch_updates[i];
                 self.nodes.states[idx] = new_state;
-                next_enqueues.push(idx);
+                self.scratch_next_enqueues.push(idx);
 
-                // Update sleep domains if a control gate state changed
+                // O(1)-filtered sleep domain check
                 self.sync_sleep_domains_for_control_gate(idx, new_state);
             }
 
-            total_steps += current_queue.len();
+            total_steps += batch_len;
             if total_steps >= max_steps {
                 // Cleanly drain queues and reset in_queue flags so subsequent steps aren't wedged
                 for q in &mut self.event_queue {
@@ -560,10 +601,13 @@ impl Simulator {
                 ));
             }
 
-            for idx in next_enqueues {
-                let deps = self.nodes.dependents[idx].clone();
-                for dep_u32 in deps {
-                    self.enqueue(dep_u32 as usize);
+            // Enqueue all dependents without cloning `dependents[idx]`
+            for i in 0..self.scratch_next_enqueues.len() {
+                let idx = self.scratch_next_enqueues[i];
+                let deps_len = self.nodes.dependents[idx].len();
+                for d in 0..deps_len {
+                    let dep_idx = self.nodes.dependents[idx][d] as usize;
+                    self.enqueue(dep_idx);
                 }
             }
 
