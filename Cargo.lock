@@ -1922,6 +1922,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 name = "logic_simulator"
 version = "3.4.0"
 dependencies = [
+ "android-activity",
  "eframe",
  "egui",
  "fixedbitset",

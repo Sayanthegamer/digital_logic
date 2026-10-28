@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - When the linear oscillation step budget is exceeded, pending queues and `in_queue` bitsets are cleanly drained so subsequent user interactions recover immediately.
 - **Wire Click & Context Menu Hit-Testing**:
   - Hit-testing now accounts for obstacle detours and uses `get_connection_ports()`, ensuring wires attached to `Junction` nodes select reliably.
+- **Android Compilation & NativeActivity Features**:
+  - Configured `android-activity` with `native-activity` feature and `eframe` with `android-native-activity` for Android targets, and updated `build.rs` to gate Windows resource compilation on `CARGO_CFG_TARGET_OS`.
 
 ## [3.3.1] - 2026-10-09
 

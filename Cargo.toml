@@ -27,6 +27,8 @@ fixedbitset = "0.5"
 rfd = { version = "0.15", default-features = false, features = ["gtk3", "async-std"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
+eframe = { version = "0.31", features = ["android-native-activity"] }
+android-activity = { version = "0.6", features = ["native-activity"] }
 ndk-context = "0.1.1"
 jni = "0.21.1"
 
