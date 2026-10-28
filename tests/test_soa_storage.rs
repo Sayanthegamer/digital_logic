@@ -57,7 +57,18 @@ fn test_soa_connections_and_dependents() {
 
     storage.connect(src, tgt, 1);
     assert_eq!(storage.sources[tgt][1], src as u32);
-    assert_eq!(storage.dependents[src], vec![tgt as u32, tgt as u32]);
+    // Dependents list deduplicates targets so gates driving both inputs are only queued once
+    assert_eq!(storage.dependents[src], vec![tgt as u32]);
+
+    // Disconnecting port 0 preserves dependent because port 1 still connects
+    assert!(storage.disconnect_input(tgt, 0));
+    assert_eq!(storage.sources[tgt][0], NO_SOURCE);
+    assert_eq!(storage.dependents[src], vec![tgt as u32]);
+
+    // Disconnecting port 1 completely removes the dependent
+    assert!(storage.disconnect_input(tgt, 1));
+    assert_eq!(storage.sources[tgt][1], NO_SOURCE);
+    assert!(storage.dependents[src].is_empty());
 }
 
 #[test]

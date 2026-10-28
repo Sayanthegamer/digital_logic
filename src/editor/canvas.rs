@@ -336,10 +336,9 @@ impl Editor {
                 self.engine.instance_tree = instance_tree;
                 self.engine.active_clocks = active_clocks;
                 self.engine.top_level_sleep_info = top_level_sleep_info;
-                self.engine.compiled_components.insert(
-                    comp.id,
-                    (comp.comp_type, comp.bus_width, comp.clock_period),
-                );
+                self.engine
+                    .compiled_components
+                    .insert(comp.id, (comp.comp_type, comp.bus_width, comp.clock_period));
             }
         }
         self.engine.base_sleep_domains_count = self.engine.simulator.sleep_domains.len();
@@ -556,10 +555,8 @@ impl Editor {
 
         let mut compiled_components = HashMap::with_capacity(self.circuit.components.len());
         for comp in &self.circuit.components {
-            compiled_components.insert(
-                comp.id,
-                (comp.comp_type, comp.bus_width, comp.clock_period),
-            );
+            compiled_components
+                .insert(comp.id, (comp.comp_type, comp.bus_width, comp.clock_period));
         }
 
         self.engine.simulator = sim;
@@ -729,10 +726,9 @@ impl Editor {
             ComponentType::SubChip(sub_idx) => {
                 let template = if let Some(tmpl) = template_cache.get(&sub_idx) {
                     Some(tmpl)
-                } else if let Ok(tmpl) = crate::engine::compiler::compile_subchip_template(
-                    sub_idx,
-                    &self.engine.library,
-                ) {
+                } else if let Ok(tmpl) =
+                    crate::engine::compiler::compile_subchip_template(sub_idx, &self.engine.library)
+                {
                     template_cache.insert(sub_idx, tmpl);
                     template_cache.get(&sub_idx)
                 } else {
@@ -745,10 +741,8 @@ impl Editor {
                     let end_gate_idx = sim.nodes.capacity();
 
                     if let Some(sub_bp) = self.engine.library.get(sub_idx)
-                        && let Some(gating_port) = crate::engine::compiler::find_gating_input(
-                            sub_bp,
-                            &self.engine.library,
-                        )
+                        && let Some(gating_port) =
+                            crate::engine::compiler::find_gating_input(sub_bp, &self.engine.library)
                     {
                         let gates: Vec<usize> = (start_gate_idx..end_gate_idx)
                             .filter(|&g| sim.nodes.contains(g))

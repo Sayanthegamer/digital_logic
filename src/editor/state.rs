@@ -125,7 +125,7 @@ pub struct EngineState {
     pub port_to_sim_gate_map: HashMap<(usize, usize), usize>, // (Visual ID, port_idx) -> Sim gate index
     pub component_ports: HashMap<usize, (Vec<Vec<(usize, u8)>>, Vec<crate::engine::OutputSource>)>,
     pub compiled_components:
-        HashMap<usize, (crate::engine::ComponentType, Option<usize>, Option<u32>)>,
+        HashMap<usize, (crate::engine::ComponentType, Option<usize>, Option<usize>)>,
     pub top_level_sleep_info: Vec<(usize, usize, Vec<usize>, Vec<usize>)>,
     pub base_sleep_domains_count: usize,
     pub dynamic_resolvers: Vec<usize>,

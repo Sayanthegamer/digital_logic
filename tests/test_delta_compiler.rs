@@ -107,6 +107,71 @@ fn test_incremental_delta_compilation_preserves_subchips_and_patches_nets() {
     editor.circuit.components.clear();
     editor.circuit.connections.clear();
 
+    editor.engine.library = vec![ChipBlueprint {
+        name: "AND".to_string(),
+        inputs: 2,
+        outputs: 1,
+        input_names: vec!["A".to_string(), "B".to_string()],
+        output_names: vec!["OUT".to_string()],
+        components: vec![
+            Component {
+                component_type: ComponentType::Nand,
+                pos: (200.0, 150.0),
+                clock_period: None,
+                bus_width: None,
+            },
+            Component {
+                component_type: ComponentType::Nand,
+                pos: (400.0, 150.0),
+                clock_period: None,
+                bus_width: None,
+            },
+        ],
+        connections: vec![
+            Connection {
+                source: SourcePort::ChipInput(0),
+                target: TargetPort::ComponentInput {
+                    component_idx: 0,
+                    port_idx: 0,
+                },
+            },
+            Connection {
+                source: SourcePort::ChipInput(1),
+                target: TargetPort::ComponentInput {
+                    component_idx: 0,
+                    port_idx: 1,
+                },
+            },
+            Connection {
+                source: SourcePort::ComponentOutput {
+                    component_idx: 0,
+                    port_idx: 0,
+                },
+                target: TargetPort::ComponentInput {
+                    component_idx: 1,
+                    port_idx: 0,
+                },
+            },
+            Connection {
+                source: SourcePort::ComponentOutput {
+                    component_idx: 0,
+                    port_idx: 0,
+                },
+                target: TargetPort::ComponentInput {
+                    component_idx: 1,
+                    port_idx: 1,
+                },
+            },
+            Connection {
+                source: SourcePort::ComponentOutput {
+                    component_idx: 1,
+                    port_idx: 0,
+                },
+                target: TargetPort::ChipOutput(0),
+            },
+        ],
+    }];
+
     // Index 0 in default library is "AND" (2 inputs, 1 output)
     editor.circuit.components.push(VisualComponent {
         id: 1,
