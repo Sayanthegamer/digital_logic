@@ -354,7 +354,9 @@ impl Simulator {
             let new_idx =
                 new_storage.insert(self.nodes.gate_types[old_idx], self.nodes.states[old_idx]);
             new_storage.depths[new_idx] = self.nodes.depths[old_idx];
-            new_storage.in_queue.set(new_idx, self.nodes.in_queue.contains(old_idx));
+            new_storage
+                .in_queue
+                .set(new_idx, self.nodes.in_queue.contains(old_idx));
             old_to_new[old_idx] = new_idx;
         }
 

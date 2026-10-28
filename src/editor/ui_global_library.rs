@@ -147,14 +147,16 @@ impl Editor {
 
                                         if let Some(fi) = folder_to_delete {
                                             // Compute exact flat index remapping before moving folder chips to ungrouped
-                                            let old_total = self.global_library.to_flat_list().len();
+                                            let old_total =
+                                                self.global_library.to_flat_list().len();
                                             let mut tagged_ungrouped: Vec<usize> =
                                                 (0..self.global_library.ungrouped.len()).collect();
                                             let mut offset = self.global_library.ungrouped.len();
                                             let mut tagged_folders: Vec<Vec<usize>> = Vec::new();
                                             for folder in &self.global_library.folders {
                                                 let len = folder.chips.len();
-                                                tagged_folders.push((offset..offset + len).collect());
+                                                tagged_folders
+                                                    .push((offset..offset + len).collect());
                                                 offset += len;
                                             }
                                             let moved_indices = tagged_folders.remove(fi);
@@ -383,7 +385,9 @@ impl Editor {
 
                                         // Process delete using centralized flat-index remapper
                                         if let Some(ci) = chip_to_delete {
-                                            let flat_idx_opt = match self.ui.global_lib_selected_folder
+                                            let flat_idx_opt = match self
+                                                .ui
+                                                .global_lib_selected_folder
                                             {
                                                 Some(fi)
                                                     if fi < self.global_library.folders.len() =>
@@ -421,7 +425,8 @@ impl Editor {
 
                                         // Process move with full flat-index remapping
                                         if let Some((ci, target_folder)) = chip_to_move {
-                                            let from_loc = match self.ui.global_lib_selected_folder {
+                                            let from_loc = match self.ui.global_lib_selected_folder
+                                            {
                                                 Some(fi)
                                                     if fi < self.global_library.folders.len() =>
                                                 {

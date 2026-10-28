@@ -41,6 +41,7 @@ pub(crate) fn draw_rounded_rect(
 }
 
 #[inline(always)]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_rounded_rect_lines(
     painter: &egui::Painter,
     x: f32,
@@ -78,13 +79,7 @@ pub(crate) fn draw_line_seg(
 }
 
 #[inline(always)]
-pub(crate) fn draw_circle_filled(
-    painter: &egui::Painter,
-    x: f32,
-    y: f32,
-    r: f32,
-    color: Color,
-) {
+pub(crate) fn draw_circle_filled(painter: &egui::Painter, x: f32, y: f32, r: f32, color: Color) {
     painter.circle_filled(egui::pos2(x, y), r.max(0.0), color.to_egui());
 }
 

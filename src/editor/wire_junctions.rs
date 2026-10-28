@@ -409,7 +409,10 @@ impl Editor {
     }
 
     /// Find all wire intersections (junctions and crossings) across visible connections.
-    pub fn find_wire_intersections(&self, visible_wires: &[&VisualConnection]) -> Vec<WireIntersection> {
+    pub fn find_wire_intersections(
+        &self,
+        visible_wires: &[&VisualConnection],
+    ) -> Vec<WireIntersection> {
         let mut all_segments = Vec::new();
         let mut seg_id_counter = 0;
 

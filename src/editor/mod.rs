@@ -166,8 +166,7 @@ impl Editor {
         self.draw_gui(ctx);
 
         // 3. Snapshot frame input from egui and update editor/simulation state
-        self.canvas.frame_input =
-            state::FrameInput::from_egui(ctx, self.canvas.last_mouse_pos);
+        self.canvas.frame_input = state::FrameInput::from_egui(ctx, self.canvas.last_mouse_pos);
         self.update();
 
         // 4. Flush any pending viewport commands (fullscreen / resolution changes)
@@ -838,11 +837,10 @@ impl Editor {
         {
             match map.get(old_idx).copied().flatten() {
                 Some(new_idx) => {
-                    self.canvas.selected_tool = Some(
-                        crate::editor::types::ActiveTool::PlaceComponent(ComponentType::SubChip(
-                            new_idx,
-                        )),
-                    );
+                    self.canvas.selected_tool =
+                        Some(crate::editor::types::ActiveTool::PlaceComponent(
+                            ComponentType::SubChip(new_idx),
+                        ));
                 }
                 None => {
                     self.canvas.selected_tool = None;

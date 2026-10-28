@@ -3,7 +3,6 @@ use crate::editor::math::{Rect, Vec2};
 use crate::editor::types::{TextAnnotation, VisualComponent, VisualConnection};
 use crate::engine::ComponentType;
 
-
 #[test]
 fn test_custom_port_naming_collision() {
     let mut editor = Editor::new();
@@ -891,7 +890,6 @@ fn test_undo_redo_preserves_wire_nudges_and_offsets() {
         "Redo must restore wire_offsets"
     );
 }
-
 
 #[test]
 fn test_compile_preserves_input_and_latch_states() {

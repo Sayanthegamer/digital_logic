@@ -45,11 +45,13 @@ impl Editor {
 
             let grid_color = theme::BORDER.mq_with_alpha(grid_alpha);
 
-            for x in (0..=(sw as i32 / cell_size as i32 + 1)).map(|i| i as f32 * cell_size + offset_x)
+            for x in
+                (0..=(sw as i32 / cell_size as i32 + 1)).map(|i| i as f32 * cell_size + offset_x)
             {
                 draw_line_seg(painter, x, 0.0, x, sh, 1.0, grid_color);
             }
-            for y in (0..=(sh as i32 / cell_size as i32 + 1)).map(|i| i as f32 * cell_size + offset_y)
+            for y in
+                (0..=(sh as i32 / cell_size as i32 + 1)).map(|i| i as f32 * cell_size + offset_y)
             {
                 draw_line_seg(painter, 0.0, y, sw, y, 1.0, grid_color);
             }
@@ -313,21 +315,16 @@ impl Editor {
             let comp_width = comp.width * self.canvas.zoom;
             let comp_height = comp.height * self.canvas.zoom;
 
-            let is_input_active = if comp.comp_type == ComponentType::Input {
-                if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&comp.id) {
-                    self.engine.simulator.get_state(gate_idx)
+            let is_input_active =
+                if matches!(comp.comp_type, ComponentType::Input | ComponentType::Output) {
+                    if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&comp.id) {
+                        self.engine.simulator.get_state(gate_idx)
+                    } else {
+                        false
+                    }
                 } else {
                     false
-                }
-            } else if comp.comp_type == ComponentType::Output {
-                if let Some(&gate_idx) = self.engine.visual_to_sim_map.get(&comp.id) {
-                    self.engine.simulator.get_state(gate_idx)
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
+                };
 
             if comp.comp_type == ComponentType::Junction {
                 let center_x = screen_pos.x + comp_width / 2.0;
@@ -357,7 +354,13 @@ impl Editor {
                 );
 
                 let radius = 4.5 * self.canvas.zoom;
-                draw_circle_filled(painter, center_x, center_y, radius, theme::TEXT_PRIMARY.mq());
+                draw_circle_filled(
+                    painter,
+                    center_x,
+                    center_y,
+                    radius,
+                    theme::TEXT_PRIMARY.mq(),
+                );
 
                 if self.canvas.selected_comp_id == Some(comp.id)
                     || self.canvas.selected_comp_ids.contains(&comp.id)

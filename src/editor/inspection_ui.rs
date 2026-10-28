@@ -35,7 +35,8 @@ impl Editor {
             self.get_component_ports_count_with_width(comp.component_type, comp.bus_width);
         let max_ports = inputs_count.max(outputs_count);
         let height = 40.0 + (max_ports as f32 * 16.0);
-        let (width, _) = self.get_component_dimensions_with_width(comp.component_type, comp.bus_width);
+        let (width, _) =
+            self.get_component_dimensions_with_width(comp.component_type, comp.bus_width);
 
         let x = comp.pos.0 + width;
         let spacing = height / (outputs_count + 1) as f32;
@@ -343,6 +344,7 @@ impl Editor {
 
             let mut seg_states = [false; 8];
 
+            #[allow(clippy::needless_range_loop)]
             for i in 0..inputs_count {
                 let w_pos = self.get_bp_comp_input_port_pos(comp_idx, i, &internal_components);
                 let port_pos = self.to_screen_space(w_pos);

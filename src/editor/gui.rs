@@ -649,8 +649,8 @@ impl Editor {
                                 let mut any_outside_viewport = false;
                                 for comp in &self.circuit.components {
                                     let p1 = (comp.pos * self.canvas.zoom) + self.canvas.pan;
-                                    let p2 = p1
-                                        + Vec2::new(comp.width, comp.height) * self.canvas.zoom;
+                                    let p2 =
+                                        p1 + Vec2::new(comp.width, comp.height) * self.canvas.zoom;
 
                                     if p1.x < view_min_x
                                         || p2.x > view_max_x
@@ -863,11 +863,11 @@ impl Editor {
                             self.ui
                                 .pending_viewport_commands
                                 .push(egui::ViewportCommand::Fullscreen(self.ui.is_fullscreen));
-                            self.ui
-                                .pending_viewport_commands
-                                .push(egui::ViewportCommand::InnerSize(egui::vec2(
+                            self.ui.pending_viewport_commands.push(
+                                egui::ViewportCommand::InnerSize(egui::vec2(
                                     r.0 as f32, r.1 as f32,
-                                )));
+                                )),
+                            );
 
                             if size_changed {
                                 self.ui.resolution_revert_timer = Some(10.0);

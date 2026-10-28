@@ -1196,7 +1196,6 @@ fn test_compiler_rejects_out_of_bounds_connections() {
     assert!(res.unwrap_err().contains("Invalid source component index"));
 }
 
-
 #[test]
 fn test_nand_dominant_low_and_contention_propagation() {
     let mut sim = Simulator::new();

@@ -4,7 +4,6 @@ use logic_simulator::editor::ProjectFile;
 use logic_simulator::editor::types::*;
 use logic_simulator::engine::types::*;
 
-
 /// Builder for all chip blueprints in the hierarchy
 pub struct ChipLibraryBuilder {
     pub library: Vec<ChipBlueprint>,
